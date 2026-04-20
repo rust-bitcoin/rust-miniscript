@@ -374,6 +374,26 @@ impl fmt::Display for NonDefiniteKeyError {
 #[cfg(feature = "std")]
 impl error::Error for NonDefiniteKeyError {}
 
+/// Error parsing the hex string of a master key fingerprint.
+///
+/// The underlying `Fingerprint::from_hex` surfaces its error from an unstable
+/// `hex-conservative` version that is not re-exported from `bitcoin`, so we
+/// capture its textual representation and expose it as a proper [`error::Error`].
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MasterFingerprintHexError(String);
+
+impl MasterFingerprintHexError {
+    /// Construct from any displayable source error.
+    pub fn from_display<E: fmt::Display>(err: E) -> Self { Self(err.to_string()) }
+}
+
+impl fmt::Display for MasterFingerprintHexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.0) }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for MasterFingerprintHexError {}
+
 /// Kinds of malformed key data
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
@@ -439,8 +459,8 @@ pub enum DescriptorKeyParseError {
     MasterFingerprint {
         /// The invalid fingerprint
         fingerprint: String,
-        /// The underlying parse error (displayed as a string)
-        err: String,
+        /// The underlying hex parse error.
+        err: MasterFingerprintHexError,
     },
     /// Attempt to construct a [`DefiniteDescriptorKey`] from an ambiguous key.
     NonDefiniteKey(NonDefiniteKeyError),
@@ -482,7 +502,7 @@ impl error::Error for DescriptorKeyParseError {
             Self::DerivationIndexError { err, .. } => Some(err),
             Self::DeriveHardenedKey(err) => Some(err),
             Self::MasterDerivationPath(err) => Some(err),
-            Self::MasterFingerprint { .. } => None,
+            Self::MasterFingerprint { err, .. } => Some(err),
             Self::NonDefiniteKey(err) => Some(err),
             Self::FullPublicKey(err) => Some(err),
             Self::WifPrivateKey(err) => Some(err),
@@ -1053,7 +1073,7 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
         let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|err| {
             DescriptorKeyParseError::MasterFingerprint {
                 fingerprint: origin_id_hex.to_owned(),
-                err: err.to_string(),
+                err: MasterFingerprintHexError::from_display(err),
             }
         })?;
         let origin_path = raw_origin
