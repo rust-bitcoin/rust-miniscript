@@ -1188,7 +1188,7 @@ mod test {
         .iter()
         .map(|d: &&[u8; 32]| {
             let sk = secp256k1::SecretKey::from_secret_bytes(**d).unwrap();
-            let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+            let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&sk));
             (sk, pk)
         })
         .unzip();
@@ -1202,7 +1202,7 @@ mod test {
                     secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
                         .expect("32 bytes");
                 bitcoin::ecdsa::Signature {
-                    signature: secp.sign_ecdsa(&sighash, sk),
+                    signature: secp.sign_ecdsa(sighash, sk),
                     sighash_type: bitcoin::sighash::EcdsaSighashType::All,
                 }
             })

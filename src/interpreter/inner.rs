@@ -487,10 +487,16 @@ mod tests {
             .unwrap();
             let dummy_sig = <[u8; 48]>::try_from(&dummy_sig_vec[..]).unwrap();
 
-            let pkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
-            let wpkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
+            let pkhash = bitcoin::key::PubkeyHash::from_byte_array(
+                key.to_pubkeyhash(SigType::Ecdsa).to_byte_array(),
+            );
+            let wpkhash = bitcoin::key::WPubkeyHash::from_byte_array(
+                key.to_pubkeyhash(SigType::Ecdsa).to_byte_array(),
+            );
             let wpkh_spk = ScriptBuf::new_p2wpkh(wpkhash);
-            let wpkh_scripthash = hash160::Hash::hash(wpkh_spk.as_bytes()).into();
+            let wpkh_scripthash = bitcoin::script::ScriptHash::from_byte_array(
+                hash160::Hash::hash(wpkh_spk.as_bytes()).to_byte_array(),
+            );
 
             KeyTestData {
                 pk_spk: ScriptBuf::new_p2pk(key),
@@ -677,7 +683,7 @@ mod tests {
         let (inner, stack, script_code) =
             from_txdata(&comp.wpkh_spk, &blank_script, &comp.wpkh_stack).expect("parse txdata");
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Wpkh));
-        assert_eq!(stack, Stack::from(vec![comp.wpkh_stack.iter().rev().nth(1).unwrap().into()]));
+        assert_eq!(stack, Stack::from(vec![comp.wpkh_stack.get_back(1).unwrap().into()]));
         assert_eq!(script_code, Some(comp.pkh_spk));
 
         // Scriptsig is nonempty
@@ -733,7 +739,7 @@ mod tests {
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh));
         assert_eq!(
             stack,
-            Stack::from(vec![comp.sh_wpkh_stack.iter().rev().nth(1).unwrap().into()])
+            Stack::from(vec![comp.sh_wpkh_stack.get_back(1).unwrap().into()])
         );
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
     }
@@ -775,7 +781,9 @@ mod tests {
         let hash = hash160::Hash::hash(&preimage[..]);
 
         let (miniscript, redeem_script) = ms_inner_script(&format!("hash160({})", hash));
-        let rs_hash = hash160::Hash::hash(redeem_script.as_bytes()).into();
+        let rs_hash = bitcoin::script::ScriptHash::from_byte_array(
+            hash160::Hash::hash(redeem_script.as_bytes()).to_byte_array(),
+        );
 
         let spk = ScriptBuf::new_p2sh(rs_hash);
         let script_sig = ScriptBuilderLocal::new()
@@ -810,7 +818,9 @@ mod tests {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
-        let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
+        let wit_hash = bitcoin::script::WScriptHash::from_byte_array(
+            sha256::Hash::hash(witness_script.as_bytes()).to_byte_array(),
+        );
         let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
         let spk = ScriptBuf::new_p2wsh(wit_hash);
@@ -845,7 +855,9 @@ mod tests {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
-        let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
+        let wit_hash = bitcoin::script::WScriptHash::from_byte_array(
+            sha256::Hash::hash(witness_script.as_bytes()).to_byte_array(),
+        );
         let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
         let redeem_script = ScriptBuf::new_p2wsh(wit_hash);
@@ -854,7 +866,9 @@ mod tests {
             .into_script();
         let blank_script = ScriptBuf::new();
 
-        let rs_hash = hash160::Hash::hash(redeem_script.as_bytes()).into();
+        let rs_hash = bitcoin::script::ScriptHash::from_byte_array(
+            hash160::Hash::hash(redeem_script.as_bytes()).to_byte_array(),
+        );
         let spk = ScriptBuf::new_p2sh(rs_hash);
 
         // shwsh without witness or scriptsig

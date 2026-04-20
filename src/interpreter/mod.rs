@@ -1093,9 +1093,8 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
-            let pk =
-                bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&secp, &sk));
-            let signature = secp.sign_ecdsa(&msg, &sk);
+            let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&sk));
+            let signature = secp.sign_ecdsa(msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,
@@ -1105,10 +1104,12 @@ mod tests {
             pks.push(pk);
             der_sigs.push(sigser);
 
-            let keypair = bitcoin::key::Keypair::from_secret_key(&secp, &sk);
+            let secp_keypair = secp256k1::Keypair::from_secret_key(&sk);
+            let keypair = bitcoin::key::Keypair::from_secp(secp_keypair);
             let x_only_pk = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair);
             x_only_pks.push(x_only_pk);
-            let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
+            let schnorr_sig =
+                secp.sign_schnorr_with_aux_rand(msg.as_ref(), &secp_keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,
@@ -1126,10 +1127,10 @@ mod tests {
         let secp_ref = &secp;
         let vfyfn = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(&sighash, &ecdsa_sig.signature, pk.as_inner())
+                .verify_ecdsa(sighash, &ecdsa_sig.signature, &pk.to_inner())
                 .is_ok(),
             KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.signature, &sighash, xpk)
+                .verify_schnorr(&schnorr_sig.signature, sighash.as_ref(), xpk.as_inner())
                 .is_ok(),
         };
 

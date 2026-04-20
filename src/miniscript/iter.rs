@@ -227,7 +227,6 @@ pub mod test {
     /// Generate a deterministic list of public keys of the given length.
     pub fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
 
         for i in 1..n + 1 {
@@ -236,8 +235,7 @@ pub mod test {
             sk[2] = (i >> 16) as u8;
 
             ret.push(secp256k1::PublicKey::from_secret_key(
-                &secp,
-                &secp256k1::SecretKey::from_slice(&sk[..]).unwrap(),
+                &secp256k1::SecretKey::from_secret_bytes(sk).unwrap(),
             ));
         }
         ret
@@ -247,7 +245,13 @@ pub mod test {
     pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
         gen_secp_pubkeys(n)
             .into_iter()
-            .map(|inner| bitcoin::PublicKey { inner, compressed })
+            .map(|inner| {
+                if compressed {
+                    bitcoin::PublicKey::from_secp(inner)
+                } else {
+                    bitcoin::PublicKey::from_secp_uncompressed(inner)
+                }
+            })
             .collect()
     }
 

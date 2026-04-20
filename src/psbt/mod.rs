@@ -1481,7 +1481,7 @@ mod tests {
         let first_leaf_hash = {
             let ms =
                 Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", &key_0_1)).unwrap();
-            let first_script = ms.encode();
+            let first_script = TapScriptBuf::from_bytes(ms.encode().into_bytes());
             assert!(psbt_input
                 .tap_scripts
                 .values()
@@ -1599,7 +1599,7 @@ mod tests {
             lock_time: absolute::LockTime::ZERO,
             inputs: vec![],
             outputs: vec![TxOut {
-                amount: Amount::from_sat(1_000),
+                amount: Amount::from_sat(1_000).expect("in range"),
                 script_pubkey: ScriptBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )
@@ -1612,7 +1612,7 @@ mod tests {
             lock_time: absolute::LockTime::ZERO,
             inputs: vec![TxIn {
                 previous_output: OutPoint { txid: non_witness_utxo.compute_txid(), vout: 0 },
-                ..Default::default()
+                ..TxIn::EMPTY_COINBASE
             }],
             outputs: vec![],
         };
@@ -1635,7 +1635,7 @@ mod tests {
             Ok(()),
             "matching non_witness_utxo"
         );
-        non_witness_utxo.version = transaction::Version::non_standard(0);
+        non_witness_utxo.version = transaction::Version::maybe_non_standard(0);
         psbt.inputs[0].non_witness_utxo = Some(non_witness_utxo);
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
@@ -1661,7 +1661,7 @@ mod tests {
             lock_time: absolute::LockTime::ZERO,
             inputs: vec![],
             outputs: vec![TxOut {
-                amount: Amount::from_sat(1_000),
+                amount: Amount::from_sat(1_000).expect("in range"),
                 script_pubkey: ScriptBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )

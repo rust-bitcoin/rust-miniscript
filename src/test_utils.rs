@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::secp256k1::XOnlyPublicKey;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 
@@ -169,7 +169,7 @@ impl StrXOnlyKeyTranslator {
             .map(|sk| {
                 let keypair = secp256k1::Keypair::from_secret_key(sk);
                 let (pk, _parity) = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
-                XOnlyPublicKey::from(pk)
+                pk
             })
             .collect();
         let mut pk_map = HashMap::new();

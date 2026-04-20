@@ -1123,7 +1123,6 @@ mod tests {
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
         for i in 1..n + 1 {
             sk[0] = i as u8;
@@ -1131,7 +1130,6 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(
-                &secp,
                 &secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key"),
             ));
             ret.push(pk);
@@ -1735,7 +1733,9 @@ mod tests {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap();
-        let hash160 = pk.pubkey_hash().to_raw_hash();
+        let hash160 = bitcoin::hashes::hash160::Hash::from_byte_array(
+            pk.pubkey_hash().to_byte_array(),
+        );
         let ms_str = &format!("c:expr_raw_pkh({})", hash160);
         type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
