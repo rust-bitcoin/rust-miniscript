@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use miniscript::bitcoin::key::{Keypair, XOnlyPublicKey};
-use miniscript::bitcoin::secp256k1::rand;
+use miniscript::bitcoin::secp256k1::{self, rand};
 use miniscript::bitcoin::{Network, WitnessVersion};
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
@@ -86,10 +86,10 @@ fn main() {
     let mut pk_map = HashMap::new();
 
     // We require secp for generating a random XOnlyPublicKey
-    let secp = secp256k1::Secp256k1::new();
-    let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
+    let _secp = secp256k1::Secp256k1::new();
+    let key_pair = Keypair::from_secp(secp256k1::Keypair::new(&mut rand::rng()));
     // Random unspendable XOnlyPublicKey provided for compilation to Taproot Descriptor
-    let (unspendable_pubkey, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
+    let unspendable_pubkey = XOnlyPublicKey::from_keypair(&key_pair);
 
     pk_map.insert("UNSPENDABLE_KEY".to_string(), unspendable_pubkey);
     let pubkeys = hardcoded_xonlypubkeys();
@@ -142,7 +142,7 @@ fn hardcoded_xonlypubkeys() -> Vec<XOnlyPublicKey> {
     ];
     let mut keys: Vec<XOnlyPublicKey> = vec![];
     for key in serialized_keys {
-        keys.push(XOnlyPublicKey::from_slice(&key).unwrap());
+        keys.push(secp256k1::XOnlyPublicKey::from_byte_array(key).unwrap().into());
     }
     keys
 }
