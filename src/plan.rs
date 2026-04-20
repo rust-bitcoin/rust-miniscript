@@ -340,7 +340,7 @@ impl Plan {
                         Placeholder::TapScript(script) => data.tap_script = Some(script.clone()),
                         Placeholder::TapControlBlock(cb) => data.control_block = Some(cb.clone()),
                         Placeholder::SchnorrSigPk(pk, sig_type, _) => {
-                            let raw_pk: XOnlyPublicKey = pk.to_x_only_pubkey().into();
+                            let raw_pk: XOnlyPublicKey = pk.to_x_only_pubkey();
 
                             match (&data.spend_type, sig_type) {
                                 // First encountered schnorr sig, update the `TrDescriptorData` accordingly
@@ -415,10 +415,11 @@ impl Plan {
                     descriptor::ShInner::Wsh(wsh) => {
                         let inner = wsh.inner_script();
                         let witness_script = WitnessScriptBuf::from_bytes(inner.to_vec());
-                        input.redeem_script = witness_script
+                        let p2wsh_spk = witness_script
                             .to_p2wsh()
-                            .ok()
-                            .map(|spk| RedeemScriptBuf::from_bytes(spk.into_bytes()));
+                            .expect("witness script size within bounds");
+                        input.redeem_script =
+                            Some(RedeemScriptBuf::from_bytes(p2wsh_spk.into_bytes()));
                         input.witness_script = Some(witness_script);
                     }
                     descriptor::ShInner::Wpkh(..) => {
