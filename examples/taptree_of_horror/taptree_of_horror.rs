@@ -57,8 +57,7 @@ fn main() {
 
     // ====== 2. Derive Keys, Preimages, Hashes, and Timelocks for Policy and Signing ======
 
-    let internal_xpub: miniscript::DescriptorPublicKey =
-        internal_desc_secret.to_public().unwrap();
+    let internal_xpub: miniscript::DescriptorPublicKey = internal_desc_secret.to_public().unwrap();
 
     // example of how defining the internal xpriv that can be used for signing.
     // let internal_xpriv: DescriptorXKey<bitcoin::bip32::Xpriv> = match internal_desc_secret {

@@ -277,8 +277,7 @@ impl<'txin> Interpreter<'txin> {
                 };
                 let msg = sighash_msg.map(|hash| hash.to_byte_array());
                 let success = msg.map(|msg| {
-                    secp256k1::schnorr::verify(&schnorr_sig.signature, &msg, xpk.as_inner())
-                        .is_ok()
+                    secp256k1::schnorr::verify(&schnorr_sig.signature, &msg, xpk.as_inner()).is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
             }
