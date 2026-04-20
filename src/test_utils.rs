@@ -137,11 +137,10 @@ fn random_sks(n: usize) -> Vec<secp256k1::SecretKey> {
 
 impl StrKeyTranslator {
     pub fn new() -> Self {
-        let secp = secp256k1::Secp256k1::new();
         let sks = random_sks(26);
         let pks: Vec<_> = sks
             .iter()
-            .map(|sk| bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, sk)))
+            .map(|sk| bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(sk)))
             .collect();
         let mut pk_map = HashMap::new();
         let mut pkh_map = HashMap::new();
@@ -164,12 +163,11 @@ impl StrKeyTranslator {
 
 impl StrXOnlyKeyTranslator {
     pub fn new() -> Self {
-        let secp = secp256k1::Secp256k1::new();
         let sks = random_sks(26);
         let pks: Vec<_> = sks
             .iter()
             .map(|sk| {
-                let keypair = secp256k1::Keypair::from_secret_key(&secp, sk);
+                let keypair = secp256k1::Keypair::from_secret_key(sk);
                 let (pk, _parity) = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
                 XOnlyPublicKey::from(pk)
             })

@@ -1170,7 +1170,7 @@ mod tests {
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::Hash;
-    use bitcoin::script::PushBytes;
+    use bitcoin::script::{PushBytes, ScriptExt as _, WitnessScriptExt as _};
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};
 
@@ -1287,7 +1287,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             pkh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
@@ -1312,7 +1312,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             wpkh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
                     hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
@@ -1334,7 +1334,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             shwpkh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7",)
@@ -1357,7 +1357,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             sh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("aa5282151694d3f2f32ace7d00ad38f927a33ac8",)
@@ -1380,7 +1380,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             wsh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
                     sha256::Hash::from_str(
@@ -1407,7 +1407,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             shwsh.script_pubkey(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e",)
@@ -1426,12 +1426,14 @@ mod tests {
     #[test]
     fn satisfy() {
         let secp = secp256k1::Secp256k1::new();
-        let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
-        let msg = secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
-            .expect("32 bytes");
-        let sig = secp.sign_ecdsa(&msg, &sk);
+        let mut sk_bytes = [0u8; 32];
+        sk_bytes.copy_from_slice(&b"sally was a secret key, she said"[..]);
+        let sk = secp256k1::SecretKey::from_secret_bytes(sk_bytes).unwrap();
+        let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&sk));
+        let mut msg_bytes = [0u8; 32];
+        msg_bytes.copy_from_slice(&b"michael was a message, amusingly"[..]);
+        let msg = secp256k1::Message::from_digest(msg_bytes);
+        let sig = secp.sign_ecdsa(msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 
@@ -1460,8 +1462,8 @@ mod tests {
         let ms = ms_str!("c:pk_k({})", pk);
 
         let mut txin = bitcoin::TxIn {
-            previous_output: bitcoin::OutPoint::default(),
-            script_sig: bitcoin::ScriptBuf::new(),
+            previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+            script_sig: bitcoin::ScriptSigBuf::new(),
             sequence: Sequence::from_height(100),
             witness: Witness::default(),
         };
@@ -1471,48 +1473,48 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(bare.unsigned_script_sig(), bitcoin::ScriptBuf::new());
+        assert_eq!(bare.unsigned_script_sig(), ScriptBuf::new());
 
         let pkh = Descriptor::new_pkh(pk).unwrap();
         pkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
-                    .push_key(&pk)
+                    .push_key(pk)
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(pkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
+        assert_eq!(pkh.unsigned_script_sig(), ScriptBuf::new());
 
         let wpkh = Descriptor::new_wpkh(pk).unwrap();
         wpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: bitcoin::ScriptBuf::new(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::ScriptSigBuf::new(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes()]),
             }
         );
-        assert_eq!(wpkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
+        assert_eq!(wpkh.unsigned_script_sig(), ScriptBuf::new());
 
         let shwpkh = Descriptor::new_sh_wpkh(pk).unwrap();
         shwpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
-        let redeem_script = script::Builder::new()
+        let redeem_script = crate::ScriptBuilder::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)
             .push_slice(
                 hash160::Hash::from_str("d1b2a1faf62e73460af885c687dee3b7189cd8ab")
@@ -1523,8 +1525,8 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
@@ -1533,7 +1535,7 @@ mod tests {
         );
         assert_eq!(
             shwpkh.unsigned_script_sig(),
-            script::Builder::new()
+            crate::ScriptBuilder::new()
                 .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                 .into_script()
         );
@@ -1544,8 +1546,8 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
                     .push_slice(<&PushBytes>::try_from(ms.encode().as_bytes()).unwrap())
                     .into_script(),
@@ -1553,7 +1555,7 @@ mod tests {
                 witness: Witness::default(),
             }
         );
-        assert_eq!(sh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
+        assert_eq!(sh.unsigned_script_sig(), ScriptBuf::new());
 
         let ms = ms_str!("c:pk_k({})", pk);
 
@@ -1562,22 +1564,22 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: bitcoin::ScriptBuf::new(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::ScriptSigBuf::new(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
             }
         );
-        assert_eq!(wsh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
+        assert_eq!(wsh.unsigned_script_sig(), ScriptBuf::new());
 
         let shwsh = Descriptor::new_sh_wsh(ms.clone()).unwrap();
         shwsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
-                    .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+                script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
+                    .push_slice(<&PushBytes>::try_from(bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes()).to_p2wsh().unwrap().as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
@@ -1585,8 +1587,8 @@ mod tests {
         );
         assert_eq!(
             shwsh.unsigned_script_sig(),
-            script::Builder::new()
-                .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+            crate::ScriptBuilder::new()
+                .push_slice(<&PushBytes>::try_from(bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes()).to_p2wsh().unwrap().as_bytes()).unwrap())
                 .into_script()
         );
     }
@@ -1722,8 +1724,8 @@ mod tests {
         .unwrap();
 
         let mut txin = bitcoin::TxIn {
-            previous_output: bitcoin::OutPoint::default(),
-            script_sig: bitcoin::ScriptBuf::new(),
+            previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+            script_sig: bitcoin::ScriptSigBuf::new(),
             sequence: Sequence::ZERO,
             witness: Witness::default(),
         };
@@ -1930,13 +1932,13 @@ mod tests {
             let addr_one = desc_one
                 .derive_at_index(index)
                 .unwrap()
-                .derived_descriptor(&secp_ctx)
+                .derived_descriptor()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
                 .derive_at_index(index)
                 .unwrap()
-                .derived_descriptor(&secp_ctx)
+                .derived_descriptor()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_expected = bitcoin::Address::from_str(raw_addr_expected)
@@ -1961,7 +1963,7 @@ mod tests {
                 let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
                 assert_eq!(desc.to_string(), desc_str);
                 let addr = desc
-                    .derived_descriptor(&secp_ctx)
+                    .derived_descriptor()
                     .address(bitcoin::Network::Bitcoin)
                     .unwrap();
                 assert_eq!(addr, addr_expected);
@@ -1983,7 +1985,7 @@ mod tests {
                 let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
                 assert_eq!(desc.to_string(), desc_str);
                 let addr = desc
-                    .derived_descriptor(&secp_ctx)
+                    .derived_descriptor()
                     .address(bitcoin::Network::Bitcoin)
                     .unwrap();
                 assert_eq!(addr, addr_expected);
@@ -2101,24 +2103,23 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn test_find_derivation_index_for_spk() {
-        let secp = secp256k1::Secp256k1::verification_only();
         let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
-        let script_at_0_1 = ScriptBuf::from_hex(
-            "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",
-        )
-        .unwrap();
+        let script_at_0_1 = ScriptBuf::from_bytes(
+            hex::decode_to_vec("5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb")
+                .unwrap(),
+        );
         let expected_concrete = Descriptor::from_str(
             "tr(0283dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145)",
         )
         .unwrap();
 
-        assert_eq!(descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1), Ok(None));
+        assert_eq!(descriptor.find_derivation_index_for_spk(&script_at_0_1, 0..1), Ok(None));
         assert_eq!(
-            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..2),
+            descriptor.find_derivation_index_for_spk(&script_at_0_1, 0..2),
             Ok(Some((1, expected_concrete.clone())))
         );
         assert_eq!(
-            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..10),
+            descriptor.find_derivation_index_for_spk(&script_at_0_1, 0..10),
             Ok(Some((1, expected_concrete)))
         );
     }

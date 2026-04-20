@@ -394,7 +394,7 @@ mod tests {
 
         // Empty tree
         let merkle_root = None;
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
         ret.push((
@@ -405,7 +405,7 @@ mod tests {
 
         // Single-leaf tree
         let merkle_root = Some(TapNodeHash::from(zero_hash));
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
         ret.push((
@@ -423,7 +423,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
         ret.push((
@@ -449,7 +449,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
         ret.push((
@@ -475,7 +475,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
 
@@ -521,7 +521,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
 
@@ -573,7 +573,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let internal_key = pk.to_x_only_pubkey();
+        let internal_key = UntweakedPublicKey::from(pk.to_x_only_pubkey());
         let output_key = internal_key.tap_tweak(merkle_root);
         let output_key_parity = output_key.as_x_only_public_key().parity();
 
