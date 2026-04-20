@@ -271,25 +271,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 
     /// Obtains the corresponding address for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        let addr = self.address_fallible(network);
-
-        // Size is checked in `check_global_consensus_validity`.
-        assert!(addr.is_ok());
-        addr.expect("only fails if size > MAX_SCRIPT_ELEMENT_SIZE")
-    }
-
-    fn address_fallible(&self, network: Network) -> Result<Address, Error> {
         // The redeem script for a P2SH-wrapped segwit descriptor is the wrapped
         // segwit output's scriptPubKey, not the inner witness/redeem script.
-        let address = match self.inner {
-            ShInner::Wsh(ref wsh) => Address::p2sh(&wsh.script_pubkey(), network)?,
-            ShInner::Wpkh(ref wpkh) => Address::p2sh(&wpkh.script_pubkey(), network)?,
+        // Size is checked in `check_global_consensus_validity`.
+        match self.inner {
+            ShInner::Wsh(ref wsh) => Address::p2sh(&wsh.script_pubkey(), network)
+                .expect("redeem script within size bounds"),
+            ShInner::Wpkh(ref wpkh) => Address::p2sh(&wpkh.script_pubkey(), network)
+                .expect("redeem script within size bounds"),
             ShInner::Ms(ref ms) => {
                 let redeem: bitcoin::script::RedeemScriptBuf = ms.encode();
-                Address::p2sh(&redeem, network)?
+                Address::p2sh(&redeem, network).expect("redeem script within size bounds")
             }
-        };
-        Ok(address)
+        }
     }
 
     /// Obtain the underlying miniscript for this descriptor, tagged as a
