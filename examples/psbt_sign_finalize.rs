@@ -16,8 +16,6 @@ use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::Descriptor;
 
 fn main() {
-    let secp256k1 = secp256k1::Secp256k1::new();
-
     let s = "wsh(t:or_c(pk(027a3565454fe1b749bccaef22aff72843a9c3efefd7b16ac54537a0c23f0ec0de),v:thresh(1,pkh(032d672a1a91cc39d154d366cd231983661b0785c7f27bc338447565844f4a6813),a:pkh(03417129311ed34c242c012cd0a3e0b9bca0065f742d0dfb63c78083ea6a02d4d9),a:pkh(025a687659658baeabdfc415164528065be7bcaade19342241941e556557f01e28))))#7hut9ukn";
     let bridge_descriptor = Descriptor::from_str(s).unwrap();
     //let bridge_descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&s).expect("parse descriptor string");
@@ -124,14 +122,14 @@ fn main() {
     let sk2 = *backup2_private.as_inner();
 
     // Finally construct the signature and add to psbt
-    let sig1 = secp256k1.sign_ecdsa(msg, &sk1);
+    let sig1 = secp256k1::ecdsa::sign(msg, &sk1);
     let pk1 = backup1_private.public_key();
-    assert!(secp256k1.verify_ecdsa(msg, &sig1, &pk1.to_inner()).is_ok());
+    assert!(secp256k1::ecdsa::verify(&sig1, msg, &pk1.to_inner()).is_ok());
 
     // Second key just in case
-    let sig2 = secp256k1.sign_ecdsa(msg, &sk2);
+    let sig2 = secp256k1::ecdsa::sign(msg, &sk2);
     let pk2 = backup2_private.public_key();
-    assert!(secp256k1.verify_ecdsa(msg, &sig2, &pk2.to_inner()).is_ok());
+    assert!(secp256k1::ecdsa::verify(&sig2, msg, &pk2.to_inner()).is_ok());
 
     psbt.inputs[0]
         .partial_sigs
@@ -140,7 +138,7 @@ fn main() {
     println!("{:#?}", psbt);
     println!("{}", psbt);
 
-    psbt.finalize_mut(&secp256k1).unwrap();
+    psbt.finalize_mut().unwrap();
     println!("{:#?}", psbt);
 
     let tx = psbt.extract_tx().expect("failed to extract tx");

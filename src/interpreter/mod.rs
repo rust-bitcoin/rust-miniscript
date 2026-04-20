@@ -192,9 +192,8 @@ impl<'txin> Interpreter<'txin> {
     // TODO: Create a good first issue to change this to error
     // TODO: Requires refactor to remove the script_code logic in order to use the new sighash API.
     #[allow(deprecated)] // For segwit_signature_hash
-    pub fn verify_sig<C: secp256k1::Verification, T: Borrow<TxOut>>(
+    pub fn verify_sig<T: Borrow<TxOut>>(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
         tx: &bitcoin::Transaction,
         input_idx: usize,
         prevouts: &sighash::Prevouts<T>,
@@ -245,9 +244,7 @@ impl<'txin> Interpreter<'txin> {
                 };
 
                 let success = msg.map(|msg| {
-                    let inner_pk = key.to_inner();
-                    secp.verify_ecdsa(msg, &ecdsa_sig.signature, &inner_pk)
-                        .is_ok()
+                    secp256k1::ecdsa::verify(&ecdsa_sig.signature, msg, &key.to_inner()).is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
             }
@@ -280,7 +277,7 @@ impl<'txin> Interpreter<'txin> {
                 };
                 let msg = sighash_msg.map(|hash| hash.to_byte_array());
                 let success = msg.map(|msg| {
-                    secp.verify_schnorr(&schnorr_sig.signature, &msg, xpk.as_inner())
+                    secp256k1::schnorr::verify(&schnorr_sig.signature, &msg, xpk.as_inner())
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -305,14 +302,13 @@ impl<'txin> Interpreter<'txin> {
     /// - For legacy outputs, no information about prevouts is required
     /// - For segwitv0 outputs, prevout at corresponding index with correct amount must be provided
     /// - For taproot outputs, information about all prevouts must be supplied
-    pub fn iter<'iter, C: secp256k1::Verification, T: Borrow<TxOut>>(
+    pub fn iter<'iter, T: Borrow<TxOut>>(
         &'iter self,
-        secp: &'iter secp256k1::Secp256k1<C>,
         tx: &'txin bitcoin::Transaction,
         input_idx: usize,
         prevouts: &'iter sighash::Prevouts<T>, // actually a 'prevouts, but 'prevouts: 'iter
     ) -> Iter<'txin, 'iter> {
-        self.iter_custom(Box::new(move |sig| self.verify_sig(secp, tx, input_idx, prevouts, sig)))
+        self.iter_custom(Box::new(move |sig| self.verify_sig(tx, input_idx, prevouts, sig)))
     }
 
     /// Creates an iterator over the satisfied spending conditions without checking signatures
