@@ -40,14 +40,14 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
-    let mut map: BTreeMap<hash160::Hash, bitcoin::secp256k1::XOnlyPublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, bitcoin::XOnlyPublicKey> = BTreeMap::new();
     let psbt_inputs = &sat.psbt.inputs;
     for psbt_input in psbt_inputs {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
         // all the keys added on a descriptor and thus we get keys from it.
         let public_keys = psbt_input.tap_key_origins.keys();
         for key in public_keys {
-            let bitcoin_key: bitcoin::secp256k1::XOnlyPublicKey = *key.as_inner();
+            let bitcoin_key: bitcoin::XOnlyPublicKey = *key;
             let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
             map.insert(hash, bitcoin_key);
         }
@@ -72,7 +72,7 @@ fn construct_tap_witness(
                 continue;
             }
             let script_spk = Script::from_bytes(script.as_bytes());
-            let ms = match Miniscript::<bitcoin::secp256k1::XOnlyPublicKey, Tap>::decode_consensus(
+            let ms = match Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(
                 script_spk,
             ) {
                 Ok(ms) => ms.substitute_raw_pkh(&map),

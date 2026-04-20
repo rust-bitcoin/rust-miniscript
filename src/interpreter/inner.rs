@@ -426,27 +426,6 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey,
     }
 }
 
-impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Ctx> {
-    fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
-        struct TranslateSecpXOnlyPk;
-
-        impl Translator<bitcoin::secp256k1::XOnlyPublicKey> for TranslateSecpXOnlyPk {
-            type TargetPk = BitcoinKey;
-            type Error = core::convert::Infallible;
-
-            fn pk(
-                &mut self,
-                pk: &bitcoin::secp256k1::XOnlyPublicKey,
-            ) -> Result<BitcoinKey, Self::Error> {
-                Ok(BitcoinKey::XOnlyPublicKey(bitcoin::key::XOnlyPublicKey::from(*pk)))
-            }
-
-            translate_hash_clone!(bitcoin::secp256k1::XOnlyPublicKey);
-        }
-        self.translate_pk_ctx(&mut TranslateSecpXOnlyPk)
-            .expect("Translation should succeed")
-    }
-}
 
 #[cfg(test)]
 mod tests {

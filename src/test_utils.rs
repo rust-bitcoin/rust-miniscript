@@ -9,7 +9,7 @@ use std::str::FromStr;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
-use bitcoin::secp256k1::XOnlyPublicKey;
+use bitcoin::XOnlyPublicKey;
 
 use crate::miniscript::context::SigType;
 use crate::{hash256, ToPublicKey, Translator};
@@ -164,12 +164,12 @@ impl StrKeyTranslator {
 impl StrXOnlyKeyTranslator {
     pub fn new() -> Self {
         let sks = random_sks(26);
-        let pks: Vec<_> = sks
+        let pks: Vec<XOnlyPublicKey> = sks
             .iter()
             .map(|sk| {
                 let keypair = secp256k1::Keypair::from_secret_key(sk);
                 let (pk, _parity) = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
-                pk
+                XOnlyPublicKey::from_secp(pk)
             })
             .collect();
         let mut pk_map = HashMap::new();

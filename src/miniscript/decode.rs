@@ -45,6 +45,14 @@ impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 }
 
+impl ParseableKey for bitcoin::XOnlyPublicKey {
+    fn from_slice(sl: &[u8]) -> Result<Self, KeyError> {
+        let secp: bitcoin::secp256k1::XOnlyPublicKey =
+            <bitcoin::secp256k1::XOnlyPublicKey as ParseableKey>::from_slice(sl)?;
+        Ok(bitcoin::XOnlyPublicKey::from_secp(secp))
+    }
+}
+
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
 
@@ -53,6 +61,7 @@ mod private {
     // Implement for those same types, but no others.
     impl Sealed for bitcoin::PublicKey {}
     impl Sealed for bitcoin::secp256k1::XOnlyPublicKey {}
+    impl Sealed for bitcoin::XOnlyPublicKey {}
 }
 
 #[derive(Copy, Clone, Debug)]
