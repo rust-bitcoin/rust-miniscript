@@ -9,7 +9,7 @@ use crate::miniscript::context;
 use crate::miniscript::limits::MAX_SCRIPT_ELEMENT_SIZE;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
-use crate::{MiniscriptKey, ScriptBuf, ScriptBuilder, ScriptContext, ToPublicKey};
+use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
 
 pub(crate) fn varint_len(n: usize) -> usize {
     // Equivalent to the CompactSize / VarInt length used by Bitcoin consensus encoding.
@@ -62,8 +62,8 @@ pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
     wit.iter().map(T::size).sum::<usize>() + varint_len(wit.len())
 }
 
-pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
-    let mut b = ScriptBuilder::new();
+pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> bitcoin::script::ScriptSigBuf {
+    let mut b = bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new();
     for (i, wit) in witness.iter().enumerate() {
         if let Ok(n) = bitcoin::script::read_scriptint_non_minimal(wit) {
             b = b.push_int(n).expect("not i32::MIN");
@@ -95,7 +95,7 @@ pub(crate) trait MsKeyBuilder {
         Ctx: ScriptContext;
 }
 
-impl MsKeyBuilder for ScriptBuilder {
+impl<T> MsKeyBuilder for bitcoin::script::Builder<T> {
     fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,

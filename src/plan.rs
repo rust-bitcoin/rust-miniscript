@@ -271,9 +271,7 @@ impl Plan {
     pub fn satisfy<Sat: Satisfier<DefiniteDescriptorKey>>(
         &self,
         stfr: &Sat,
-    ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
-        use bitcoin::blockdata::script::Builder;
-
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error> {
         let stack = self
             .template
             .iter()
@@ -286,14 +284,20 @@ impl Plan {
                 vec![],
                 stack
                     .into_iter()
-                    .fold(Builder::new(), |builder, item| {
-                        let bytes = PushBytesBuf::try_from(item)
-                            .expect("All the possible placeholders can be made into PushBytesBuf");
-                        builder.push_slice(bytes)
-                    })
+                    .fold(
+                        bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new(),
+                        |builder, item| {
+                            let bytes = PushBytesBuf::try_from(item).expect(
+                                "All the possible placeholders can be made into PushBytesBuf",
+                            );
+                            builder.push_slice(bytes)
+                        },
+                    )
                     .into_script(),
             ),
-            DescriptorType::Wpkh | DescriptorType::Tr => (stack, ScriptBuf::new()),
+            DescriptorType::Wpkh | DescriptorType::Tr => {
+                (stack, bitcoin::script::ScriptSigBuf::new())
+            }
             DescriptorType::ShWpkh => (stack, self.descriptor.unsigned_script_sig()),
             DescriptorType::Wsh | DescriptorType::ShWsh => {
                 let mut stack = stack;

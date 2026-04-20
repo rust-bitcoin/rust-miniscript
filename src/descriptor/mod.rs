@@ -456,14 +456,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// This is used in Segwit transactions to produce an unsigned transaction
     /// whose txid will not change during signing (since only the witness data
     /// will change).
-    pub fn unsigned_script_sig(&self) -> ScriptBuf {
+    pub fn unsigned_script_sig(&self) -> bitcoin::script::ScriptSigBuf {
         match *self {
-            Descriptor::Bare(_) => ScriptBuf::new(),
-            Descriptor::Pkh(_) => ScriptBuf::new(),
-            Descriptor::Wpkh(_) => ScriptBuf::new(),
-            Descriptor::Wsh(_) => ScriptBuf::new(),
+            Descriptor::Bare(_) => bitcoin::script::ScriptSigBuf::new(),
+            Descriptor::Pkh(_) => bitcoin::script::ScriptSigBuf::new(),
+            Descriptor::Wpkh(_) => bitcoin::script::ScriptSigBuf::new(),
+            Descriptor::Wsh(_) => bitcoin::script::ScriptSigBuf::new(),
             Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
-            Descriptor::Tr(_) => ScriptBuf::new(),
+            Descriptor::Tr(_) => bitcoin::script::ScriptSigBuf::new(),
         }
     }
 
@@ -478,8 +478,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
             Descriptor::Wpkh(ref wpkh) => Ok(wpkh.script_pubkey()),
-            Descriptor::Wsh(ref wsh) => Ok(wsh.inner_script()),
-            Descriptor::Sh(ref sh) => Ok(sh.inner_script()),
+            Descriptor::Wsh(ref wsh) => {
+                Ok(ScriptBuf::from_bytes(wsh.inner_script().into_bytes()))
+            }
+            Descriptor::Sh(ref sh) => {
+                Ok(ScriptBuf::from_bytes(sh.inner_script().into_bytes()))
+            }
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
@@ -496,8 +500,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.ecdsa_sighash_script_code()),
             Descriptor::Wpkh(ref wpkh) => Ok(wpkh.ecdsa_sighash_script_code()),
-            Descriptor::Wsh(ref wsh) => Ok(wsh.ecdsa_sighash_script_code()),
-            Descriptor::Sh(ref sh) => Ok(sh.ecdsa_sighash_script_code()),
+            Descriptor::Wsh(ref wsh) => {
+                Ok(ScriptBuf::from_bytes(wsh.ecdsa_sighash_script_code().into_bytes()))
+            }
+            Descriptor::Sh(ref sh) => {
+                Ok(ScriptBuf::from_bytes(sh.ecdsa_sighash_script_code().into_bytes()))
+            }
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
@@ -505,7 +513,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -522,7 +533,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns a possilbly mallable satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction_mall<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -545,7 +559,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     {
         let (witness, script_sig) = self.get_satisfaction(satisfier)?;
         txin.witness = Witness::from_slice(&witness);
-        txin.script_sig = bitcoin::script::ScriptSigBuf::from(script_sig.into_bytes());
+        txin.script_sig = script_sig;
         Ok(())
     }
 }
@@ -1478,7 +1492,7 @@ mod tests {
                 witness: Witness::default(),
             }
         );
-        assert_eq!(bare.unsigned_script_sig(), ScriptBuf::new());
+        assert_eq!(bare.unsigned_script_sig(), bitcoin::script::ScriptSigBuf::new());
 
         let pkh = Descriptor::new_pkh(pk).unwrap();
         pkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1494,7 +1508,7 @@ mod tests {
                 witness: Witness::default(),
             }
         );
-        assert_eq!(pkh.unsigned_script_sig(), ScriptBuf::new());
+        assert_eq!(pkh.unsigned_script_sig(), bitcoin::script::ScriptSigBuf::new());
 
         let wpkh = Descriptor::new_wpkh(pk).unwrap();
         wpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1507,7 +1521,7 @@ mod tests {
                 witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes()]),
             }
         );
-        assert_eq!(wpkh.unsigned_script_sig(), ScriptBuf::new());
+        assert_eq!(wpkh.unsigned_script_sig(), bitcoin::script::ScriptSigBuf::new());
 
         let shwpkh = Descriptor::new_sh_wpkh(pk).unwrap();
         shwpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1532,7 +1546,7 @@ mod tests {
         );
         assert_eq!(
             shwpkh.unsigned_script_sig(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                 .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                 .into_script()
         );
@@ -1540,37 +1554,40 @@ mod tests {
         let ms = ms_str!("c:pk_k({})", pk);
         let sh = Descriptor::new_sh(ms.clone()).unwrap();
         sh.satisfy(&mut txin, &satisfier).expect("satisfaction");
+        let ms_redeem: bitcoin::script::RedeemScriptBuf = ms.encode();
         assert_eq!(
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
-                    .push_slice(<&PushBytes>::try_from(ms.encode().as_bytes()).unwrap())
+                    .push_slice(<&PushBytes>::try_from(ms_redeem.as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(sh.unsigned_script_sig(), ScriptBuf::new());
+        assert_eq!(sh.unsigned_script_sig(), bitcoin::script::ScriptSigBuf::new());
 
         let ms = ms_str!("c:pk_k({})", pk);
 
         let wsh = Descriptor::new_wsh(ms.clone()).unwrap();
         wsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
+        let ms_wit: bitcoin::WitnessScriptBuf = ms.encode();
         assert_eq!(
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::ScriptSigBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
+                witness: Witness::from_slice(&[sigser.clone(), ms_wit.into_bytes()]),
             }
         );
-        assert_eq!(wsh.unsigned_script_sig(), ScriptBuf::new());
+        assert_eq!(wsh.unsigned_script_sig(), bitcoin::script::ScriptSigBuf::new());
 
         let shwsh = Descriptor::new_sh_wsh(ms.clone()).unwrap();
         shwsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
+        let ms_wit2: bitcoin::WitnessScriptBuf = ms.encode();
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -1578,7 +1595,7 @@ mod tests {
                 script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(
                         <&PushBytes>::try_from(
-                            bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes())
+                            ms_wit2
                                 .to_p2wsh()
                                 .unwrap()
                                 .as_bytes()
@@ -1587,15 +1604,16 @@ mod tests {
                     )
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
+                witness: Witness::from_slice(&[sigser.clone(), ms_wit2.clone().into_bytes()]),
             }
         );
+        let ms_encoded: bitcoin::WitnessScriptBuf = ms.encode();
         assert_eq!(
             shwsh.unsigned_script_sig(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                 .push_slice(
                     <&PushBytes>::try_from(
-                        bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes())
+                        ms_encoded
                             .to_p2wsh()
                             .unwrap()
                             .as_bytes()

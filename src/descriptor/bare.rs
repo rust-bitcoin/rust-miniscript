@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ScriptBuf,
-    ScriptBuilder, ToPublicKey, TranslateErr, Translator,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -114,7 +114,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -127,7 +130,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction_mall<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -288,12 +294,15 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
         if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
-            let script_sig = ScriptBuilder::new()
+            let script_sig = bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                 .push_slice::<&PushBytes>(
                     // serialize() does not allocate here
                     sig.serialize().as_ref(),
@@ -310,7 +319,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction_mall<S>(
+        &self,
+        satisfier: S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {

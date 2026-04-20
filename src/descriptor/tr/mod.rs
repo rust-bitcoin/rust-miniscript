@@ -285,7 +285,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: &S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(
+        &self,
+        satisfier: &S,
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -293,7 +296,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
             .try_completing(satisfier)
             .expect("the same satisfier should manage to complete the template");
         if let Witness::Stack(stack) = satisfaction.stack {
-            Ok((stack, ScriptBuf::new()))
+            Ok((stack, bitcoin::script::ScriptSigBuf::new()))
         } else {
             Err(Error::CouldNotSatisfy)
         }
@@ -305,7 +308,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     pub fn get_satisfaction_mall<S>(
         &self,
         satisfier: &S,
-    ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    ) -> Result<(Vec<Vec<u8>>, bitcoin::script::ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -313,7 +316,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
             .try_completing(satisfier)
             .expect("the same satisfier should manage to complete the template");
         if let Witness::Stack(stack) = satisfaction.stack {
-            Ok((stack, ScriptBuf::new()))
+            Ok((stack, bitcoin::script::ScriptSigBuf::new()))
         } else {
             Err(Error::CouldNotSatisfy)
         }

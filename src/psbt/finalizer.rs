@@ -89,7 +89,8 @@ fn construct_tap_witness(
                     Err(..) => continue,
                 }
             };
-            wit.push(ms.encode().into_bytes());
+            let encoded: bitcoin::TapScriptBuf = ms.encode();
+            wit.push(encoded.into_bytes());
             wit.push(control_block.serialize());
             let wit_len = Some(witness_size(&wit));
             if min_wit_len.is_some() && wit_len > min_wit_len {
@@ -326,9 +327,9 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     for (index, input) in psbt.inputs.iter().enumerate() {
-        let empty_script_sig = ScriptBuf::new();
-        let script_sig_spk = match input.final_script_sig.as_ref() {
-            Some(sig) => ScriptBuf::from_bytes(sig.to_vec()),
+        let empty_script_sig = bitcoin::script::ScriptSigBuf::new();
+        let script_sig = match input.final_script_sig.as_ref() {
+            Some(sig) => sig.clone(),
             None => empty_script_sig,
         };
         let empty_witness = Witness::default();
@@ -338,7 +339,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
             .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
             .unwrap_or(empty_witness);
 
-        interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig_spk)?;
+        interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;
     }
     Ok(())
 }
@@ -350,7 +351,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     index: usize,
     utxos: &Prevouts<T>,
     witness: &Witness,
-    script_sig: &Script,
+    script_sig: &bitcoin::script::ScriptSig,
 ) -> Result<(), Error> {
     let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
 
@@ -360,8 +361,11 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     {
         let cltv = psbt.unsigned_tx.lock_time;
         let csv = psbt.unsigned_tx.inputs[index].sequence;
+        // The miniscript interpreter takes an untagged ScriptPubKey for both spk and sig;
+        // cast the tagged scriptSig bytes accordingly.
+        let script_sig_spk = Script::from_bytes(script_sig.as_bytes());
         let interpreter =
-            interpreter::Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
+            interpreter::Interpreter::from_txdata(&spk, script_sig_spk, witness, csv, cltv)
                 .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
         let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, utxos);
         if let Some(error) = iter.filter_map(Result::err).next() {
@@ -420,7 +424,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
     index: usize,
     secp: &Secp256k1<C>,
     allow_mall: bool,
-) -> Result<(Witness, ScriptBuf), super::Error> {
+) -> Result<(Witness, bitcoin::script::ScriptSigBuf), super::Error> {
     let (witness, script_sig) = {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let sat = PsbtInputSatisfier::new(psbt, index);
@@ -429,7 +433,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
             // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
             let wit = construct_tap_witness(&spk, &sat, allow_mall)
                 .map_err(|e| Error::InputError(e, index))?;
-            (wit, ScriptBuf::new())
+            (wit, bitcoin::script::ScriptSigBuf::new())
         } else {
             // Get a descriptor for this input.
             let desc = get_descriptor(psbt, index).map_err(|e| Error::InputError(e, index))?;

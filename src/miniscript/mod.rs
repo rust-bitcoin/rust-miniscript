@@ -21,7 +21,7 @@ use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
 use crate::prelude::*;
-use crate::{script_num_size, Script, ScriptBuf, ScriptBuilder, TranslateErr};
+use crate::{script_num_size, Script, TranslateErr};
 
 pub mod analyzable;
 pub mod astelem;
@@ -360,12 +360,18 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Get a reference to the inner `AstElem` representing the root of miniscript
     pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
-    /// Encode as a Bitcoin script
-    pub fn encode(&self) -> ScriptBuf
+    /// Encode as a Bitcoin script, tagged at the call site.
+    ///
+    /// The caller chooses the script tag `T`, so this works for
+    /// `ScriptPubKeyBuf`, `RedeemScriptBuf`, `WitnessScriptBuf`,
+    /// `TapScriptBuf`, etc. without any byte-level conversion.
+    pub fn encode<T>(&self) -> bitcoin::script::ScriptBuf<T>
     where
         Pk: ToPublicKey,
     {
-        self.node.encode(ScriptBuilder::new()).into_script()
+        self.node
+            .encode(bitcoin::script::Builder::<T>::new())
+            .into_script()
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
@@ -452,9 +458,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        let encoded = self.encode();
-        let tap_script = bitcoin::script::TapScript::from_bytes(encoded.as_bytes());
-        TapLeafHash::from_script(tap_script, LeafVersion::TapScript)
+        let encoded: bitcoin::script::TapScriptBuf = self.encode();
+        TapLeafHash::from_script(&encoded, LeafVersion::TapScript)
     }
 
     /// Attempt to produce non-malleable satisfying witness for the
@@ -1205,7 +1210,7 @@ mod tests {
 
     fn roundtrip(tree: &Segwitv0Script, s: &str) {
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser = tree.encode();
+        let ser: crate::ScriptBuf = tree.encode();
         assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
         let deser =
@@ -1225,7 +1230,8 @@ mod tests {
         let ms: Result<Segwitv0Script, _> = Miniscript::from_str_insane(ms);
         match (ms, valid) {
             (Ok(ms), true) => {
-                assert_eq!(format!("{:x}", ms.encode()), expected_hex);
+                let encoded: crate::ScriptBuf = ms.encode();
+                assert_eq!(format!("{:x}", encoded), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.static_ops + ms.ext.sat_data.unwrap().max_exec_op_count, ops);
@@ -1424,7 +1430,7 @@ mod tests {
 
         let tree: &Segwitv0Script = &ms_str!("c:pk_h({})", keys[5]);
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser = tree.encode();
+        let ser: crate::ScriptBuf = tree.encode();
         let s = "\
              OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
              7e5a2a6a7610ca4ea78bd65a087bd75b1870e319 \
@@ -1679,8 +1685,11 @@ mod tests {
         // );
         assert_eq!(tap_ms.script_size(), 104);
         assert_eq!(tap_ms_sorted.script_size(), 104);
-        assert_eq!(tap_ms.encode().len(), tap_ms.script_size());
-        assert_eq!(tap_ms_sorted.encode().len(), tap_ms_sorted.script_size());
+        assert_eq!(tap_ms.encode::<bitcoin::TapScriptTag>().len(), tap_ms.script_size());
+        assert_eq!(
+            tap_ms_sorted.encode::<bitcoin::TapScriptTag>().len(),
+            tap_ms_sorted.script_size()
+        );
 
         // Test satisfaction code
         struct SimpleSatisfier(secp256k1::schnorr::Signature);
@@ -1721,9 +1730,11 @@ mod tests {
         )
         .unwrap();
         let ms_trans = ms.translate_pk(&mut StrKeyTranslator::new()).unwrap();
-        let enc = ms_trans.encode();
+        let enc: crate::ScriptBuf = ms_trans.encode();
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(&enc).unwrap();
-        assert_eq!(ms_trans.encode(), ms.encode());
+        let trans_enc: crate::ScriptBuf = ms_trans.encode();
+        let re_enc: crate::ScriptBuf = ms.encode();
+        assert_eq!(trans_enc, re_enc);
     }
 
     #[test]

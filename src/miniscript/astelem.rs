@@ -12,16 +12,18 @@ use bitcoin::{absolute, opcodes};
 use crate::miniscript::context::SigType;
 use crate::miniscript::ScriptContext;
 use crate::util::MsKeyBuilder;
-use crate::{Miniscript, MiniscriptKey, ScriptBuilder, Terminal, ToPublicKey};
+use crate::{Miniscript, MiniscriptKey, Terminal, ToPublicKey};
 
-/// Helper trait to add a `push_astelem` method to `ScriptBuilder`
+/// Helper trait to add a `push_astelem` method to `bitcoin::script::Builder<T>`.
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
     fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
         Pk: ToPublicKey;
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for ScriptBuilder {
+impl<T, Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx>
+    for bitcoin::script::Builder<T>
+{
     fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
         Pk: ToPublicKey,
@@ -34,7 +36,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode(&self, mut builder: ScriptBuilder) -> ScriptBuilder
+    pub fn encode<T>(
+        &self,
+        mut builder: bitcoin::script::Builder<T>,
+    ) -> bitcoin::script::Builder<T>
     where
         Pk: ToPublicKey,
     {
