@@ -72,9 +72,8 @@ fn construct_tap_witness(
                 continue;
             }
             let script_spk = Script::from_bytes(script.as_bytes());
-            let ms = match Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(
-                script_spk,
-            ) {
+            let ms = match Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(script_spk)
+            {
                 Ok(ms) => ms.substitute_raw_pkh(&map),
                 Err(..) => continue, // try another script
             };

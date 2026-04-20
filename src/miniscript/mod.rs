@@ -1110,8 +1110,8 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::hashes::{hash160, sha256};
-    use bitcoin::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
+    use bitcoin::XOnlyPublicKey;
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};

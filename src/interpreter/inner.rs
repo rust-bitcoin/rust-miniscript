@@ -426,7 +426,6 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey,
     }
 }
 
-
 #[cfg(test)]
 mod tests {
 

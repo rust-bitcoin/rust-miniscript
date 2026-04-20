@@ -478,12 +478,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
             Descriptor::Wpkh(ref wpkh) => Ok(wpkh.script_pubkey()),
-            Descriptor::Wsh(ref wsh) => {
-                Ok(ScriptBuf::from_bytes(wsh.inner_script().into_bytes()))
-            }
-            Descriptor::Sh(ref sh) => {
-                Ok(ScriptBuf::from_bytes(sh.inner_script().into_bytes()))
-            }
+            Descriptor::Wsh(ref wsh) => Ok(ScriptBuf::from_bytes(wsh.inner_script().into_bytes())),
+            Descriptor::Sh(ref sh) => Ok(ScriptBuf::from_bytes(sh.inner_script().into_bytes())),
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
@@ -773,13 +769,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// Internally turns every secret key found into the corresponding public key and then returns a
     /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
-    pub fn parse_descriptor(
-        s: &str,
-    ) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
-        fn parse_key(
-            s: &str,
-            key_map: &mut KeyMap,
-        ) -> Result<DescriptorPublicKey, Error> {
+    pub fn parse_descriptor(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+        fn parse_key(s: &str, key_map: &mut KeyMap) -> Result<DescriptorPublicKey, Error> {
             match DescriptorSecretKey::from_str(s) {
                 Ok(sk) => {
                     let pk = key_map
@@ -1594,13 +1585,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                     .push_slice(
-                        <&PushBytes>::try_from(
-                            ms_wit2
-                                .to_p2wsh()
-                                .unwrap()
-                                .as_bytes()
-                        )
-                        .unwrap()
+                        <&PushBytes>::try_from(ms_wit2.to_p2wsh().unwrap().as_bytes()).unwrap()
                     )
                     .into_script(),
                 sequence: Sequence::from_height(100),
@@ -1612,13 +1597,7 @@ mod tests {
             shwsh.unsigned_script_sig(),
             bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
                 .push_slice(
-                    <&PushBytes>::try_from(
-                        ms_encoded
-                            .to_p2wsh()
-                            .unwrap()
-                            .as_bytes()
-                    )
-                    .unwrap()
+                    <&PushBytes>::try_from(ms_encoded.to_p2wsh().unwrap().as_bytes()).unwrap()
                 )
                 .into_script()
         );
