@@ -1094,7 +1094,7 @@ mod tests {
 
             let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
             let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&sk));
-            let signature = secp.sign_ecdsa(msg, &sk);
+            let signature = secp256k1::ecdsa::sign(msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,
@@ -1106,10 +1106,13 @@ mod tests {
 
             let secp_keypair = secp256k1::Keypair::from_secret_key(&sk);
             let keypair = bitcoin::key::Keypair::from_secp(secp_keypair);
-            let x_only_pk = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair);
+            // The interpreter reconstructs XOnlyPublicKey from a 32-byte push with default (Even)
+            // parity; normalise the test's expected keys the same way so assertions line up.
+            let x_only_pk = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair)
+                .with_parity(bitcoin::secp256k1::Parity::Even);
             x_only_pks.push(x_only_pk);
             let schnorr_sig =
-                secp.sign_schnorr_with_aux_rand(msg.as_ref(), &secp_keypair, &[0u8; 32]);
+                secp256k1::schnorr::sign_with_aux_rand(msg.as_ref(), &secp_keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,
@@ -1125,13 +1128,15 @@ mod tests {
         let (pks, der_sigs, ecdsa_sigs, sighash, secp, xpks, schnorr_sigs, ser_schnorr_sigs) =
             setup_keys_sigs(10);
         let secp_ref = &secp;
+        let _ = secp_ref;
         let vfyfn = |pksig: &KeySigPair| match pksig {
-            KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(sighash, &ecdsa_sig.signature, &pk.to_inner())
-                .is_ok(),
-            KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.signature, sighash.as_ref(), xpk.as_inner())
-                .is_ok(),
+            KeySigPair::Ecdsa(pk, ecdsa_sig) => {
+                ecdsa_sig.signature.verify(sighash, &pk.to_inner()).is_ok()
+            }
+            KeySigPair::Schnorr(xpk, schnorr_sig) => {
+                secp256k1::schnorr::verify(&schnorr_sig.signature, sighash.as_ref(), xpk.as_inner())
+                    .is_ok()
+            }
         };
 
         fn from_stack<'txin, 'elem>(

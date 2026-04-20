@@ -1104,7 +1104,7 @@ mod tests {
     use core::str;
     use core::str::FromStr;
 
-    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::hashes::{hash160, sha256};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
     use sync::Arc;
@@ -1337,10 +1337,10 @@ mod tests {
 
     #[test]
     fn true_false() {
-        roundtrip(&ms_str!("1"), "OP_PUSHNUM_1");
-        roundtrip(&ms_str!("tv:1"), "OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1");
+        roundtrip(&ms_str!("1"), "OP_1");
+        roundtrip(&ms_str!("tv:1"), "OP_1 OP_VERIFY OP_1");
         roundtrip(&ms_str!("0"), "OP_0");
-        roundtrip(&ms_str!("andor(0,1,0)"), "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF");
+        roundtrip(&ms_str!("andor(0,1,0)"), "OP_0 OP_NOTIF OP_0 OP_ELSE OP_1 OP_ENDIF");
 
         assert!(Segwitv0Script::from_str("1()").is_err());
         assert!(Segwitv0Script::from_str("tv:1()").is_err());
@@ -1373,7 +1373,7 @@ mod tests {
 
         string_rtt(
             script,
-            "[B/onduesm]pk(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/onduesm]pk(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
         );
 
@@ -1381,7 +1381,7 @@ mod tests {
 
         string_rtt(
             script,
-            "[B/onduesm]pk(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/onduesm]pk(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
         );
 
@@ -1389,7 +1389,7 @@ mod tests {
 
         string_rtt(
             script,
-            "[B/onufsm]t[V/onfsm]v:[B/onduesm]pk(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/onufsm]t[V/onfsm]v:[B/onduesm]pk(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "tv:pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
         );
 
@@ -1397,7 +1397,7 @@ mod tests {
 
         string_display_debug_test(
             script,
-            "[B/nduesm]pkh(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/nduesm]pkh(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
 
@@ -1405,7 +1405,7 @@ mod tests {
 
         string_display_debug_test(
             script,
-            "[B/nduesm]pkh(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/nduesm]pkh(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
 
@@ -1413,7 +1413,7 @@ mod tests {
 
         string_display_debug_test(
             script,
-            "[B/nufsm]t[V/nfsm]v:[B/nduesm]pkh(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "[B/nufsm]t[V/nfsm]v:[B/nduesm]pkh(PublicKey { compressed: true, inner: 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa })",
             "tv:pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
     }
@@ -1439,7 +1439,7 @@ mod tests {
         );
         roundtrip(
             &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
-            "OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG"
+            "OP_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_5 OP_CHECKMULTISIG"
         );
 
         // Liquid policy
@@ -1449,13 +1449,13 @@ mod tests {
                       keys[1].to_string(),
                       keys[3].to_string(),
                       keys[4].to_string()),
-            "OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
+            "OP_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                                   OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
-                                  OP_PUSHNUM_2 OP_CHECKMULTISIG \
+                                  OP_2 OP_CHECKMULTISIG \
                      OP_IFDUP OP_NOTIF \
-                         OP_PUSHNUM_2 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
+                         OP_2 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
                                       OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
-                                      OP_PUSHNUM_2 OP_CHECKMULTISIGVERIFY \
+                                      OP_2 OP_CHECKMULTISIGVERIFY \
                          OP_PUSHBYTES_2 1027 OP_CSV \
                      OP_ENDIF"
         );
@@ -1491,13 +1491,13 @@ mod tests {
 
         roundtrip(
             &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
-            "OP_PUSHNUM_3 \
+            "OP_3 \
              OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
              OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
              OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 \
              OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
              OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
-             OP_PUSHNUM_5 OP_CHECKMULTISIG",
+             OP_5 OP_CHECKMULTISIG",
         );
 
         roundtrip(
@@ -1506,11 +1506,11 @@ mod tests {
                      vu:hash256(131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b),\
                      v:sha256(ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5)\
                  )"),
-            "OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY OP_PUSHNUM_1"
+            "OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY OP_1"
         );
         roundtrip(
             &ms_str!("and_n(pk(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),and_b(l:older(4252898),a:older(16)))"),
-            "OP_PUSHBYTES_33 03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729 OP_CHECKSIG OP_NOTIF OP_0 OP_ELSE OP_IF OP_0 OP_ELSE OP_PUSHBYTES_3 e2e440 OP_CSV OP_ENDIF OP_TOALTSTACK OP_PUSHNUM_16 OP_CSV OP_FROMALTSTACK OP_BOOLAND OP_ENDIF"
+            "OP_PUSHBYTES_33 03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729 OP_CHECKSIG OP_NOTIF OP_0 OP_ELSE OP_IF OP_0 OP_ELSE OP_PUSHBYTES_3 e2e440 OP_CSV OP_ENDIF OP_TOALTSTACK OP_16 OP_CSV OP_FROMALTSTACK OP_BOOLAND OP_ENDIF"
         );
         roundtrip(
             &ms_str!(
@@ -1523,12 +1523,12 @@ mod tests {
                  v:older(4194305),\
                  v:sha256(9267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed2)\
                  )"),
-            "OP_PUSHNUM_3 OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e \
+            "OP_3 OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e \
              OP_PUSHBYTES_33 03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556 \
              OP_PUSHBYTES_33 02e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13 \
-             OP_PUSHNUM_3 OP_CHECKMULTISIG OP_NOTIF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 \
+             OP_3 OP_CHECKMULTISIG OP_NOTIF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 \
              OP_PUSHBYTES_32 9267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed2 OP_EQUALVERIFY \
-             OP_ELSE OP_PUSHBYTES_3 010040 OP_CSV OP_VERIFY OP_ENDIF OP_PUSHNUM_1"
+             OP_ELSE OP_PUSHBYTES_3 010040 OP_CSV OP_VERIFY OP_ENDIF OP_1"
         );
         roundtrip(
             &ms_str!(
@@ -1539,14 +1539,14 @@ mod tests {
             "\
              OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL \
              OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY \
-             OP_PUSHNUM_1\
+             OP_1\
              "
         );
 
         // Thresh bug with equal verify roundtrip
         roundtrip(
             &ms_str!("tv:thresh(1,pk(02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e))", ),
-            "OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e OP_CHECKSIG OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1",
+            "OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e OP_CHECKSIG OP_1 OP_EQUALVERIFY OP_1",
         );
     }
 
@@ -1733,9 +1733,8 @@ mod tests {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap();
-        let hash160 = bitcoin::hashes::hash160::Hash::from_byte_array(
-            pk.pubkey_hash().to_byte_array(),
-        );
+        let hash160 =
+            bitcoin::hashes::hash160::Hash::from_byte_array(pk.pubkey_hash().to_byte_array());
         let ms_str = &format!("c:expr_raw_pkh({})", hash160);
         type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
 

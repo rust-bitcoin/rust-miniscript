@@ -223,7 +223,7 @@ pub fn lex(script: &'_ Script) -> Result<Vec<Token>, Error> {
                     ret.push(Token::Bytes65(bytes));
                 } else {
                     // check minimality of the number
-                    match script::read_scriptint_non_minimal(bytes.as_bytes()) {
+                    match bytes.read_scriptint() {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }

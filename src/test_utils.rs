@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::secp256k1::XOnlyPublicKey;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
+use bitcoin::secp256k1::XOnlyPublicKey;
 
 use crate::miniscript::context::SigType;
 use crate::{hash256, ToPublicKey, Translator};

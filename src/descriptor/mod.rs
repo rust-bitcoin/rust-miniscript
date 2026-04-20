@@ -728,14 +728,13 @@ impl Descriptor<DescriptorPublicKey> {
     /// This is a shorthand for:
     ///
     /// ```
-    /// # use miniscript::{Descriptor, DescriptorPublicKey, bitcoin::secp256k1::Secp256k1};
+    /// # use miniscript::{Descriptor, DescriptorPublicKey};
     /// # use core::str::FromStr;
     /// # let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
     /// # let index = 42;
-    /// # let secp = Secp256k1::verification_only();
-    /// let derived_descriptor = descriptor.derive_at_index(index).unwrap().derived_descriptor(&secp);
-    /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
+    /// let derived_descriptor = descriptor.derive_at_index(index).unwrap().derived_descriptor();
+    /// # assert_eq!(descriptor.derived_descriptor(index).unwrap(), derived_descriptor);
     /// ```
     ///
     /// and is only here really here for backwards compatibility.
@@ -1166,10 +1165,9 @@ pub(crate) use write_descriptor;
 mod tests {
     use core::convert::TryFrom;
 
+    use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
-    use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes::Hash;
     use bitcoin::script::{PushBytes, ScriptExt as _, WitnessScriptExt as _};
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};
@@ -1433,7 +1431,8 @@ mod tests {
         let mut msg_bytes = [0u8; 32];
         msg_bytes.copy_from_slice(&b"michael was a message, amusingly"[..]);
         let msg = secp256k1::Message::from_digest(msg_bytes);
-        let sig = secp.sign_ecdsa(msg, &sk);
+        let _ = &secp;
+        let sig = secp256k1::ecdsa::sign(msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 
@@ -1579,7 +1578,15 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::script::Builder::<bitcoin::script::ScriptSigTag>::new()
-                    .push_slice(<&PushBytes>::try_from(bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes()).to_p2wsh().unwrap().as_bytes()).unwrap())
+                    .push_slice(
+                        <&PushBytes>::try_from(
+                            bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes())
+                                .to_p2wsh()
+                                .unwrap()
+                                .as_bytes()
+                        )
+                        .unwrap()
+                    )
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
@@ -1588,7 +1595,15 @@ mod tests {
         assert_eq!(
             shwsh.unsigned_script_sig(),
             crate::ScriptBuilder::new()
-                .push_slice(<&PushBytes>::try_from(bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes()).to_p2wsh().unwrap().as_bytes()).unwrap())
+                .push_slice(
+                    <&PushBytes>::try_from(
+                        bitcoin::WitnessScriptBuf::from(ms.encode().into_bytes())
+                            .to_p2wsh()
+                            .unwrap()
+                            .as_bytes()
+                    )
+                    .unwrap()
+                )
                 .into_script()
         );
     }
@@ -1915,7 +1930,6 @@ mod tests {
     #[test]
     fn test_sortedmulti() {
         fn _test_sortedmulti(raw_desc_one: &str, raw_desc_two: &str, raw_addr_expected: &str) {
-            let secp_ctx = secp256k1::Secp256k1::verification_only();
             let index = 5;
 
             // Parse descriptor
@@ -1947,8 +1961,6 @@ mod tests {
             assert_eq!(addr_one, addr_expected);
             assert_eq!(addr_two, addr_expected);
         }
-
-        let secp_ctx = secp256k1::Secp256k1::verification_only();
 
         // P2SH and pubkeys (no wildcard — descriptors are fully defined)
         {
@@ -2105,8 +2117,10 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     fn test_find_derivation_index_for_spk() {
         let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
         let script_at_0_1 = ScriptBuf::from_bytes(
-            hex::decode_to_vec("5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb")
-                .unwrap(),
+            hex::decode_to_vec(
+                "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",
+            )
+            .unwrap(),
         );
         let expected_concrete = Descriptor::from_str(
             "tr(0283dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145)",

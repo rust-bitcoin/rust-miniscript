@@ -142,7 +142,11 @@ fn hardcoded_xonlypubkeys() -> Vec<XOnlyPublicKey> {
     ];
     let mut keys: Vec<XOnlyPublicKey> = vec![];
     for key in serialized_keys {
-        keys.push(secp256k1::XOnlyPublicKey::from_byte_array(key).unwrap().into());
+        keys.push(
+            secp256k1::XOnlyPublicKey::from_byte_array(key)
+                .unwrap()
+                .into(),
+        );
     }
     keys
 }

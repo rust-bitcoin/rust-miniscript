@@ -747,7 +747,6 @@ mod test {
     use std::str::FromStr;
 
     use bitcoin::bip32::Xpub;
-    use secp256k1::Secp256k1;
 
     use super::*;
     use crate::*;
@@ -953,7 +952,7 @@ mod test {
                 vec![0, 1],
                 vec![],
                 None,
-                Some(absolute::LockTime::from_time(500_001_000).unwrap()),
+                Some(absolute::LockTime::from_mtp(500_001_000).unwrap()),
                 Some(153),
             ), // incompatible timelock
         ];
@@ -1055,7 +1054,7 @@ mod test {
                 vec![4],
                 vec![],
                 None,
-                Some(absolute::LockTime::from_time(1296000000).unwrap()),
+                Some(absolute::LockTime::from_mtp(1296000000).unwrap()),
                 None,
             ),
             // Spend with third leaf (key + timelock),
@@ -1178,8 +1177,6 @@ mod test {
         desc_str_fn: fn(&[bitcoin::PublicKey]) -> String,
         exp_witness_len: usize,
     ) -> Vec<Vec<u8>> {
-        let secp = Secp256k1::new();
-
         let (sks, pks): (Vec<_>, Vec<_>) = [
             b"sally was a secret key, she said",
             b"polly was a secret key, she said",
@@ -1198,11 +1195,11 @@ mod test {
         let sigs = sks
             .iter()
             .map(|sk| {
-                let sighash =
-                    secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
-                        .expect("32 bytes");
+                let mut msg_bytes = [0u8; 32];
+                msg_bytes.copy_from_slice(&b"michael was a message, amusingly"[..]);
+                let sighash = secp256k1::Message::from_digest(msg_bytes);
                 bitcoin::ecdsa::Signature {
-                    signature: secp.sign_ecdsa(sighash, sk),
+                    signature: secp256k1::ecdsa::sign(sighash, sk),
                     sighash_type: bitcoin::sighash::EcdsaSighashType::All,
                 }
             })

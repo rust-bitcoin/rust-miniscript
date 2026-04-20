@@ -510,14 +510,14 @@ mod tests {
                     .into_script(),
                 pkh_sig_justkey: ScriptBuilderLocal::new().push_key(key).into_script(),
                 wpkh_spk: wpkh_spk.clone(),
-                wpkh_stack: Witness::from_slice(&[dummy_sig_vec.clone(), key.to_bytes()]),
-                wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),
+                wpkh_stack: Witness::from_slice(&[dummy_sig_vec.clone(), key.to_vec()]),
+                wpkh_stack_justkey: Witness::from_slice(&[key.to_vec()]),
                 sh_wpkh_spk: ScriptBuf::new_p2sh(wpkh_scripthash),
                 sh_wpkh_sig: ScriptBuilderLocal::new()
                     .push_slice(<&PushBytes>::try_from(wpkh_spk[..].as_bytes()).unwrap())
                     .into_script(),
-                sh_wpkh_stack: Witness::from_slice(&[dummy_sig_vec, key.to_bytes()]),
-                sh_wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),
+                sh_wpkh_stack: Witness::from_slice(&[dummy_sig_vec, key.to_vec()]),
+                sh_wpkh_stack_justkey: Witness::from_slice(&[key.to_vec()]),
             }
         }
     }
@@ -582,14 +582,14 @@ mod tests {
         assert_eq!(script_code, Some(uncomp.pk_spk));
 
         // Scriptpubkey has invalid key
-        let mut spk = comp.pk_spk.to_bytes();
+        let mut spk = comp.pk_spk.to_vec();
         spk[1] = 5;
         let spk = ScriptBuf::from(spk);
         let err = from_txdata(&spk, &ScriptBuf::new(), &empty_wit).unwrap_err();
         assert_eq!(err.to_string(), "could not parse pubkey");
 
         // Scriptpubkey has invalid script
-        let mut spk = comp.pk_spk.to_bytes();
+        let mut spk = comp.pk_spk.to_vec();
         spk[0] = 100;
         let spk = ScriptBuf::from(spk);
         let err = from_txdata(&spk, &ScriptBuf::new(), &empty_wit).unwrap_err();
@@ -737,10 +737,7 @@ mod tests {
             from_txdata(&comp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack)
                 .expect("parse txdata");
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh));
-        assert_eq!(
-            stack,
-            Stack::from(vec![comp.sh_wpkh_stack.get_back(1).unwrap().into()])
-        );
+        assert_eq!(stack, Stack::from(vec![comp.sh_wpkh_stack.get_back(1).unwrap().into()]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
     }
 
@@ -821,7 +818,7 @@ mod tests {
         let wit_hash = bitcoin::script::WScriptHash::from_byte_array(
             sha256::Hash::hash(witness_script.as_bytes()).to_byte_array(),
         );
-        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_vec()]);
 
         let spk = ScriptBuf::new_p2wsh(wit_hash);
         let blank_script = ScriptBuf::new();
@@ -831,7 +828,7 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&[spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_vec()]);
         let err = from_txdata(&spk, &blank_script, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
@@ -858,7 +855,7 @@ mod tests {
         let wit_hash = bitcoin::script::WScriptHash::from_byte_array(
             sha256::Hash::hash(witness_script.as_bytes()).to_byte_array(),
         );
-        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_vec()]);
 
         let redeem_script = ScriptBuf::new_p2wsh(wit_hash);
         let script_sig = ScriptBuilderLocal::new()
@@ -880,7 +877,7 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&[spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_vec()]);
         let err = from_txdata(&spk, &script_sig, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 

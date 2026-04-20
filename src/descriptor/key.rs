@@ -1209,8 +1209,6 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// use miniscript::bitcoin::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
-    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
-    ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*").or(Err(()))?;
     /// let xpub = match key {
     ///     DescriptorPublicKey::XPub(xpub) => xpub,
@@ -1221,21 +1219,21 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1").or(Err(()))?)
     /// );
     /// assert_eq!(
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("ffffffff").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     None
     /// );
     /// assert_eq!(
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/100/0").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     None
     /// );
     /// # Ok(())

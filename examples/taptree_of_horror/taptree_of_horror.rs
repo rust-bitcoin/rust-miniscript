@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
 use bitcoin::absolute::LockTime;
+use bitcoin::blockdata::witness::Witness;
 use bitcoin::consensus::encode::serialize;
-use bitcoin::hashes::Hash;
 use bitcoin::hashes::hex::prelude::DisplayHex;
+use bitcoin::hashes::Hash;
 use bitcoin::transaction::Version;
 use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut};
-use bitcoin::blockdata::witness::Witness;
 use helper_fns::{produce_grim_hash, produce_kelly_hash, produce_key_pairs};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::policy::Concrete;

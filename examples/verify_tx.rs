@@ -85,15 +85,13 @@ fn main() {
     //
     // Same, but with the wrong signature hash, to demonstrate what happens
     // given an apparently invalid script.
-    let secp = Secp256k1::new();
+    let _secp = Secp256k1::new();
     let message = secp256k1::Message::from_digest([0x01; 32]);
 
     let iter = interpreter.iter_custom(Box::new(|key_sig: &KeySigPair| {
         let (pk, ecdsa_sig) = key_sig.as_ecdsa().expect("Ecdsa Sig");
         ecdsa_sig.sighash_type == bitcoin::sighash::EcdsaSighashType::All
-            && secp
-                .verify_ecdsa(message, &ecdsa_sig.signature, &pk.to_inner())
-                .is_ok()
+            && ecdsa_sig.signature.verify(message, &pk.to_inner()).is_ok()
     }));
 
     println!("\n\nExample three:\n");

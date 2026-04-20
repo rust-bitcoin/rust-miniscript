@@ -3,16 +3,15 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use miniscript::bitcoin::blockdata::witness::Witness;
 use miniscript::bitcoin::consensus::encode::deserialize_hex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
+use miniscript::bitcoin::ScriptPubKey;
 //use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
 use miniscript::bitcoin::{
-    transaction, Address, Amount, Network, OutPoint, PrivateKey, Sequence, Transaction,
-    TxIn, TxOut,
+    transaction, Address, Amount, Network, OutPoint, PrivateKey, Sequence, Transaction, TxIn, TxOut,
 };
-use miniscript::bitcoin::ScriptPubKey;
-use miniscript::bitcoin::blockdata::witness::Witness;
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::Descriptor;
 
