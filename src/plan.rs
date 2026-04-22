@@ -766,7 +766,7 @@ mod test {
                 assets = assets.add(hashes[hi]);
             }
 
-            let result = desc.clone().plan(&assets);
+            let result = desc.clone().into_plan(&assets);
             assert_eq!(
                 result.as_ref().ok().map(|plan| plan.satisfaction_weight()),
                 expected,
@@ -1105,7 +1105,7 @@ mod test {
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(internal_key);
         desc.clone()
-            .plan(&assets)
+            .into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_some(), "Internal key is missing");
@@ -1116,7 +1116,7 @@ mod test {
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(first_branch);
         desc.clone()
-            .plan(&assets)
+            .into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
@@ -1126,7 +1126,7 @@ mod test {
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(second_branch);
-        desc.plan(&assets)
+        desc.into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
@@ -1149,7 +1149,7 @@ mod test {
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(asset_key);
-        desc.plan(&assets)
+        desc.into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.witness_script.is_some(), "Witness script missing");
@@ -1202,7 +1202,7 @@ mod test {
             assets = assets.add(DescriptorPublicKey::from_str(&pk.to_string()).unwrap());
         }
 
-        let plan = desc.plan(&assets).expect("plan should succeed");
+        let plan = desc.into_plan(&assets).expect("plan should succeed");
 
         let (witness, script_sig) = plan.satisfy(&satisfier).expect("satisfy should succeed");
         assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());
