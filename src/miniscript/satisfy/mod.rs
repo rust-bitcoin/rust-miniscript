@@ -553,6 +553,103 @@ impl_tuple_satisfier!(A, B, C, D, E, F);
 impl_tuple_satisfier!(A, B, C, D, E, F, G);
 impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use bitcoin::{absolute, PublicKey};
+
+    use crate::descriptor::Descriptor;
+
+    #[test]
+    fn regression_895() {
+        // Tests a pathological descriptor whose cheapest satisfaction would require mixing
+        // timelocks, although a more expensive satisfaction is available that avoids the
+        // timelock mixing. This descriptor is accepted by rust-miniscript but its satisfier
+        // cannot produce a satisfaction for it.
+        //
+        // Prior to PR #895, the satisfaction logic would yield the invalid timelock-mixing
+        // satisfaction. After PR #895, it yields no satisfaction at all.
+        //
+        // The correct behavior is arguably to find the more expensive satisfaction. Doing
+        // this would would require some sort of backtracking in the satisfier and is highly
+        // nontrivial. Since triggering this bug requires generating a satisfaction in a
+        // context where both a height-based and time-based timelock are available, an
+        // impossible situation, it is probably not worth fixing.
+
+        // Setup: an unavailable key, used to make some branches unsatisfiable from the POV
+        // of the satisfier (but not the typechecker).
+        let unavailable_key = PublicKey::from_str(
+            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad3",
+        )
+        .unwrap();
+        // Setup: a satisfier that thinks that both a height-based and time-based timelock
+        // are available. This is needed for the second test.
+        let satisfier = (
+            absolute::LockTime::from_height(1000).unwrap(),
+            absolute::LockTime::from_time(2000000000).unwrap(),
+        );
+
+        // Construct a script that would mix timelocks:
+        // or_b(
+        //    n:or_i(
+        //        and_v(v:after(144),pk()),     // dissatisfied by a height-based timelock
+        //        thresh(3,pk(),s:pk(),s:pk())  // dissatisfied by 3empty sigs (more expensive)
+        //    ),
+        //    sdv:after(50)                     // satisfied by a lower height-based timelock
+        // )
+        //
+        // Here the or_i cannot be satisfied because none of the keys are available, so it
+        // must be dissatisfied (and the after(50) branch must be satisfied). However, there
+        // are two dissatisfactions for the or_i: one which dissatisfies the first branch,
+        // by using the height-based timelock, and one which dissatisfies the second branch,
+        // which is ignored since it's the more expensive of the two possibilities.
+        //
+        // We therefore take both the after(144) and after(50) branches, and the resulting
+        // plan should show after(144) since it's the higher one. However, prior to #895,
+        // we "did not notice" the after(144) since it appears as part of a dissatisfaction.
+        //
+        // Unrelatedly: the fact that the LHS of the `or_i` has a malleable dissatisfaction
+        // means that the whole script is malleable, and the fact that this parses at all is
+        // an instance of https://github.com/rust-bitcoin/rust-miniscript/issues/734
+
+        let descriptor_str = format!(
+            "wsh(or_b(n:or_i(and_v(v:after(144),pk({})),thresh(3,pk({}),s:pk({}),s:pk({}))),sdv:after(50)))",
+            unavailable_key, unavailable_key, unavailable_key, unavailable_key,
+        );
+        // Need DefiniteDescriptorKey https://github.com/rust-bitcoin/rust-miniscript/issues/927
+        let descriptor =
+            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
+        // Compute plan and confirm the timelock is correct.
+        let plan = descriptor.plan(&satisfier).unwrap();
+        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(144).unwrap()),);
+
+        // Same descriptor as above, except that now we use a time-based timelock rather than a
+        // lower height-based one. This time the "ideal" behavior would be that once we get to
+        // the final time-based timelock, we somehow backtrack and then use the more-expensive
+        // dissatisfaction choice for the `or_i`. (The type system guarantees that such a choice
+        // exists; otherwise the whole script would be flagged as mixing timelocks.)
+        //
+        // However, our code architecture doesn't let us backtrack like this, and it's only possible
+        // to get into this situation if (a) you have a pathological script like this, and (b) you
+        // call .plan() or .satisfy() with both a height-based and time-based timelock set (which
+        // is impossible for any actual transaction). So for now we just use this unit test to
+        // document the behavior.
+        let descriptor_str = format!(
+            "wsh(or_b(n:or_i(and_v(v:after(144),pk({})),thresh(2,pk({}),s:pk({}))),sdv:after(1000000000)))",
+            unavailable_key, unavailable_key, unavailable_key,
+        );
+        let descriptor =
+            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
+
+        let plan = descriptor.plan(&satisfier).unwrap();
+        assert_eq!(
+            plan.absolute_timelock,
+            Some(absolute::LockTime::from_time(1000000000).unwrap()),
+        );
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Type of schnorr signature to produce
 pub enum SchnorrSigType {
