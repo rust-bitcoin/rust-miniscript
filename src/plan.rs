@@ -210,20 +210,20 @@ where
 /// Calling `plan` on a Descriptor will return this structure,
 /// containing the cheapest spending path possible (considering the `Assets` given)
 #[derive(Debug, Clone)]
-pub struct Plan {
+pub struct Plan<Pk: MiniscriptKey> {
     /// This plan's witness template
-    pub(crate) template: Vec<Placeholder<DefiniteDescriptorKey>>,
+    pub(crate) template: Vec<Placeholder<Pk>>,
     /// The absolute timelock this plan uses
     pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<relative::LockTime>,
 
-    pub(crate) descriptor: Descriptor<DefiniteDescriptorKey>,
+    pub(crate) descriptor: Descriptor<Pk>,
 }
 
-impl Plan {
+impl<Pk: MiniscriptKey + ToPublicKey> Plan<Pk> {
     /// Returns the witness template
-    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> { &self.template }
+    pub fn witness_template(&self) -> &Vec<Placeholder<Pk>> { &self.template }
 
     /// Returns the witness version
     pub fn witness_version(&self) -> Option<WitnessVersion> {
@@ -264,7 +264,7 @@ impl Plan {
     }
 
     /// Try creating the final script_sig and witness using a [`Satisfier`]
-    pub fn satisfy<Sat: Satisfier<DefiniteDescriptorKey>>(
+    pub fn satisfy<Sat: Satisfier<Pk>>(
         &self,
         stfr: &Sat,
     ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
@@ -302,7 +302,9 @@ impl Plan {
             }
         })
     }
+}
 
+impl Plan<DefiniteDescriptorKey> {
     /// Update a PSBT input with the metadata required to complete this plan
     ///
     /// This will only add the metadata for items required to complete this plan. For example, if

@@ -10,7 +10,7 @@ use core::fmt;
 
 use bitcoin::{Address, Network, ScriptBuf, Weight};
 
-use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
+use crate::descriptor::write_descriptor;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -159,27 +159,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
         let script_sig = ScriptBuf::new();
         Ok((witness, script_sig))
     }
-}
 
-impl Wsh<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
-    pub fn plan_satisfaction<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         self.ms.build_template(provider)
     }
 
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
-    pub fn plan_satisfaction_mall<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction_mall<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         if let Terminal::SortedMulti(..) = self.ms.node {
             self.ms.build_template(provider)
@@ -363,16 +355,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     {
         self.get_satisfaction(satisfier)
     }
-}
 
-impl Wpkh<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
-    pub fn plan_satisfaction<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         let stack = if provider.provider_lookup_ecdsa_sig(&self.pk) {
             let stack = vec![
@@ -388,12 +375,9 @@ impl Wpkh<DefiniteDescriptorKey> {
     }
 
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
-    pub fn plan_satisfaction_mall<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction_mall<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         self.plan_satisfaction(provider)
     }

@@ -14,7 +14,7 @@ use bitcoin::script::PushBytes;
 use bitcoin::{script, Address, Network, ScriptBuf, Weight};
 
 use super::{Wpkh, Wsh};
-use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
+use crate::descriptor::write_descriptor;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -377,16 +377,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             _ => self.get_satisfaction(satisfier),
         }
     }
-}
 
-impl Sh<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
-    pub fn plan_satisfaction<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         match &self.inner {
             ShInner::Wsh(ref wsh) => wsh.plan_satisfaction(provider),
@@ -396,12 +391,9 @@ impl Sh<DefiniteDescriptorKey> {
     }
 
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
-    pub fn plan_satisfaction_mall<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction_mall<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         match &self.inner {
             ShInner::Wsh(ref wsh) => wsh.plan_satisfaction_mall(provider),
