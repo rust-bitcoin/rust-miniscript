@@ -464,7 +464,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     {
         // Only satisfactions for default versions (0xc0) are allowed.
         let satisfaction = satisfy::Satisfaction::satisfy(
-            &self.node,
+            self,
             &satisfier,
             self.ty.mall.safe,
             &self.leaf_hash_internal(),
@@ -482,7 +482,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Pk: ToPublicKey,
     {
         let satisfaction = satisfy::Satisfaction::satisfy_mall(
-            &self.node,
+            self,
             &satisfier,
             self.ty.mall.safe,
             &self.leaf_hash_internal(),
@@ -511,7 +511,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Pk: ToPublicKey,
     {
         satisfy::Satisfaction::build_template(
-            &self.node,
+            self,
             provider,
             self.ty.mall.safe,
             &self.leaf_hash_internal(),
@@ -527,7 +527,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Pk: ToPublicKey,
     {
         satisfy::Satisfaction::build_template_mall(
-            &self.node,
+            self,
             provider,
             self.ty.mall.safe,
             &self.leaf_hash_internal(),
