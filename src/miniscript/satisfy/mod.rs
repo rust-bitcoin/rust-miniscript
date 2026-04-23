@@ -1026,7 +1026,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         Ctx: ScriptContext,
         P: AssetProvider<Pk>,
     {
-        Self::dissat_sat(node, provider, false, root_has_sig, leaf_hash).sat
+        Self::sat_dissat(node, provider, false, root_has_sig, leaf_hash).sat
     }
 
     pub(crate) fn build_template_mall<P, Ctx>(
@@ -1039,7 +1039,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         Ctx: ScriptContext,
         P: AssetProvider<Pk>,
     {
-        Self::dissat_sat(node, provider, true, root_has_sig, leaf_hash).sat
+        Self::sat_dissat(node, provider, true, root_has_sig, leaf_hash).sat
     }
 
     // produce a non-malleable satisafaction for thesh frag

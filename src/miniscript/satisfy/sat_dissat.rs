@@ -310,7 +310,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     /// If the `malleable` flag is set to true, more efficient satisfactions may be found,
     /// but which a 3rd party may be able to replace with less efficient versions. (This
     /// flag does not affect dissatisfactions.)
-    pub(super) fn dissat_sat<Ctx, Sat>(
+    pub(super) fn sat_dissat<Ctx, Sat>(
         node: &Miniscript<Pk, Ctx>,
         stfr: &Sat,
         malleable: bool,
