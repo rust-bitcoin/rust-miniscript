@@ -7,7 +7,6 @@ use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
 use sync::Arc;
 
 use super::checksum;
-use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
@@ -318,27 +317,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
             Err(Error::CouldNotSatisfy)
         }
     }
-}
 
-impl Tr<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
-    pub fn plan_satisfaction<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         best_tap_spend(self, provider, false /* allow_mall */)
     }
 
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
-    pub fn plan_satisfaction_mall<P>(
-        &self,
-        provider: &P,
-    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    pub fn plan_satisfaction_mall<P>(&self, provider: &P) -> Satisfaction<Placeholder<Pk>>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         best_tap_spend(self, provider, true /* allow_mall */)
     }

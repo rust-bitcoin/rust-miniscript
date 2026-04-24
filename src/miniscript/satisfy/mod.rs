@@ -621,7 +621,7 @@ mod tests {
         let descriptor =
             Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
         // Compute plan and confirm the timelock is correct.
-        let plan = descriptor.plan(&satisfier).unwrap();
+        let plan = descriptor.into_plan(&satisfier).unwrap();
         assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(144).unwrap()),);
 
         // Same descriptor as above, except that now we use a time-based timelock rather than a
@@ -642,7 +642,7 @@ mod tests {
         let descriptor =
             Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
 
-        let plan = descriptor.plan(&satisfier).unwrap();
+        let plan = descriptor.into_plan(&satisfier).unwrap();
         assert_eq!(
             plan.absolute_timelock,
             Some(absolute::LockTime::from_time(1000000000).unwrap()),

@@ -210,20 +210,20 @@ where
 /// Calling `plan` on a Descriptor will return this structure,
 /// containing the cheapest spending path possible (considering the `Assets` given)
 #[derive(Debug, Clone)]
-pub struct Plan {
+pub struct Plan<Pk: MiniscriptKey> {
     /// This plan's witness template
-    pub(crate) template: Vec<Placeholder<DefiniteDescriptorKey>>,
+    pub(crate) template: Vec<Placeholder<Pk>>,
     /// The absolute timelock this plan uses
     pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<relative::LockTime>,
 
-    pub(crate) descriptor: Descriptor<DefiniteDescriptorKey>,
+    pub(crate) descriptor: Descriptor<Pk>,
 }
 
-impl Plan {
+impl<Pk: MiniscriptKey + ToPublicKey> Plan<Pk> {
     /// Returns the witness template
-    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> { &self.template }
+    pub fn witness_template(&self) -> &Vec<Placeholder<Pk>> { &self.template }
 
     /// Returns the witness version
     pub fn witness_version(&self) -> Option<WitnessVersion> {
@@ -264,7 +264,7 @@ impl Plan {
     }
 
     /// Try creating the final script_sig and witness using a [`Satisfier`]
-    pub fn satisfy<Sat: Satisfier<DefiniteDescriptorKey>>(
+    pub fn satisfy<Sat: Satisfier<Pk>>(
         &self,
         stfr: &Sat,
     ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
@@ -302,7 +302,9 @@ impl Plan {
             }
         })
     }
+}
 
+impl Plan<DefiniteDescriptorKey> {
     /// Update a PSBT input with the metadata required to complete this plan
     ///
     /// This will only add the metadata for items required to complete this plan. For example, if
@@ -764,7 +766,7 @@ mod test {
                 assets = assets.add(hashes[hi]);
             }
 
-            let result = desc.clone().plan(&assets);
+            let result = desc.clone().into_plan(&assets);
             assert_eq!(
                 result.as_ref().ok().map(|plan| plan.satisfaction_weight()),
                 expected,
@@ -1103,7 +1105,7 @@ mod test {
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(internal_key);
         desc.clone()
-            .plan(&assets)
+            .into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_some(), "Internal key is missing");
@@ -1114,7 +1116,7 @@ mod test {
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(first_branch);
         desc.clone()
-            .plan(&assets)
+            .into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
@@ -1124,7 +1126,7 @@ mod test {
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(second_branch);
-        desc.plan(&assets)
+        desc.into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
@@ -1147,7 +1149,7 @@ mod test {
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(asset_key);
-        desc.plan(&assets)
+        desc.into_plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
         assert!(psbt_input.witness_script.is_some(), "Witness script missing");
@@ -1200,7 +1202,7 @@ mod test {
             assets = assets.add(DescriptorPublicKey::from_str(&pk.to_string()).unwrap());
         }
 
-        let plan = desc.plan(&assets).expect("plan should succeed");
+        let plan = desc.into_plan(&assets).expect("plan should succeed");
 
         let (witness, script_sig) = plan.satisfy(&satisfier).expect("satisfy should succeed");
         assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());

@@ -552,14 +552,26 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     }
 }
 
-impl Descriptor<DefiniteDescriptorKey> {
+impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
+    /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
+    ///
+    /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
+    #[deprecated(since = "TBD", note = "use into_plan instead")]
+    #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
+    pub fn plan<P>(self, provider: &P) -> Result<Plan<Pk>, Self>
+    where
+        P: AssetProvider<Pk>,
+    {
+        self.into_plan(provider)
+    }
+
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
     ///
     /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
     #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
-    pub fn plan<P>(self, provider: &P) -> Result<Plan, Self>
+    pub fn into_plan<P>(self, provider: &P) -> Result<Plan<Pk>, Self>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
     {
         let satisfaction = match self {
             Descriptor::Bare(ref bare) => bare.plan_satisfaction(provider),
@@ -585,10 +597,22 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
     ///
     /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
+    #[deprecated(since = "TBD", note = "use into_plan_mall instead")]
     #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
-    pub fn plan_mall<P>(self, provider: &P) -> Result<Plan, Self>
+    pub fn plan_mall<P>(self, provider: &P) -> Result<Plan<Pk>, Self>
     where
-        P: AssetProvider<DefiniteDescriptorKey>,
+        P: AssetProvider<Pk>,
+    {
+        self.into_plan_mall(provider)
+    }
+
+    /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
+    ///
+    /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
+    #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
+    pub fn into_plan_mall<P>(self, provider: &P) -> Result<Plan<Pk>, Self>
+    where
+        P: AssetProvider<Pk>,
     {
         let satisfaction = match self {
             Descriptor::Bare(ref bare) => bare.plan_satisfaction_mall(provider),

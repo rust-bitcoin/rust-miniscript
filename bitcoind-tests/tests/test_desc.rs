@@ -475,7 +475,7 @@ fn test_plan_satisfy(
 
     let plan = definite_desc
         .clone()
-        .plan(&assets)
+        .into_plan(&assets)
         .expect("plan creation failed");
 
     let mut unsigned_tx = Transaction {
