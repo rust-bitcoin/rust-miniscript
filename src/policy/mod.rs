@@ -255,12 +255,6 @@ mod tests {
         assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
-    fn semantic_policy_rtt(s: &str) {
-        let sem = SemanticPol::from_str(s).unwrap();
-        let output = sem.normalized().to_string();
-        assert_eq!(s.to_lowercase(), output.to_lowercase());
-    }
-
     #[test]
     fn test_timelock_validity() {
         // only height
@@ -283,15 +277,51 @@ mod tests {
         concrete_policy_rtt("or(99@pk(X),1@pk(Y))");
         concrete_policy_rtt("and(pk(X),or(99@pk(Y),1@older(12960)))");
 
-        semantic_policy_rtt("pk()");
-        semantic_policy_rtt("or(pk(X),pk(Y))");
-        semantic_policy_rtt("and(pk(X),pk(Y))");
-
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh(0)").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
         concrete_policy_rtt("ripemd160()");
+    }
+
+    #[test]
+    fn semantic_display_uses_mathematical_notation() {
+        let pol = SemanticPol::from_str("and(pk(A),pk(B))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "(pk(A) ∧ pk(B))");
+
+        let pol = SemanticPol::from_str("or(pk(A),pk(B))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "(pk(A) ∨ pk(B))");
+
+        let pol = SemanticPol::from_str("thresh(2,pk(A),pk(B),pk(C))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "#{pk(A), pk(B), pk(C)} = 2");
+    }
+
+    #[test]
+    fn semantic_display_roundtrips_via_from_str() {
+        // from_str must accept the mathematical Display output so that
+        // `Display` and `FromStr` round-trip (a property serde relies on).
+        for s in [
+            "pk(A)",
+            "and(pk(A),pk(B))",
+            "or(pk(A),pk(B))",
+            "thresh(2,pk(A),pk(B),pk(C))",
+            "and(pk(A),or(pk(B),pk(C)))",
+            "thresh(2,pk(A),and(pk(B),pk(C)),pk(D))",
+        ] {
+            let pol = SemanticPol::from_str(s).unwrap().normalized();
+            let displayed = pol.to_string();
+            let reparsed = SemanticPol::from_str(&displayed).unwrap().normalized();
+            assert_eq!(pol, reparsed, "round-trip failed for {}", s);
+        }
+
+        // Parser must also accept direct mathematical-form input.
+        let math = "(pk(A) ∧ (pk(B) ∨ pk(C)))";
+        let fncall = "and(pk(A),or(pk(B),pk(C)))";
+        assert_eq!(SemanticPol::from_str(math).unwrap(), SemanticPol::from_str(fncall).unwrap(),);
+
+        let math = "#{pk(A), pk(B), pk(C)} = 2";
+        let fncall = "thresh(2,pk(A),pk(B),pk(C))";
+        assert_eq!(SemanticPol::from_str(math).unwrap(), SemanticPol::from_str(fncall).unwrap(),);
     }
 
     #[test]
