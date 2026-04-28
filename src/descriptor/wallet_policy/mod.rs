@@ -5,7 +5,7 @@ use core::str::FromStr;
 
 use super::key::XKeyParseError;
 use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
-use crate::{Descriptor, DescriptorPublicKey, String, Translator, Vec};
+use crate::{BTreeSet, Descriptor, DescriptorPublicKey, String, Translator, Vec};
 
 mod key_expression;
 
@@ -119,7 +119,9 @@ impl WalletPolicy {
     /// Sets the key information so that `WalletPolicy::into_descriptor` can be
     /// called successfully. Errors when there are not enough keys for the template.
     pub fn set_key_info(&mut self, keys: &[DescriptorPublicKey]) -> Result<(), WalletPolicyError> {
-        if keys.len() != self.template.iter_pk().count() {
+        let unique_placeholders: BTreeSet<u32> =
+            self.template.iter_pk().map(|k| k.index.0).collect();
+        if keys.len() != unique_placeholders.len() {
             return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
         }
         self.key_info = keys.to_vec();
