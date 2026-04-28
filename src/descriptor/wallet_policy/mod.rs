@@ -379,4 +379,27 @@ mod tests {
         template_only.set_key_info(&keys).unwrap();
         assert!(template_only.clone().into_descriptor().is_ok());
     }
+
+    // Regression test for a bug where set_key_info() counted key-expression
+    // occurrences instead of unique placeholder indices. A template reusing @0
+    // with disjoint paths (e.g. @0/**,@0/<2;3>/*) has 2 occurrences but only 1
+    // unique placeholder. The old code accepted 2 keys, silently dropping the
+    // second one during descriptor translation since both @0 resolve to
+    // key_info[0].
+    // Reported by jm@squareup.com
+    #[test]
+    fn set_key_info_rejects_extra_keys_for_repeated_placeholder() {
+        let mut policy = WalletPolicy::from_str("wsh(sortedmulti(2,@0/**,@0/<2;3>/*))").unwrap();
+        let attacker_key: DescriptorPublicKey = "[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw".parse().unwrap();
+        let victim_key: DescriptorPublicKey = "[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7".parse().unwrap();
+
+        // Must reject: 2 keys provided but only 1 unique placeholder (@0)
+        assert_eq!(
+            policy.set_key_info(&[attacker_key.clone(), victim_key]),
+            Err(WalletPolicyError::WalletPolicyInvalidKeyInfo),
+        );
+
+        // Must accept: 1 key for 1 unique placeholder
+        assert!(policy.set_key_info(&[attacker_key]).is_ok());
+    }
 }
