@@ -7,7 +7,7 @@ use core::fmt;
 use std::error;
 
 use super::semantic::Semantic;
-use super::Policy as Concrete;
+use super::Policy;
 use crate::descriptor::Descriptor;
 use crate::iter::TreeLike as _;
 use crate::miniscript::{Miniscript, ScriptContext};
@@ -21,7 +21,7 @@ use crate::{Error, MiniscriptKey, Terminal, Threshold};
 ///
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
 /// maintain the following invariant(modulo resource limits):
-/// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
+/// `Lift(Policy) == Policy -> Miniscript -> Script -> Miniscript -> Semantic`
 ///
 /// Lifting from [`Miniscript`] or [`Descriptor`] can fail if the miniscript
 /// contains a timelock combination or if it contains a branch that exceeds
@@ -179,34 +179,34 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(self.clone()) }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Policy<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // do not lift if there is a possible satisfaction
         // involving combination of timelocks and heightlocks
         self.check_timelocks().map_err(Error::ConcretePolicy)?;
         let ret = match *self {
-            Concrete::Unsatisfiable => Semantic::Unsatisfiable,
-            Concrete::Trivial => Semantic::Trivial,
-            Concrete::Key(ref pk) => Semantic::Key(pk.clone()),
-            Concrete::After(t) => Semantic::After(t),
-            Concrete::Older(t) => Semantic::Older(t),
-            Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
-            Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
-            Concrete::And(ref subs) => {
+            Policy::Unsatisfiable => Semantic::Unsatisfiable,
+            Policy::Trivial => Semantic::Trivial,
+            Policy::Key(ref pk) => Semantic::Key(pk.clone()),
+            Policy::After(t) => Semantic::After(t),
+            Policy::Older(t) => Semantic::Older(t),
+            Policy::Sha256(ref h) => Semantic::Sha256(h.clone()),
+            Policy::Hash256(ref h) => Semantic::Hash256(h.clone()),
+            Policy::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
+            Policy::Hash160(ref h) => Semantic::Hash160(h.clone()),
+            Policy::And(ref subs) => {
                 let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
                     subs.iter().map(Liftable::lift).collect();
                 let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
                 Semantic::Thresh(Threshold::new(2, semantic_subs).unwrap())
             }
-            Concrete::Or(ref subs) => {
+            Policy::Or(ref subs) => {
                 let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
                     subs.iter().map(|(_p, sub)| sub.lift()).collect();
                 let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
                 Semantic::Thresh(Threshold::new(1, semantic_subs).unwrap())
             }
-            Concrete::Thresh(ref thresh) => {
+            Policy::Thresh(ref thresh) => {
                 Semantic::Thresh(thresh.translate_ref(|sub| Liftable::lift(sub).map(Arc::new))?)
             }
         }
@@ -214,6 +214,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         Ok(ret)
     }
 }
-impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Policy<Pk>> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> { self.as_ref().lift() }
 }

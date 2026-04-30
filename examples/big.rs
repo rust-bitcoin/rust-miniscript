@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use bitcoin::{ecdsa, XOnlyPublicKey};
 use miniscript::descriptor::Wsh;
-use miniscript::policy::{Concrete, Liftable};
+use miniscript::policy::{Policy, Liftable};
 use miniscript::psbt::PsbtExt;
 use miniscript::{
     translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
@@ -44,7 +44,7 @@ fn main() {
     use_descriptor(d);
     println!("{:?}", m);
 
-    let p = Concrete::<bitcoin::PublicKey>::from_str(&i).unwrap();
+    let p = Policy::<bitcoin::PublicKey>::from_str(&i).unwrap();
     let h = Wsh::new(p.compile().unwrap()).unwrap();
     println!("{}", h);
     println!("{:?}", h.lift());
@@ -60,7 +60,7 @@ fn main() {
     let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
     d.satisfy(&mut tx.input[0], &sigs).unwrap();
 
-    let pol = Concrete::<String>::from_str(&i).unwrap();
+    let pol = Policy::<String>::from_str(&i).unwrap();
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
     println!("{}", desc);
     let pk_map = HashMap::new();

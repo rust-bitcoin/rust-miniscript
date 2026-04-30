@@ -7,7 +7,7 @@ use miniscript::bitcoin::key::{Keypair, XOnlyPublicKey};
 use miniscript::bitcoin::secp256k1::rand;
 use miniscript::bitcoin::{Network, WitnessVersion};
 use miniscript::descriptor::DescriptorType;
-use miniscript::policy::Concrete;
+use miniscript::policy::Policy;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, Translator};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
@@ -42,7 +42,7 @@ fn main() {
     .replace(&[' ', '\n', '\t'][..], "");
 
     let _ms = Miniscript::<String, Tap>::from_str("and_v(v:ripemd160(H),pk(A))").unwrap();
-    let pol = Concrete::<String>::from_str(&pol_str).unwrap();
+    let pol = Policy::<String>::from_str(&pol_str).unwrap();
     // In case we can't find an internal key for the given policy, we set the internal key to
     // a random pubkey as specified by BIP341 (which are *unspendable* by any party :p)
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();

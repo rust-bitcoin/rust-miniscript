@@ -15,7 +15,7 @@ macro_rules! ms_str {
 /// `policy_str!("wsh(c:or_i(pk({}),pk({})))", pk1, pk2)`
 #[cfg(all(feature = "compiler", test))]
 macro_rules! policy_str {
-    ($($arg:tt)*) => ($crate::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
+    ($($arg:tt)*) => ($crate::policy::Policy::from_str(&format!($($arg)*)).unwrap())
 }
 
 /// A macro that implements serde serialization and deserialization using the

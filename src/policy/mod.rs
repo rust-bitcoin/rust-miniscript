@@ -713,7 +713,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Ok(Arc::try_unwrap(root_node).unwrap())
     }
 
-    /// Translates `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting `TapKey`.
+    /// Translates `Policy::Key(key)` to `Policy::Unsatisfiable` when extracting `TapKey`.
     pub fn translate_unsatisfiable_pk(self, key: &Pk) -> Policy<Pk> {
         use Policy::*;
 
@@ -1249,11 +1249,11 @@ mod compiler_tests {
     use core::str::FromStr;
 
     use super::*;
-    use crate::policy::Concrete;
+    use crate::policy::Policy;
 
     #[test]
     fn test_gen_comb() {
-        let policies: Vec<Arc<Concrete<String>>> = vec!["pk(A)", "pk(B)", "pk(C)", "pk(D)"]
+        let policies: Vec<Arc<Policy<String>>> = vec!["pk(A)", "pk(B)", "pk(C)", "pk(D)"]
             .into_iter()
             .map(|st| policy_str!("{}", st))
             .map(Arc::new)
@@ -1331,7 +1331,7 @@ mod tests {
     use crate::{descriptor::TapTree, Tap};
     use crate::{Miniscript, RelLockTime, Threshold};
 
-    type ConcretePol = Concrete<String>;
+    type ConcretePol = Policy<String>;
     type SemanticPol = Semantic<String>;
 
     fn concrete_policy_rtt(s: &str) {
@@ -1460,7 +1460,7 @@ mod tests {
         // Trivial single-node compilation
         let unspendable_key: String = "UNSPENDABLE".to_string();
         {
-            let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
+            let policy: Policy<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
             let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
@@ -1472,7 +1472,7 @@ mod tests {
 
         // Trivial multi-node compilation
         {
-            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
+            let policy: Policy<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
             let left_ms_compilation: Miniscript<String, Tap> = ms_str!("and_v(v:pk(C),pk(D))");
@@ -1489,7 +1489,7 @@ mod tests {
 
         {
             // Invalid policy compilation (Duplicate PubKeys)
-            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
+            let policy: Policy<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
 
             assert_eq!(descriptor.unwrap_err().to_string(), "Policy contains duplicate keys");
@@ -1511,7 +1511,7 @@ mod tests {
             let node_probabilities: [f64; 7] =
                 [0.12000002, 0.28, 0.08, 0.12, 0.19, 0.18999998, 0.02];
 
-            let policy: Concrete<String> = policy_str!(
+            let policy: Policy<String> = policy_str!(
                 "{}",
                 &format!(
                     "or(4@or(3@{},7@{}),6@thresh(1,or(4@{},6@{}),{},or(9@{},1@{})))",
@@ -1540,7 +1540,7 @@ mod tests {
             let node_compilations = sorted_policies
                 .into_iter()
                 .map(|x| {
-                    let leaf_policy: Concrete<String> = policy_str!("{}", x);
+                    let leaf_policy: Policy<String> = policy_str!("{}", x);
                     TapTree::leaf(leaf_policy.compile::<Tap>().unwrap())
                 })
                 .collect::<Vec<_>>();
@@ -1576,7 +1576,7 @@ mod tests {
         let unspendable_key = "UNSPEND".to_string();
 
         {
-            let pol = Concrete::<String>::from_str(
+            let pol = Policy::<String>::from_str(
                 "thresh(7,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H))",
             )
             .unwrap();
@@ -1604,7 +1604,7 @@ mod tests {
 
         {
             let pol =
-                Concrete::<String>::from_str("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))").unwrap();
+                Policy::<String>::from_str("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))").unwrap();
             let desc = pol
                 .compile_tr_private_experimental(Some(unspendable_key.clone()))
                 .unwrap();
@@ -1640,7 +1640,7 @@ mod tests {
 
         // Simple or: one key becomes internal key, other is single leaf
         {
-            let policy: Concrete<String> = policy_str!("or(pk(A),pk(B))");
+            let policy: Policy<String> = policy_str!("or(pk(A),pk(B))");
             let desc = policy
                 .compile_tr_native(Some(unspendable_key.clone()), 128)
                 .unwrap();
@@ -1651,7 +1651,7 @@ mod tests {
         // And(Or(A,B), C) -> 2 leaves via cross-product; verify semantic equivalence
         // (compile_tr_native and compile_tr should produce same semantic policy when lifted)
         {
-            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),pk(C))");
+            let policy: Policy<String> = policy_str!("and(or(pk(A),pk(B)),pk(C))");
             let desc = policy
                 .compile_tr_native(Some(unspendable_key.clone()), 128)
                 .unwrap();
@@ -1679,7 +1679,7 @@ mod tests {
 
         // Or of Ands: 2 leaves (same as compile_tr); verify semantic equivalence
         {
-            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
+            let policy: Policy<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
             let desc = policy
                 .compile_tr_native(Some(unspendable_key.clone()), 128)
                 .unwrap();
@@ -1699,14 +1699,14 @@ mod tests {
 
         // max_leaves caps the enumeration
         {
-            let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D),pk(E))");
+            let policy: Policy<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D),pk(E))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 1024);
             assert!(result.is_ok());
         }
 
         // max_leaves=0 returns error
         {
-            let policy: Concrete<String> = policy_str!("or(pk(A),pk(B))");
+            let policy: Policy<String> = policy_str!("or(pk(A),pk(B))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 0);
             assert!(matches!(result, Err(super::compiler::CompilerError::TooManyTapleaves { .. })));
         }
@@ -1714,7 +1714,7 @@ mod tests {
         // max_leaves too small: returns TooManyTapleaves or IfFragmentInNativeLeaf
         // (the latter when enumeration stops early, leaving unexpanded branches)
         {
-            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
+            let policy: Policy<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 2);
             assert!(
                 matches!(
@@ -1729,7 +1729,7 @@ mod tests {
 
         // and(or(A,B),or(C,D)) -> 4 leaves via cross-product; verify semantic equivalence
         {
-            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
+            let policy: Policy<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
             let desc = policy
                 .compile_tr_native(Some(unspendable_key.clone()), 128)
                 .unwrap();
@@ -1749,7 +1749,7 @@ mod tests {
 
         // thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E)) -> 10 leaves (C(5,3)=10), all distinct
         {
-            let policy: Concrete<String> = policy_str!("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))");
+            let policy: Policy<String> = policy_str!("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))");
             let desc = policy
                 .compile_tr_native(Some(unspendable_key.clone()), 128)
                 .unwrap();
