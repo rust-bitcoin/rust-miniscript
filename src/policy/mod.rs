@@ -18,7 +18,10 @@ pub mod compiler;
 pub mod concrete;
 pub mod semantic;
 
+pub use self::concrete::Policy;
+// Deprecated, use `policy::Policy` instead.
 pub use self::concrete::Policy as Concrete;
+// Deprecated, use `policy::semantic::Semantic` instead"
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::iter::TreeLike as _;

@@ -9,6 +9,7 @@ use core::{fmt, str};
 
 use bitcoin::{absolute, relative};
 
+pub use self::Policy as Semantic;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
