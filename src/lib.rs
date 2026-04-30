@@ -89,8 +89,7 @@ compile_error!(
     "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
 );
 
-pub use bitcoin;
-pub use hex;
+pub use {bitcoin, hex};
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
