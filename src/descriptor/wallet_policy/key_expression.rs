@@ -23,10 +23,13 @@ pub struct KeyExpression {
     pub wildcard: Wildcard,
 }
 
+/// The numeric index of a BIP-388 key placeholder (the `N` in `@N`).
 #[derive(Debug, Clone, Copy, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct KeyIndex(pub u32);
 
 impl KeyExpression {
+    /// Returns `true` if the multipath derivation suffixes of `self` and
+    /// `other` share no concrete child-derivation step.
     pub fn is_disjoint(&self, other: &KeyExpression) -> bool {
         let lhs: BTreeSet<_> = self
             .derivation_paths
