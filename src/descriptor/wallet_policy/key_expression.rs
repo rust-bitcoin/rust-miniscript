@@ -23,6 +23,7 @@ pub struct KeyExpression {
     pub wildcard: Wildcard,
 }
 
+/// The numeric index of a BIP-388 key placeholder (the `N` in `@N`).
 #[derive(Debug, Clone, Copy, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct KeyIndex(pub u32);
 

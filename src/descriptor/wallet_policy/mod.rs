@@ -9,7 +9,7 @@ use crate::{BTreeSet, Descriptor, DescriptorPublicKey, String, Translator, Vec};
 
 mod key_expression;
 
-use key_expression::{KeyExpression, KeyIndex};
+pub use key_expression::{KeyExpression, KeyIndex};
 
 /// A wallet policy as described in BIP-388
 ///
@@ -107,6 +107,15 @@ impl WalletPolicy {
     ) -> Result<WalletPolicy, WalletPolicyError> {
         WalletPolicy::from_descriptor_unchecked(descriptor).and_then(WalletPolicy::validate)
     }
+
+    /// Returns a reference to the template descriptor.
+    ///
+    /// Each [`KeyExpression`] yielded by `iter_pk()` carries a public
+    /// `index` field giving the BIP-388 placeholder index.
+    pub fn template(&self) -> &Descriptor<KeyExpression> { &self.template }
+
+    /// Returns the concrete keys, indexed in `template().iter_pk()` order.
+    pub fn key_info(&self) -> &[DescriptorPublicKey] { &self.key_info }
 
     /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
     /// the underlying template and key information.
@@ -401,5 +410,46 @@ mod tests {
 
         // Must accept: 1 key for 1 unique placeholder
         assert!(policy.set_key_info(&[attacker_key]).is_ok());
+    }
+
+    #[test]
+    fn template_accessor_yields_keyexpressions_with_placeholder_indices() {
+        // Template-only parse: key_info is empty until set_key_info() is called.
+        let template_only =
+            WalletPolicy::from_str("wsh(sortedmulti(2,@0/**,@1/**))").expect("parse template");
+        let indices: Vec<u32> = template_only
+            .template()
+            .iter_pk()
+            .map(|ke| ke.index.0)
+            .collect();
+        assert_eq!(indices, vec![0, 1]);
+        assert!(template_only.key_info().is_empty());
+        assert_eq!(format!("{:#}", template_only.template()), "wsh(sortedmulti(2,@0/**,@1/**))");
+    }
+
+    #[test]
+    fn template_accessor_distinguishes_ast_position_from_placeholder_index() {
+        // Same `@0` at two AST positions: `into_descriptor()` erases placeholder
+        // identity, but the template preserves it via `KeyExpression::index`.
+        let policy =
+            WalletPolicy::from_str("sh(multi(1,@0/**,@0/<2;3>/*))").expect("parse template");
+        let pairs: Vec<(usize, u32)> = policy
+            .template()
+            .iter_pk()
+            .enumerate()
+            .map(|(ast_pos, ke)| (ast_pos, ke.index.0))
+            .collect();
+        assert_eq!(pairs, vec![(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn key_info_accessor_preserves_source_order_of_concrete_keys() {
+        // A swap of key_info[0] and key_info[1] would pass any AST-order check
+        // that only inspects placeholder indices. Pin source-order by content.
+        let k0 = "[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<0;1>/*";
+        let k1 = "[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*";
+        let policy = WalletPolicy::from_str(&format!("wsh(multi(2,{k0},{k1}))")).unwrap();
+        let expected: Vec<DescriptorPublicKey> = vec![k0.parse().unwrap(), k1.parse().unwrap()];
+        assert_eq!(policy.key_info(), expected.as_slice());
     }
 }
