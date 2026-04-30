@@ -16,7 +16,8 @@ use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
+use crate::policy::semantic::Semantic;
+use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
@@ -182,7 +183,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
+    fn lift(&self) -> Result<Semantic<Pk>, Error> { self.ms.lift() }
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
@@ -394,9 +395,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
-    }
+    fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(Semantic::Key(self.pk.clone())) }
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {

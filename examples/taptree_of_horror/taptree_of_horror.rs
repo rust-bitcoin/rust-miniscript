@@ -8,7 +8,7 @@ use bitcoin::transaction::Version;
 use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut};
 use helper_fns::{produce_grim_hash, produce_kelly_hash, produce_key_pairs};
 use miniscript::descriptor::DescriptorSecretKey;
-use miniscript::policy::Concrete;
+use miniscript::policy::Policy;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, DescriptorPublicKey};
 mod helper_fns;
@@ -182,7 +182,7 @@ fn main() {
     .replace(&[' ', '\n', '\t'][..], "");
 
     // make sure policy doesn't have any issues
-    let pol = Concrete::<DescriptorPublicKey>::from_str(&pol_str).unwrap();
+    let pol = Policy::<DescriptorPublicKey>::from_str(&pol_str).unwrap();
     let policy_desc: Descriptor<DescriptorPublicKey> = pol.compile_tr(None).unwrap();
 
     // Now, using this public descriptor create the script address

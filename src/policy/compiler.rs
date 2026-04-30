@@ -14,12 +14,12 @@ use sync::Arc;
 use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
-use crate::policy::Concrete;
+use crate::policy::Policy;
 use crate::prelude::*;
 use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 
 type PolicyCache<Pk, Ctx> =
-    BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
+    BTreeMap<(Policy<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
 /// Ordered f64 for comparison.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -70,7 +70,7 @@ pub enum CompilerError {
         leaf_index: usize,
     },
     ///Policy related errors
-    PolicyError(policy::concrete::PolicyError),
+    PolicyError(policy::PolicyError),
 }
 
 impl fmt::Display for CompilerError {
@@ -130,8 +130,8 @@ impl error::Error for CompilerError {
 }
 
 #[doc(hidden)]
-impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
+impl From<policy::PolicyError> for CompilerError {
+    fn from(e: policy::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
@@ -790,7 +790,7 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// dissat probability map and get their closure.
 fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     data: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
@@ -816,7 +816,7 @@ fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// probabilities. This functions caches the results into a global policy cache.
 fn best_compilations<Pk, Ctx>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> Result<BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>, CompilerError>
@@ -851,32 +851,32 @@ where
     }
 
     match *policy {
-        Concrete::Unsatisfiable => {
+        Policy::Unsatisfiable => {
             insert_wrap!(AstElemExt::terminal(Miniscript::FALSE));
         }
-        Concrete::Trivial => {
+        Policy::Trivial => {
             insert_wrap!(AstElemExt::terminal(Miniscript::TRUE));
         }
-        Concrete::Key(ref pk) => {
+        Policy::Key(ref pk) => {
             insert_wrap!(AstElemExt::terminal(Miniscript::pk_h(pk.clone())));
             insert_wrap!(AstElemExt::terminal(Miniscript::pk_k(pk.clone())));
         }
-        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Miniscript::after(n))),
-        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Miniscript::older(n))),
-        Concrete::Sha256(ref hash) => {
+        Policy::After(n) => insert_wrap!(AstElemExt::terminal(Miniscript::after(n))),
+        Policy::Older(n) => insert_wrap!(AstElemExt::terminal(Miniscript::older(n))),
+        Policy::Sha256(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Miniscript::sha256(hash.clone())))
         }
         // Satisfaction-cost + script-cost
-        Concrete::Hash256(ref hash) => {
+        Policy::Hash256(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Miniscript::hash256(hash.clone())))
         }
-        Concrete::Ripemd160(ref hash) => {
+        Policy::Ripemd160(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Miniscript::ripemd160(hash.clone())))
         }
-        Concrete::Hash160(ref hash) => {
+        Policy::Hash160(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Miniscript::hash160(hash.clone())))
         }
-        Concrete::And(ref subs) => {
+        Policy::And(ref subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
             let mut left =
                 best_compilations(policy_cache, subs[0].as_ref(), sat_prob, dissat_prob)?;
@@ -899,13 +899,13 @@ where
             compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);
             compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
         }
-        Concrete::Or(ref subs) => {
+        Policy::Or(ref subs) => {
             let total = (subs[0].0 + subs[1].0) as f64;
             let lw = subs[0].0 as f64 / total;
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
+            if let (Policy::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     x[0].as_ref(),
@@ -932,7 +932,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, Concrete::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
+            if let (_, Policy::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     x[0].as_ref(),
@@ -1008,7 +1008,7 @@ where
             compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
             compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
         }
-        Concrete::Thresh(ref thresh) => {
+        Policy::Thresh(ref thresh) => {
             let k = thresh.k();
             let n = thresh.n();
             let k_over_n = k as f64 / n as f64;
@@ -1068,11 +1068,11 @@ where
 
             let key_count = thresh
                 .iter()
-                .filter(|s| matches!(***s, Concrete::Key(_)))
+                .filter(|s| matches!(***s, Policy::Key(_)))
                 .count();
             if key_count == thresh.n() {
                 let pk_thresh = thresh.map_ref(|s| {
-                    if let Concrete::Key(ref pk) = **s {
+                    if let Policy::Key(ref pk) = **s {
                         Pk::clone(pk)
                     } else {
                         unreachable!()
@@ -1094,7 +1094,7 @@ where
             if thresh.is_and() {
                 let mut it = thresh.iter();
                 let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
-                policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
+                policy = it.fold(policy, |acc, pol| Policy::And(vec![acc, pol.clone()]).into());
 
                 ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
             }
@@ -1125,7 +1125,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn compile_binary<Pk, Ctx, F>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     left_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     right_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
@@ -1160,7 +1160,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     a_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     b_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
@@ -1190,7 +1190,7 @@ fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
 
 /// Obtain the best compilation of for p=1.0 and q=0
 pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
 ) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
     let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
     let x = &*best_t(&mut policy_cache, policy, 1.0, None)?.ms;
@@ -1206,7 +1206,7 @@ pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// Obtain the best B expression with given sat and dissat
 fn best_t<Pk, Ctx>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
@@ -1228,7 +1228,7 @@ where
 fn best<Pk, Ctx>(
     basic_type: types::Base,
     policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
+    policy: &Policy<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
@@ -1261,8 +1261,8 @@ mod tests {
     use crate::policy::Liftable;
     use crate::{script_num_size, AbsLockTime, RelLockTime, Threshold, ToPublicKey};
 
-    type SPolicy = Concrete<String>;
-    type BPolicy = Concrete<bitcoin::PublicKey>;
+    type SPolicy = Policy<String>;
+    type BPolicy = Policy<bitcoin::PublicKey>;
     type TapAstElemExt = policy::compiler::AstElemExt<String, Tap>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
@@ -1302,11 +1302,11 @@ mod tests {
     #[test]
     fn compile_timelocks() {
         // artificially create a policy that is problematic and try to compile
-        let pol: SPolicy = Concrete::And(vec![
-            Arc::new(Concrete::Key("A".to_string())),
-            Arc::new(Concrete::And(vec![
-                Arc::new(Concrete::After(AbsLockTime::from_consensus(9).unwrap())),
-                Arc::new(Concrete::After(AbsLockTime::from_consensus(1_000_000_000).unwrap())),
+        let pol: SPolicy = Policy::And(vec![
+            Arc::new(Policy::Key("A".to_string())),
+            Arc::new(Policy::And(vec![
+                Arc::new(Policy::After(AbsLockTime::from_consensus(9).unwrap())),
+                Arc::new(Policy::After(AbsLockTime::from_consensus(1_000_000_000).unwrap())),
             ])),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
@@ -1366,9 +1366,9 @@ mod tests {
     #[allow(clippy::needless_range_loop)]
     fn compile_misc() {
         let (keys, signature) = pubkeys_and_a_sig(10);
-        let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
+        let key_pol: Vec<BPolicy> = keys.iter().map(|k| Policy::Key(*k)).collect();
 
-        let policy: BPolicy = Concrete::Key(keys[0]);
+        let policy: BPolicy = Policy::Key(keys[0]);
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
             ms.encode(),
@@ -1401,19 +1401,19 @@ mod tests {
         );
 
         // Liquid policy
-        let policy: BPolicy = Concrete::Or(vec![
+        let policy: BPolicy = Policy::Or(vec![
             (
                 127,
-                Arc::new(Concrete::Thresh(
+                Arc::new(Policy::Thresh(
                     Threshold::from_iter(3, key_pol[0..5].iter().map(|p| (p.clone()).into()))
                         .unwrap(),
                 )),
             ),
             (
                 1,
-                Arc::new(Concrete::And(vec![
-                    Arc::new(Concrete::Older(RelLockTime::from_height(10000).unwrap())),
-                    Arc::new(Concrete::Thresh(
+                Arc::new(Policy::And(vec![
+                    Arc::new(Policy::Older(RelLockTime::from_height(10000).unwrap())),
+                    Arc::new(Policy::Thresh(
                         Threshold::from_iter(2, key_pol[5..8].iter().map(|p| (p.clone()).into()))
                             .unwrap(),
                     )),
@@ -1538,12 +1538,12 @@ mod tests {
         // and to a ms thresh otherwise.
         // k = 1 (or 2) does not compile, see https://github.com/rust-bitcoin/rust-miniscript/issues/114
         for k in &[10, 15, 21] {
-            let thresh: Threshold<Arc<Concrete<bitcoin::PublicKey>>, 0> = Threshold::from_iter(
+            let thresh: Threshold<Arc<Policy<bitcoin::PublicKey>>, 0> = Threshold::from_iter(
                 *k,
-                keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+                keys.iter().map(|pubkey| Arc::new(Policy::Key(*pubkey))),
             )
             .unwrap();
-            let big_thresh = Concrete::Thresh(thresh);
+            let big_thresh = Policy::Thresh(thresh);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
@@ -1569,18 +1569,18 @@ mod tests {
         // or(thresh(52, [pubkey; 52]), thresh(52, [pubkey; 52])) results in a 3642-bytes long
         // witness script with only 54 stack elements
         let (keys, _) = pubkeys_and_a_sig(104);
-        let keys_a: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys[..keys.len() / 2]
+        let keys_a: Vec<Arc<Policy<bitcoin::PublicKey>>> = keys[..keys.len() / 2]
             .iter()
-            .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
+            .map(|pubkey| Arc::new(Policy::Key(*pubkey)))
             .collect();
-        let keys_b: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys[keys.len() / 2..]
+        let keys_b: Vec<Arc<Policy<bitcoin::PublicKey>>> = keys[keys.len() / 2..]
             .iter()
-            .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
+            .map(|pubkey| Arc::new(Policy::Key(*pubkey)))
             .collect();
 
-        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_a)))),
-            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_b)))),
+        let thresh_res: Result<SegwitMiniScript, _> = Policy::Or(vec![
+            (1, Arc::new(Policy::Thresh(Threshold::and_n(keys_a)))),
+            (1, Arc::new(Policy::Thresh(Threshold::and_n(keys_b)))),
         ])
         .compile();
         let script_size = thresh_res.clone().map(|m| m.script_size());
@@ -1596,12 +1596,12 @@ mod tests {
     fn segwit_limits_2() {
         // Hit the maximum witness stack elements limit
         let (keys, _) = pubkeys_and_a_sig(100);
-        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
+        let keys: Vec<Arc<Policy<bitcoin::PublicKey>>> = keys
             .iter()
-            .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
+            .map(|pubkey| Arc::new(Policy::Key(*pubkey)))
             .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Thresh(Threshold::and_n(keys)).compile();
+            Policy::Thresh(Threshold::and_n(keys)).compile();
         let n_elements = thresh_res
             .clone()
             .map(|m| m.max_satisfaction_witness_elements());
@@ -1619,10 +1619,10 @@ mod tests {
         let (keys, _) = pubkeys_and_a_sig(68);
         let thresh = Threshold::from_iter(
             keys.len() - 1,
-            keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+            keys.iter().map(|pubkey| Arc::new(Policy::Key(*pubkey))),
         )
         .unwrap();
-        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(thresh).compile();
+        let thresh_res: Result<SegwitMiniScript, _> = Policy::Thresh(thresh).compile();
         let ops_count = thresh_res.clone().map(|m| m.ext.sat_op_count());
         assert_eq!(
             thresh_res,
@@ -1634,11 +1634,11 @@ mod tests {
         let (keys, _) = pubkeys_and_a_sig(68);
         let thresh = Threshold::from_iter(
             keys.len() - 1,
-            keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+            keys.iter().map(|pubkey| Arc::new(Policy::Key(*pubkey))),
         )
         .unwrap();
 
-        let thresh_res = Concrete::Thresh(thresh).compile::<Legacy>();
+        let thresh_res = Policy::Thresh(thresh).compile::<Legacy>();
         let ops_count = thresh_res.clone().map(|m| m.ext.sat_op_count());
         assert_eq!(
             thresh_res,
@@ -1649,25 +1649,19 @@ mod tests {
 
         // Test that we refuse to compile policies with duplicated keys
         let (keys, _) = pubkeys_and_a_sig(1);
-        let key = Arc::new(Concrete::Key(keys[0]));
+        let key = Arc::new(Policy::Key(keys[0]));
         let res =
-            Concrete::Or(vec![(1, Arc::clone(&key)), (1, Arc::clone(&key))]).compile::<Segwitv0>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
-        );
+            Policy::Or(vec![(1, Arc::clone(&key)), (1, Arc::clone(&key))]).compile::<Segwitv0>();
+        assert_eq!(res, Err(CompilerError::PolicyError(policy::PolicyError::DuplicatePubKeys)));
         // Same for legacy
-        let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
-        );
+        let res = Policy::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
+        assert_eq!(res, Err(CompilerError::PolicyError(policy::PolicyError::DuplicatePubKeys)));
     }
 
     #[test]
     fn compile_tr_thresh() {
         for k in 1..4 {
-            let small_thresh: Concrete<String> =
+            let small_thresh: Policy<String> =
                 policy_str!("{}", &format!("thresh({},pk(B),pk(C),pk(D))", k));
             let small_thresh_ms: Miniscript<String, Tap> = small_thresh.compile().unwrap();
             // When k == 3 it is more efficient to use and_v than multi_a

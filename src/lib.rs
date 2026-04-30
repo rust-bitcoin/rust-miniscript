@@ -89,8 +89,7 @@ compile_error!(
     "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
 );
 
-pub use bitcoin;
-pub use hex;
+pub use {bitcoin, hex};
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -457,7 +456,7 @@ pub enum Error {
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
     /// Errors related to policy
-    ConcretePolicy(policy::concrete::PolicyError),
+    ConcretePolicy(policy::PolicyError),
     /// Errors related to lifting
     LiftError(policy::LiftError),
     /// Forward script context related errors
