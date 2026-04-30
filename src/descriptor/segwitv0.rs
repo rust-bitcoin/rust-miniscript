@@ -182,7 +182,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
+    fn lift(&self) -> Result<semantic::Semantic<Pk>, Error> { self.ms.lift() }
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
@@ -394,8 +394,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
+    fn lift(&self) -> Result<semantic::Semantic<Pk>, Error> {
+        Ok(semantic::Semantic::Key(self.pk.clone()))
     }
 }
 

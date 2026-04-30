@@ -21,8 +21,8 @@ pub mod semantic;
 pub use self::concrete::Policy;
 // Deprecated, use `policy::Policy` instead.
 pub use self::concrete::Policy as Concrete;
-// Deprecated, use `policy::semantic::Semantic` instead"
-pub use self::semantic::Policy as Semantic;
+// FIXME: Do we want to remove this re-export?
+pub use self::semantic::Semantic;
 use crate::descriptor::Descriptor;
 use crate::iter::TreeLike as _;
 use crate::miniscript::{Miniscript, ScriptContext};

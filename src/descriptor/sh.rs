@@ -47,10 +47,10 @@ pub enum ShInner<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<semantic::Semantic<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
+            ShInner::Wpkh(ref pk) => Ok(semantic::Semantic::Key(pk.as_inner().clone())),
             ShInner::Ms(ref ms) => ms.lift(),
         }
     }

@@ -165,7 +165,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
+    fn lift(&self) -> Result<semantic::Semantic<Pk>, Error> { self.ms.lift() }
 }
 
 impl<Pk: FromStrKey> FromTree for Bare<Pk> {
@@ -349,8 +349,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
+    fn lift(&self) -> Result<semantic::Semantic<Pk>, Error> {
+        Ok(semantic::Semantic::Key(self.pk.clone()))
     }
 }
 
