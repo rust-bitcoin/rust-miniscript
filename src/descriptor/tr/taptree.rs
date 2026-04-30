@@ -5,7 +5,8 @@ use core::fmt;
 use bitcoin::taproot::{LeafVersion, TapLeafHash, TAPROOT_CONTROL_MAX_NODE_COUNT};
 
 use crate::miniscript::context::Tap;
-use crate::policy::{Liftable, Semantic};
+use crate::policy::semantic::Semantic;
+use crate::policy::Liftable;
 use crate::prelude::Vec;
 use crate::sync::Arc;
 use crate::{Miniscript, MiniscriptKey, Threshold, ToPublicKey};

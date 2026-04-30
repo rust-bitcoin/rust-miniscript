@@ -66,7 +66,7 @@ impl<Pk: MiniscriptKey> Semantic<Pk> {
     /// use std::collections::HashMap;
     /// use std::str::FromStr;
     /// use miniscript::bitcoin::{hashes::hash160, PublicKey};
-    /// use miniscript::{translate_hash_fail, policy::semantic::Semantic, Translator};
+    /// use miniscript::{translate_hash_fail, policy::Semantic, Translator};
     /// let alice_pk = "02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7";
     /// let bob_pk = "03d008a849fbf474bd17e9d2c1a827077a468150e58221582ec3410ab309f5afe4";
     /// let placeholder_policy = Semantic::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
