@@ -456,7 +456,7 @@ pub enum Error {
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
     /// Errors related to policy
-    ConcretePolicy(policy::concrete::PolicyError),
+    ConcretePolicy(policy::PolicyError),
     /// Errors related to lifting
     LiftError(policy::LiftError),
     /// Forward script context related errors

@@ -6,8 +6,8 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use super::concrete::Policy as Concrete;
 use super::semantic::Semantic;
+use super::Policy as Concrete;
 use crate::descriptor::Descriptor;
 use crate::iter::TreeLike as _;
 use crate::miniscript::{Miniscript, ScriptContext};

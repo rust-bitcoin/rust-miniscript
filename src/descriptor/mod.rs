@@ -2075,7 +2075,7 @@ mod tests {
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*),\
 pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
-        let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
+        let policy: policy::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
         let definite_descriptor = descriptor.derive_at_index(42).unwrap();
 
@@ -2083,8 +2083,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
 pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
-        let res_policy: policy::concrete::Policy<DescriptorPublicKey> =
-            res_descriptor_str.parse().unwrap();
+        let res_policy: policy::Policy<DescriptorPublicKey> = res_descriptor_str.parse().unwrap();
         let res_descriptor = Descriptor::new_sh(res_policy.compile().unwrap()).unwrap();
 
         assert_eq!(res_descriptor.to_string(), definite_descriptor.to_string());

@@ -70,7 +70,7 @@ pub enum CompilerError {
         leaf_index: usize,
     },
     ///Policy related errors
-    PolicyError(policy::concrete::PolicyError),
+    PolicyError(policy::PolicyError),
 }
 
 impl fmt::Display for CompilerError {
@@ -130,8 +130,8 @@ impl error::Error for CompilerError {
 }
 
 #[doc(hidden)]
-impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
+impl From<policy::PolicyError> for CompilerError {
+    fn from(e: policy::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
@@ -1652,16 +1652,10 @@ mod tests {
         let key = Arc::new(Concrete::Key(keys[0]));
         let res =
             Concrete::Or(vec![(1, Arc::clone(&key)), (1, Arc::clone(&key))]).compile::<Segwitv0>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
-        );
+        assert_eq!(res, Err(CompilerError::PolicyError(policy::PolicyError::DuplicatePubKeys)));
         // Same for legacy
         let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
-        );
+        assert_eq!(res, Err(CompilerError::PolicyError(policy::PolicyError::DuplicatePubKeys)));
     }
 
     #[test]
