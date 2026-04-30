@@ -59,7 +59,7 @@ pub use self::key::{
     NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
-pub use self::wallet_policy::{WalletPolicy, WalletPolicyError};
+pub use self::wallet_policy::{KeyExpression, KeyIndex, WalletPolicy, WalletPolicyError};
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
