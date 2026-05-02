@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use core::convert::TryInto;
-use core::fmt;
 use core::str::FromStr;
+use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
@@ -212,6 +212,35 @@ impl fmt::Display for Wildcard {
     }
 }
 
+impl fmt::Display for SinglePub {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        match self.key {
+            SinglePubKey::FullKey(full_key) => full_key.fmt(f),
+            SinglePubKey::XOnly(x_only_key) => x_only_key.fmt(f),
+        }?;
+        Ok(())
+    }
+}
+
+impl MiniscriptKey for SinglePub {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { matches!(self.key, SinglePubKey::XOnly(_)) }
+
+    fn num_der_paths(&self) -> usize { 0 }
+
+    fn is_uncompressed(&self) -> bool {
+        match self.key {
+            SinglePubKey::FullKey(ref key) => key.is_uncompressed(),
+            _ => false,
+        }
+    }
+}
+
 impl SinglePriv {
     /// Returns the public key of this key.
     fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
@@ -267,6 +296,30 @@ impl DescriptorXKey<bip32::Xpriv> {
             wildcard: self.wildcard,
         })
     }
+}
+
+impl<K: InnerXKey> fmt::Display for DescriptorXKey<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        self.xkey.fmt(f)?;
+        fmt_derivation_path(f, &self.derivation_path)?;
+        self.wildcard.fmt(f)?;
+        Ok(())
+    }
+}
+
+impl<K> MiniscriptKey for DescriptorXKey<K>
+where
+    K: InnerXKey + Clone + Ord + Eq + hash::Hash + fmt::Debug,
+{
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { false }
+
+    fn num_der_paths(&self) -> usize { 1 }
 }
 
 impl DescriptorMultiXKey<bip32::Xpriv> {
@@ -348,6 +401,30 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
             wildcard: self.wildcard,
         })
     }
+}
+
+impl<K: InnerXKey> fmt::Display for DescriptorMultiXKey<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        self.xkey.fmt(f)?;
+        fmt_derivation_paths(f, self.derivation_paths.paths())?;
+        self.wildcard.fmt(f)?;
+        Ok(())
+    }
+}
+
+impl<K> MiniscriptKey for DescriptorMultiXKey<K>
+where
+    K: InnerXKey + Clone + Ord + Eq + hash::Hash + fmt::Debug,
+{
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { false }
+
+    fn num_der_paths(&self) -> usize { self.derivation_paths.paths().len() }
 }
 
 /// Kinds of malformed key data
@@ -531,28 +608,9 @@ impl From<bip32::Error> for XKeyParseError {
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Single(ref pk) => {
-                maybe_fmt_master_id(f, &pk.origin)?;
-                match pk.key {
-                    SinglePubKey::FullKey(full_key) => full_key.fmt(f),
-                    SinglePubKey::XOnly(x_only_key) => x_only_key.fmt(f),
-                }?;
-                Ok(())
-            }
-            Self::XPub(ref xpub) => {
-                maybe_fmt_master_id(f, &xpub.origin)?;
-                xpub.xkey.fmt(f)?;
-                fmt_derivation_path(f, &xpub.derivation_path)?;
-                xpub.wildcard.fmt(f)?;
-                Ok(())
-            }
-            Self::MultiXPub(ref xpub) => {
-                maybe_fmt_master_id(f, &xpub.origin)?;
-                xpub.xkey.fmt(f)?;
-                fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
-                xpub.wildcard.fmt(f)?;
-                Ok(())
-            }
+            Self::Single(ref pk) => pk.fmt(f),
+            Self::XPub(ref xpub) => xpub.fmt(f),
+            Self::MultiXPub(ref xpub) => xpub.fmt(f),
         }
     }
 }
@@ -1292,25 +1350,23 @@ impl MiniscriptKey for DescriptorPublicKey {
 
     fn is_uncompressed(&self) -> bool {
         match self {
-            DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::FullKey(ref key), ..
-            }) => key.is_uncompressed(),
+            DescriptorPublicKey::Single(key) => key.is_uncompressed(),
             _ => false,
         }
     }
 
     fn is_x_only_key(&self) -> bool {
-        matches!(
-            self,
-            DescriptorPublicKey::Single(SinglePub { key: SinglePubKey::XOnly(ref _key), .. })
-        )
+        match self {
+            DescriptorPublicKey::Single(single_pub) => single_pub.is_x_only_key(),
+            _ => false,
+        }
     }
 
     fn num_der_paths(&self) -> usize {
         match self {
-            DescriptorPublicKey::Single(_) => 0,
-            DescriptorPublicKey::XPub(_) => 1,
-            DescriptorPublicKey::MultiXPub(xpub) => xpub.derivation_paths.paths().len(),
+            DescriptorPublicKey::Single(single) => single.num_der_paths(),
+            DescriptorPublicKey::XPub(xpub) => xpub.num_der_paths(),
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.num_der_paths(),
         }
     }
 }
