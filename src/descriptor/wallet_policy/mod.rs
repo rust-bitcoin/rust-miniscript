@@ -3,6 +3,8 @@
 use core::fmt::{self, Display};
 use core::str::FromStr;
 
+use bitcoin::hashes::{hash160, ripemd160, sha256};
+
 use super::key::XKeyParseError;
 use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
 use crate::{BTreeSet, Descriptor, DescriptorPublicKey, String, Translator, Vec};
@@ -61,7 +63,30 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
             .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))
     }
 
-    translate_hash_fail!(KeyExpression, DescriptorPublicKey, Self::Error);
+    // Hash terminals: KeyExpression stores hashes as hex `String` (for
+    // template round-tripping), DescriptorPublicKey uses the concrete
+    // `bitcoin::hashes::*::Hash` types. Parse the hex string into the
+    // binary form during materialization.
+
+    fn sha256(&mut self, s: &String) -> Result<sha256::Hash, Self::Error> {
+        s.parse::<sha256::Hash>()
+            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("sha256", s.clone()))
+    }
+
+    fn hash256(&mut self, s: &String) -> Result<crate::hash256::Hash, Self::Error> {
+        s.parse::<crate::hash256::Hash>()
+            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("hash256", s.clone()))
+    }
+
+    fn ripemd160(&mut self, s: &String) -> Result<ripemd160::Hash, Self::Error> {
+        s.parse::<ripemd160::Hash>()
+            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("ripemd160", s.clone()))
+    }
+
+    fn hash160(&mut self, s: &String) -> Result<hash160::Hash, Self::Error> {
+        s.parse::<hash160::Hash>()
+            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("hash160", s.clone()))
+    }
 }
 
 impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
@@ -81,7 +106,20 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
         Ok(ke)
     }
 
-    translate_hash_fail!(DescriptorPublicKey, KeyExpression, Self::Error);
+    // Hash terminals: DescriptorPublicKey uses concrete Hash types,
+    // KeyExpression stores them as hex `String`. Render to lowercase hex
+    // (the `Display` impl on `bitcoin::hashes::*::Hash`) so the resulting
+    // template prints hashes in their canonical form.
+
+    fn sha256(&mut self, h: &sha256::Hash) -> Result<String, Self::Error> { Ok(h.to_string()) }
+
+    fn hash256(&mut self, h: &crate::hash256::Hash) -> Result<String, Self::Error> {
+        Ok(h.to_string())
+    }
+
+    fn ripemd160(&mut self, h: &ripemd160::Hash) -> Result<String, Self::Error> { Ok(h.to_string()) }
+
+    fn hash160(&mut self, h: &hash160::Hash) -> Result<String, Self::Error> { Ok(h.to_string()) }
 }
 
 impl WalletPolicy {
@@ -208,6 +246,8 @@ pub enum WalletPolicyError {
     WalletPolicyParseFromString(String),
     /// Couldn't set key info on WalletPolicy
     WalletPolicyInvalidKeyInfo,
+    /// Hash terminal in template had invalid hex (kind, raw input)
+    TranslatorInvalidHashHex(&'static str, String),
 }
 
 impl From<WalletPolicyError> for DescriptorKeyParseError {
@@ -257,6 +297,9 @@ impl Display for WalletPolicyError {
             WalletPolicyError::WalletPolicyParseFromString(msg) => msg.fmt(f),
             WalletPolicyError::WalletPolicyInvalidKeyInfo => {
                 write!(f, "Invalid key information for WalletPolicy template")
+            }
+            WalletPolicyError::TranslatorInvalidHashHex(kind, raw) => {
+                write!(f, "Invalid hex for {kind} hash terminal: {raw}")
             }
         }
     }
@@ -363,6 +406,259 @@ mod tests {
     fn can_error_on_invalid_wallet_policy_templates() {
         for t in INVALID_TEMPLATES {
             assert!(WalletPolicy::from_str(t).is_err());
+        }
+    }
+
+    // Test fixtures for hash-terminal round-trip tests. Prior to this fix,
+    // the WalletPolicyTranslator used translate_hash_fail!, which made
+    // into_descriptor() and from_descriptor() panic on any descriptor
+    // containing a hash terminal — even though hash terminals are perfectly
+    // valid in segwit-v0 miniscript and BIP 388 wallet policies (HTLC
+    // patterns are a primary use case). The fix replaces the panicking
+    // translator with hex-string ↔ binary-Hash conversion.
+
+    // Test xpub used in all hash-terminal tests below. Same value as
+    // VALID_TEMPLATES line 327. BIP 84 mainnet origin.
+    const TEST_XPUB_WITH_ORIGIN: &str = "[6738736c/84'/0'/0']xpub6CRQzb8u9dmMcq5XAwwRn9gcoYCjndJkhKgD11WKzbVGd932UmrExWFxCAvRnDN3ez6ZujLmMvmLBaSWdfWVn75L83Qxu1qSX4fJNrJg2Gt/<0;1>/*";
+
+    // Lowercase-hex test vectors of the correct length per hash type.
+    // All four types must round-trip through the translator (KeyExpression's
+    // `String` <-> DescriptorPublicKey's binary `bitcoin::hashes::*::Hash`).
+    //
+    // The Display impl on each Hash type produces lowercase hex, so the
+    // round-trip preserves the literal exactly when the input is already
+    // canonical lowercase.
+    //
+    // sha256/hash256: 32 bytes = 64 hex chars. ripemd160/hash160: 20 bytes
+    // = 40 hex chars.
+    const SHA256_HEX: &str = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+    const HASH256_HEX: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const RIPEMD160_HEX: &str = "1234567890abcdef1234567890abcdef12345678";
+    const HASH160_HEX: &str = "fedcba0987654321fedcba0987654321fedcba09";
+
+    /// Construct a single-hash template like
+    /// `wsh(and_v(v:pk(@0/**),sha256(<hex>)))` and the matching descriptor
+    /// (with `TEST_XPUB_WITH_ORIGIN` substituted for `@0`), then assert
+    /// the round-trip `WalletPolicy::from_str(descriptor) ->
+    /// into_descriptor()` equals the directly-parsed descriptor.
+    fn assert_single_hash_round_trips(hash_kind: &str, hash_hex: &str) {
+        let template_str =
+            format!("wsh(and_v(v:pk(@0/**),{hash_kind}({hash_hex})))");
+        let descriptor_str = format!(
+            "wsh(and_v(v:pk({TEST_XPUB_WITH_ORIGIN}),{hash_kind}({hash_hex})))"
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(&descriptor_str)
+            .unwrap_or_else(|e| panic!("descriptor with {hash_kind} must parse: {e}"));
+        let policy = WalletPolicy::from_str(&descriptor_str).unwrap_or_else(|e| {
+            panic!("WalletPolicy from descriptor must succeed for {hash_kind}: {e}")
+        });
+        let template = WalletPolicy::from_str(&template_str)
+            .unwrap_or_else(|e| panic!("template with {hash_kind} must parse: {e}"));
+
+        // Template form preserves the placeholder and hash literal verbatim.
+        assert_eq!(format!("{:#}", template.template), template_str);
+
+        // into_descriptor() must round-trip without panic and equal the
+        // directly-parsed descriptor.
+        assert_eq!(policy.into_descriptor().unwrap(), descriptor);
+    }
+
+    /// Construct a two-hash template like
+    /// `wsh(and_v(v:and_v(v:pk(@0/**),A(hex_a)),B(hex_b)))` and assert the
+    /// same round-trip.
+    fn assert_pair_of_hashes_round_trips(
+        a_kind: &str,
+        a_hex: &str,
+        b_kind: &str,
+        b_hex: &str,
+    ) {
+        let template_str = format!(
+            "wsh(and_v(v:and_v(v:pk(@0/**),{a_kind}({a_hex})),{b_kind}({b_hex})))"
+        );
+        let descriptor_str = format!(
+            "wsh(and_v(v:and_v(v:pk({TEST_XPUB_WITH_ORIGIN}),{a_kind}({a_hex})),{b_kind}({b_hex})))"
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(&descriptor_str)
+            .unwrap_or_else(|e| panic!("descriptor with {a_kind}+{b_kind} must parse: {e}"));
+        let policy = WalletPolicy::from_str(&descriptor_str).unwrap_or_else(|e| {
+            panic!("WalletPolicy from descriptor must succeed for {a_kind}+{b_kind}: {e}")
+        });
+        let template = WalletPolicy::from_str(&template_str)
+            .unwrap_or_else(|e| panic!("template with {a_kind}+{b_kind} must parse: {e}"));
+
+        assert_eq!(format!("{:#}", template.template), template_str);
+        assert_eq!(policy.into_descriptor().unwrap(), descriptor);
+    }
+
+    #[test]
+    fn sha256_terminal_round_trips_through_translator() {
+        assert_single_hash_round_trips("sha256", SHA256_HEX);
+    }
+
+    #[test]
+    fn hash256_terminal_round_trips_through_translator() {
+        assert_single_hash_round_trips("hash256", HASH256_HEX);
+    }
+
+    #[test]
+    fn ripemd160_terminal_round_trips_through_translator() {
+        assert_single_hash_round_trips("ripemd160", RIPEMD160_HEX);
+    }
+
+    #[test]
+    fn hash160_terminal_round_trips_through_translator() {
+        assert_single_hash_round_trips("hash160", HASH160_HEX);
+    }
+
+    /// Round-trip every ordered pair of distinct hash types in the same
+    /// policy. With 4 hash types, this is 4·3 = 12 pairs.
+    ///
+    /// The translator processes each hash terminal independently — a typo
+    /// in any one of the four `sha256`/`hash256`/`ripemd160`/`hash160`
+    /// methods (in either translator direction) is caught by the matching
+    /// single-type test above. This test additionally guards against
+    /// cross-type interference and verifies that a tree containing
+    /// multiple hash literals at different positions translates correctly.
+    #[test]
+    fn all_ordered_pairs_of_distinct_hash_types_round_trip() {
+        let kinds: &[(&str, &str)] = &[
+            ("sha256", SHA256_HEX),
+            ("hash256", HASH256_HEX),
+            ("ripemd160", RIPEMD160_HEX),
+            ("hash160", HASH160_HEX),
+        ];
+        let mut pair_count = 0;
+        for (a_idx, (a_kind, a_hex)) in kinds.iter().enumerate() {
+            for (b_idx, (b_kind, b_hex)) in kinds.iter().enumerate() {
+                if a_idx == b_idx {
+                    continue;
+                }
+                assert_pair_of_hashes_round_trips(a_kind, a_hex, b_kind, b_hex);
+                pair_count += 1;
+            }
+        }
+        assert_eq!(pair_count, 12, "expected 4·3 = 12 ordered pairs");
+    }
+
+    /// Round-trip-with-corruption: drive each hash type's translator
+    /// through both directions, then corrupt the intermediate hex String
+    /// and verify the reverse direction surfaces
+    /// `WalletPolicyError::TranslatorInvalidHashHex(kind, raw)`.
+    ///
+    /// The translator method is reached directly here because the public
+    /// `WalletPolicy::from_str` parser validates hex length up-front, so
+    /// invalid hex never reaches the translator via the public API. The
+    /// `TranslatorInvalidHashHex` variant exists as a defensive guard
+    /// against any future code path that bypasses the parser — this test
+    /// pins both that the variant is producible by the implementation
+    /// and that its Display form is informative.
+    ///
+    /// "Round-trip" here means: binary Hash -> hex String (direction 2,
+    /// infallible) -> binary Hash (direction 1, fallible). Plus the
+    /// negative case: corrupted hex String -> direction 1 errors.
+    #[test]
+    fn translator_invalid_hash_hex_corrupted_round_trip() {
+        use crate::Translator;
+        use bitcoin::hashes::Hash as _;
+
+        let mut t = WalletPolicyTranslator { key_info: Vec::new() };
+
+        // Helper: assert a (kind, valid_hex, corrupted_hex) tuple round-trips
+        // forward, succeeds in the reverse direction for the canonical hex,
+        // and errors with the right variant for the corrupted hex.
+
+        // sha256 (32 bytes)
+        {
+            let original = sha256::Hash::from_byte_array([0xab; 32]);
+            let hex: String = <WalletPolicyTranslator as Translator<DescriptorPublicKey>>
+                ::sha256(&mut t, &original)
+                .expect("direction 2 (Hash -> String) is infallible");
+            assert_eq!(hex.len(), 64, "sha256 hex must be 64 chars");
+            let parsed: sha256::Hash = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::sha256(&mut t, &hex)
+                .expect("direction 1 (String -> Hash) succeeds for canonical input");
+            assert_eq!(parsed, original, "round-trip identity for sha256");
+
+            let corrupted = String::from("not_a_valid_hex_string");
+            let err = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::sha256(&mut t, &corrupted)
+                .expect_err("direction 1 must error on invalid hex");
+            assert!(matches!(
+                err,
+                WalletPolicyError::TranslatorInvalidHashHex("sha256", _)
+            ));
+            assert_eq!(
+                format!("{err}"),
+                format!("Invalid hex for sha256 hash terminal: {corrupted}")
+            );
+        }
+
+        // hash256 (32 bytes; miniscript-defined wrapper around bitcoin sha256d)
+        {
+            let original = crate::hash256::Hash::from_byte_array([0xcd; 32]);
+            let hex: String = <WalletPolicyTranslator as Translator<DescriptorPublicKey>>
+                ::hash256(&mut t, &original)
+                .expect("direction 2 (Hash -> String) is infallible");
+            assert_eq!(hex.len(), 64, "hash256 hex must be 64 chars");
+            let parsed: crate::hash256::Hash = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::hash256(&mut t, &hex)
+                .expect("direction 1 succeeds for canonical hash256 input");
+            assert_eq!(parsed, original, "round-trip identity for hash256");
+
+            let corrupted = String::from("xyz");
+            let err = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::hash256(&mut t, &corrupted)
+                .expect_err("direction 1 must error on invalid hash256 hex");
+            assert!(matches!(
+                err,
+                WalletPolicyError::TranslatorInvalidHashHex("hash256", _)
+            ));
+        }
+
+        // ripemd160 (20 bytes)
+        {
+            let original = ripemd160::Hash::from_byte_array([0x12; 20]);
+            let hex: String = <WalletPolicyTranslator as Translator<DescriptorPublicKey>>
+                ::ripemd160(&mut t, &original)
+                .expect("direction 2 (Hash -> String) is infallible");
+            assert_eq!(hex.len(), 40, "ripemd160 hex must be 40 chars");
+            let parsed: ripemd160::Hash = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::ripemd160(&mut t, &hex)
+                .expect("direction 1 succeeds for canonical ripemd160 input");
+            assert_eq!(parsed, original, "round-trip identity for ripemd160");
+
+            let corrupted = String::from("notvalid");
+            let err = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::ripemd160(&mut t, &corrupted)
+                .expect_err("direction 1 must error on invalid ripemd160 hex");
+            assert!(matches!(
+                err,
+                WalletPolicyError::TranslatorInvalidHashHex("ripemd160", _)
+            ));
+        }
+
+        // hash160 (20 bytes)
+        {
+            let original = hash160::Hash::from_byte_array([0x34; 20]);
+            let hex: String = <WalletPolicyTranslator as Translator<DescriptorPublicKey>>
+                ::hash160(&mut t, &original)
+                .expect("direction 2 (Hash -> String) is infallible");
+            assert_eq!(hex.len(), 40, "hash160 hex must be 40 chars");
+            let parsed: hash160::Hash = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::hash160(&mut t, &hex)
+                .expect("direction 1 succeeds for canonical hash160 input");
+            assert_eq!(parsed, original, "round-trip identity for hash160");
+
+            let corrupted = String::from("???");
+            let err = <WalletPolicyTranslator as Translator<KeyExpression>>
+                ::hash160(&mut t, &corrupted)
+                .expect_err("direction 1 must error on invalid hash160 hex");
+            assert!(matches!(
+                err,
+                WalletPolicyError::TranslatorInvalidHashHex("hash160", _)
+            ));
         }
     }
 
