@@ -14,8 +14,8 @@ use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
 use crate::{
-    expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold,
-    Translator,
+    expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, RelLockTime,
+    Threshold, Translator,
 };
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
@@ -248,6 +248,11 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
+/// Displays the policy using mathematical notation for readability.
+///
+/// - `and(a, b)` is displayed as `(a ∧ b)`
+/// - `or(a, b)` is displayed as `(a ∨ b)`
+/// - `thresh(k, a, b, c)` is displayed as `#{a, b, c} = k`
 impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -261,13 +266,87 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(ref h) => write!(f, "hash160({})", h),
             Policy::Thresh(ref thresh) => {
+                let mut iter = thresh.iter();
+                let first = iter.next().expect("thresholds are never empty");
                 if thresh.k() == thresh.n() {
-                    thresh.display("and", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∧ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else if thresh.k() == 1 {
-                    thresh.display("or", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∨ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else {
-                    thresh.display("thresh", true).fmt(f)
+                    write!(f, "#{{{}", first)?;
+                    for sub in iter {
+                        write!(f, ", {}", sub)?;
+                    }
+                    write!(f, "}} = {}", thresh.k())
                 }
+            }
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> Policy<Pk> {
+    /// Serializes the policy using function-call notation
+    /// (`and(..)`, `or(..)`, `thresh(k, ..)`).
+    ///
+    /// This is an alternative to [`fmt::Display`], which uses mathematical
+    /// notation (`∧`, `∨`, `#{..} = k`). Both forms round-trip through
+    /// [`str::FromStr`]; prefer [`fmt::Display`] for general use.
+    ///
+    /// This method exists for cross-version comparison against older
+    /// releases of this crate (notably the `regression_descriptor_parse`
+    /// fuzz target), which only emit the function-call form.
+    pub fn to_policy_syntax_string(&self) -> String {
+        let mut s = String::new();
+        self.write_policy_syntax(&mut s)
+            .expect("writing to a String is infallible");
+        s
+    }
+
+    fn write_policy_syntax<W: fmt::Write>(&self, w: &mut W) -> fmt::Result {
+        match *self {
+            Policy::Unsatisfiable => w.write_str("UNSATISFIABLE"),
+            Policy::Trivial => w.write_str("TRIVIAL"),
+            Policy::Key(ref pkh) => write!(w, "pk({})", pkh),
+            Policy::After(n) => write!(w, "after({})", n),
+            Policy::Older(n) => write!(w, "older({})", n),
+            Policy::Sha256(ref h) => write!(w, "sha256({})", h),
+            Policy::Hash256(ref h) => write!(w, "hash256({})", h),
+            Policy::Ripemd160(ref h) => write!(w, "ripemd160({})", h),
+            Policy::Hash160(ref h) => write!(w, "hash160({})", h),
+            Policy::Thresh(ref thresh) => {
+                let (name, show_k) = if thresh.k() == thresh.n() {
+                    ("and", false)
+                } else if thresh.k() == 1 {
+                    ("or", false)
+                } else {
+                    ("thresh", true)
+                };
+                w.write_str(name)?;
+                w.write_str("(")?;
+                let mut iter = thresh.iter();
+                if show_k {
+                    write!(w, "{}", thresh.k())?;
+                    for child in iter {
+                        w.write_str(",")?;
+                        child.write_policy_syntax(w)?;
+                    }
+                } else {
+                    let first = iter.next().expect("thresholds are never empty");
+                    first.write_policy_syntax(w)?;
+                    for child in iter {
+                        w.write_str(",")?;
+                        child.write_policy_syntax(w)?;
+                    }
+                }
+                w.write_str(")")
             }
         }
     }
@@ -276,9 +355,262 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
 impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        let tree = expression::Tree::from_str(s)?;
-        expression::FromTree::from_tree(tree.root())
+        if s.contains('∧') || s.contains('∨') || s.contains("#{") {
+            MathParser::parse(s)
+        } else {
+            let tree = expression::Tree::from_str(s)?;
+            expression::FromTree::from_tree(tree.root())
+        }
     }
+}
+
+/// Character-level cursor over the input string for
+/// mathematical-notation parsing.
+struct MathParser<'a> {
+    s: &'a str,
+    iter: core::iter::Peekable<core::str::CharIndices<'a>>,
+}
+
+/// Low-level cursor primitives.
+impl<'a> MathParser<'a> {
+    fn new(s: &'a str) -> Self { Self { s, iter: s.char_indices().peekable() } }
+
+    fn peek(&mut self) -> Option<char> { self.iter.peek().map(|&(_, c)| c) }
+
+    fn next(&mut self) -> Option<char> { self.iter.next().map(|(_, c)| c) }
+
+    fn pos(&mut self) -> usize { self.iter.peek().map(|&(i, _)| i).unwrap_or(self.s.len()) }
+
+    fn skip_ws(&mut self) {
+        while matches!(self.peek(), Some(c) if c.is_whitespace()) {
+            self.next();
+        }
+    }
+
+    fn expect(&mut self, want: char) -> Result<(), Error> {
+        if self.peek() == Some(want) {
+            self.next();
+            Ok(())
+        } else {
+            Err(malformed_math(&format!("expected '{}'", want)))
+        }
+    }
+
+    fn consume_while(&mut self, pred: impl Fn(char) -> bool) -> &'a str {
+        let start = self.pos();
+        while matches!(self.peek(), Some(c) if pred(c)) {
+            self.next();
+        }
+        &self.s[start..self.pos()]
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Op {
+    And,
+    Or,
+}
+
+impl From<char> for Op {
+    fn from(c: char) -> Self {
+        match c {
+            '∧' => Op::And,
+            '∨' => Op::Or,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum Kind {
+    Group(Option<Op>),
+    Thresh,
+}
+
+/// One pending node on the parser's frame stack: a parenthesised
+/// `∧`/`∨` group or a `#{ ... } = k` threshold whose children are
+/// being collected.
+struct Frame<Pk: MiniscriptKey> {
+    subs: Vec<Arc<Policy<Pk>>>,
+    kind: Kind,
+}
+
+/// Parses the mathematical-notation form produced by `Display`.
+impl<'a> MathParser<'a> {
+    fn parse<Pk: FromStrKey>(s: &'a str) -> Result<Policy<Pk>, Error> {
+        let mut parser = Self::new(s);
+        let mut frames: Vec<Frame<Pk>> = Vec::new();
+        let mut cur: Option<Arc<Policy<Pk>>> = None;
+
+        loop {
+            parser.skip_ws();
+            let c = match parser.peek() {
+                Some(c) => c,
+                None => break,
+            };
+
+            if cur.is_none() {
+                match c {
+                    '(' => {
+                        parser.next();
+                        frames.push(Frame { subs: Vec::new(), kind: Kind::Group(None) });
+                    }
+                    '#' => {
+                        parser.next();
+                        parser.expect('{')?;
+                        frames.push(Frame { subs: Vec::new(), kind: Kind::Thresh });
+                    }
+                    '∧' | '∨' | ',' => {
+                        return Err(malformed_math("missing sub-expression before operator"))
+                    }
+                    ')' | '}' => return Err(malformed_math("empty group or threshold")),
+                    _ => cur = Some(Arc::new(parser.parse_terminal()?)),
+                }
+                continue;
+            }
+
+            let frame = frames
+                .last_mut()
+                .ok_or_else(|| malformed_math("trailing input after root expression"))?;
+            match c {
+                '∧' | '∨' => {
+                    parser.next();
+                    let op = Op::from(c);
+                    match &mut frame.kind {
+                        Kind::Group(slot @ None) => *slot = Some(op),
+                        Kind::Group(Some(prev)) if *prev == op => {}
+                        _ => return Err(malformed_math("mixed or unexpected operator")),
+                    }
+                    frame.subs.push(cur.take().unwrap());
+                }
+                ',' => {
+                    if frame.kind != Kind::Thresh {
+                        return Err(malformed_math("',' outside of '#{...}' threshold"));
+                    }
+                    parser.next();
+                    frame.subs.push(cur.take().unwrap());
+                }
+                ')' => {
+                    parser.next();
+                    let mut frame = frames.pop().unwrap();
+                    let op = match frame.kind {
+                        Kind::Group(op) => {
+                            op.ok_or_else(|| malformed_math("group with no operator"))?
+                        }
+                        Kind::Thresh => {
+                            return Err(malformed_math("')' closing a '#{...}' threshold"))
+                        }
+                    };
+                    frame.subs.push(cur.take().unwrap());
+                    if frame.subs.len() < 2 {
+                        return Err(malformed_math("group with fewer than 2 children"));
+                    }
+                    let k = if op == Op::And { frame.subs.len() } else { 1 };
+                    cur = Some(Arc::new(Policy::Thresh(
+                        Threshold::new(k, frame.subs).map_err(Error::Threshold)?,
+                    )));
+                }
+                '}' => {
+                    parser.next();
+                    let mut frame = match frames.pop() {
+                        Some(f) if f.kind == Kind::Thresh => f,
+                        _ => return Err(malformed_math("'}' closing a parenthesised group")),
+                    };
+                    frame.subs.push(cur.take().unwrap());
+                    parser.skip_ws();
+                    parser.expect('=')?;
+                    parser.skip_ws();
+                    let k_str = parser.consume_while(|c| c.is_ascii_digit());
+                    if k_str.is_empty() {
+                        return Err(malformed_math("expected digits after '#{...} ='"));
+                    }
+                    let k = expression::parse_num(k_str)
+                        .map_err(|_| malformed_math("invalid threshold value"))?
+                        as usize;
+                    let thresh = Threshold::new(k, frame.subs).map_err(Error::Threshold)?;
+                    // k=1 must be `∨`; k=n must be `∧`.
+                    if thresh.is_or() {
+                        return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalOr));
+                    }
+                    if thresh.is_and() {
+                        return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalAnd));
+                    }
+                    cur = Some(Arc::new(Policy::Thresh(thresh)));
+                }
+                _ => return Err(malformed_math("unexpected character")),
+            }
+        }
+
+        if !frames.is_empty() {
+            return Err(malformed_math("unclosed group or threshold"));
+        }
+        let root = cur.ok_or_else(|| malformed_math("empty input"))?;
+        Ok(Arc::try_unwrap(root).expect("root Arc is uniquely owned"))
+    }
+
+    fn parse_terminal<Pk: FromStrKey>(&mut self) -> Result<Policy<Pk>, Error> {
+        let name = self.consume_while(|c| c.is_ascii_alphanumeric());
+        if name.is_empty() {
+            return Err(malformed_math("expected terminal name"));
+        }
+
+        self.skip_ws();
+        if self.peek() != Some('(') {
+            return match name {
+                "UNSATISFIABLE" => Ok(Policy::Unsatisfiable),
+                "TRIVIAL" => Ok(Policy::Trivial),
+                _ => Err(malformed_math("unknown nullary terminal")),
+            };
+        }
+        self.next();
+
+        let arg = self.consume_while(|c| c != ')').trim();
+        self.expect(')')?;
+
+        Ok(match name {
+            "pk" => Policy::Key(parse_arg(arg)?),
+            "after" => {
+                let n = expression::parse_num(arg)
+                    .map_err(ParseError::Num)
+                    .map_err(Error::Parse)?;
+                Policy::After(
+                    AbsLockTime::from_consensus(n)
+                        .map_err(ParseError::AbsoluteLockTime)
+                        .map_err(Error::Parse)?,
+                )
+            }
+            "older" => {
+                let n = expression::parse_num(arg)
+                    .map_err(ParseError::Num)
+                    .map_err(Error::Parse)?;
+                Policy::Older(
+                    RelLockTime::from_consensus(n)
+                        .map_err(ParseError::RelativeLockTime)
+                        .map_err(Error::Parse)?,
+                )
+            }
+            "sha256" => Policy::Sha256(parse_arg(arg)?),
+            "hash256" => Policy::Hash256(parse_arg(arg)?),
+            "ripemd160" => Policy::Ripemd160(parse_arg(arg)?),
+            "hash160" => Policy::Hash160(parse_arg(arg)?),
+            _ => return Err(malformed_math("unknown terminal name")),
+        })
+    }
+}
+
+fn parse_arg<T: core::str::FromStr>(arg: &str) -> Result<T, Error>
+where
+    T::Err: crate::blanket_traits::StaticDebugAndDisplay,
+{
+    arg.parse::<T>()
+        .map_err(ParseError::box_from_str)
+        .map_err(Error::Parse)
+}
+
+fn malformed_math(context: &str) -> Error {
+    Error::Parse(ParseError::Tree(crate::ParseTreeError::UnknownName {
+        name: format!("malformed mathematical-notation policy: {}", context),
+    }))
 }
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
@@ -710,6 +1042,60 @@ mod tests {
              )"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn parse_math_notation() {
+        let a = StringPolicy::from_str("((pk(A) ∧ pk(B)) ∨ pk(C))").unwrap();
+        let b = StringPolicy::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
+        assert_eq!(a, b);
+
+        let a = StringPolicy::from_str("(pk(A) ∧ #{pk(B), pk(C), pk(D)} = 2)").unwrap();
+        let b = StringPolicy::from_str("and(pk(A),thresh(2,pk(B),pk(C),pk(D)))").unwrap();
+        assert_eq!(a, b);
+
+        assert_eq!(StringPolicy::from_str("TRIVIAL").unwrap(), Policy::Trivial);
+
+        assert!(StringPolicy::from_str("(pk(A) ∧ pk(B)").is_err());
+        assert!(StringPolicy::from_str("#{pk(A), pk(B)} = 1").is_err());
+        assert!(StringPolicy::from_str("(and(pk(A),pk(B)) ∧ pk(C))").is_err());
+
+        // Whitespace flexibility: any amount of whitespace between tokens.
+        let canonical = StringPolicy::from_str("(pk(A) ∧ pk(B))").unwrap();
+        assert_eq!(StringPolicy::from_str("(pk(A)∧pk(B))").unwrap(), canonical);
+        assert_eq!(StringPolicy::from_str("( pk(A)   ∧   pk(B) )").unwrap(), canonical);
+
+        let thresh = StringPolicy::from_str("#{pk(A), pk(B), pk(C)} = 2").unwrap();
+        assert_eq!(StringPolicy::from_str("#{pk(A),pk(B),pk(C)}=2").unwrap(), thresh);
+        assert_eq!(StringPolicy::from_str("#{ pk(A) , pk(B) , pk(C) }  =  2").unwrap(), thresh);
+
+        // `#{` is a digraph; whitespace between `#` and `{` is rejected.
+        assert!(StringPolicy::from_str("# {pk(A), pk(B), pk(C)} = 2").is_err());
+    }
+
+    fn roundtrip(s: &str) {
+        let policy = StringPolicy::from_str(s).unwrap();
+        assert_eq!(StringPolicy::from_str(&policy.to_string()).unwrap(), policy);
+    }
+
+    #[test]
+    fn display_roundtrip() {
+        roundtrip("TRIVIAL");
+        roundtrip("UNSATISFIABLE");
+        roundtrip("pk(A)");
+        roundtrip("after(100)");
+        roundtrip("older(50)");
+        roundtrip("(pk(A) ∧ pk(B))");
+        roundtrip("(pk(A) ∨ pk(B))");
+        roundtrip("(pk(A) ∧ pk(B) ∧ pk(C))");
+        roundtrip("(pk(A) ∨ pk(B) ∨ pk(C))");
+        roundtrip("((pk(A) ∧ pk(B)) ∨ pk(C))");
+        roundtrip("#{pk(A), pk(B), pk(C)} = 2");
+        roundtrip("(pk(A) ∧ #{pk(B), pk(C), pk(D)} = 2)");
+        // Display always emits the mathematical form, so feeding it the
+        // function-call form exercises the parser → Display → parser path.
+        roundtrip("or(and(pk(A),pk(B)),pk(C))");
+        roundtrip("thresh(2,pk(A),pk(B),pk(C))");
     }
 
     #[test]
