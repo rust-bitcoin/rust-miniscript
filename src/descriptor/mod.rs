@@ -1222,7 +1222,7 @@ mod tests {
 
         let mut checksum_eng = checksum::Engine::new();
         checksum_eng.input(&normalize_aliases).unwrap();
-        assert_eq!(format!("{}#{}", &normalize_aliases, checksum_eng.checksum()), output);
+        assert_eq!(format!("{}#{}", normalize_aliases, checksum_eng.checksum()), output);
     }
 
     #[test]
