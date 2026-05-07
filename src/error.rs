@@ -29,6 +29,8 @@ pub enum ParseError {
     Num(crate::ParseNumError),
     /// Error parsing a string into an expression tree.
     Tree(crate::ParseTreeError),
+    /// Syntax error in the mathematical-notation form of a `policy::Semantic`.
+    Math(crate::MathSyntaxError),
 }
 
 impl ParseError {
@@ -54,6 +56,7 @@ impl fmt::Display for ParseError {
             ParseError::FromStr(ref e) => e.fmt(f),
             ParseError::Num(ref e) => e.fmt(f),
             ParseError::Tree(ref e) => e.fmt(f),
+            ParseError::Math(ref e) => e.fmt(f),
         }
     }
 }
@@ -67,6 +70,7 @@ impl error::Error for ParseError {
             ParseError::FromStr(..) => None,
             ParseError::Num(ref e) => Some(e),
             ParseError::Tree(ref e) => Some(e),
+            ParseError::Math(ref e) => Some(e),
         }
     }
 }
