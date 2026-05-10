@@ -9,12 +9,13 @@ publish = false
 
 [dependencies]
 miniscript = {path = "../"}
-bitcoind = { package = "corepc-node", version = "0.10.0", default-features = false }
+bitcoind = { version = "0.38.0", default-features = false }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
 [features]
 # Enable the same feature in `bitcoind`.
+"30_2" = ["bitcoind/30_2"]
 "29_0" = ["bitcoind/29_0"]
 "28_2" = ["bitcoind/28_2"]
 "27_2" = ["bitcoind/27_2"]
