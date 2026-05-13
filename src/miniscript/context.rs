@@ -91,69 +91,69 @@ impl error::Error for ScriptContextError {
 impl fmt::Display for ScriptContextError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ScriptContextError::MalleableOrI => write!(f, "OrI is malleable under Legacy rules"),
-            ScriptContextError::MalleableDupIf => {
+            Self::MalleableOrI => write!(f, "OrI is malleable under Legacy rules"),
+            Self::MalleableDupIf => {
                 write!(f, "DupIf is malleable under Legacy rules")
             }
-            ScriptContextError::CompressedOnly(ref pk) => {
+            Self::CompressedOnly(ref pk) => {
                 write!(f, "Only Compressed pubkeys are allowed in segwit context. Found {}", pk)
             }
-            ScriptContextError::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
+            Self::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
                 write!(f, "x-only key {} not allowed in {}", pk, ctx)
             }
-            ScriptContextError::UncompressedKeysNotAllowed => {
+            Self::UncompressedKeysNotAllowed => {
                 write!(f, "uncompressed keys cannot be used in Taproot descriptors.")
             }
-            ScriptContextError::MaxWitnessItemsExceeded { actual, limit } => write!(
+            Self::MaxWitnessItemsExceeded { actual, limit } => write!(
                 f,
                 "At least one satisfaction path in the Miniscript fragment has {} witness items \
                  (limit: {}).",
                 actual, limit
             ),
-            ScriptContextError::MaxOpCountExceeded { actual, limit } => write!(
+            Self::MaxOpCountExceeded { actual, limit } => write!(
                 f,
                 "At least one satisfaction path in the Miniscript fragment contains {} opcodes \
                  (limit: {}).",
                 actual, limit
             ),
-            ScriptContextError::MaxWitnessScriptSizeExceeded { max, got } => write!(
+            Self::MaxWitnessScriptSizeExceeded { max, got } => write!(
                 f,
                 "The Miniscript corresponding Script cannot be larger than \
                 {} bytes, but got {} bytes.",
                 max, got
             ),
-            ScriptContextError::MaxRedeemScriptSizeExceeded { max, got } => write!(
+            Self::MaxRedeemScriptSizeExceeded { max, got } => write!(
                 f,
                 "The Miniscript corresponding Script cannot be larger than \
                 {} bytes, but got {} bytes.",
                 max, got
             ),
-            ScriptContextError::MaxBareScriptSizeExceeded { max, got } => write!(
+            Self::MaxBareScriptSizeExceeded { max, got } => write!(
                 f,
                 "The Miniscript corresponding Script cannot be larger than \
                 {} bytes, but got {} bytes.",
                 max, got
             ),
-            ScriptContextError::MaxScriptSigSizeExceeded { actual, limit } => write!(
+            Self::MaxScriptSigSizeExceeded { actual, limit } => write!(
                 f,
                 "At least one satisfaction path in the Miniscript fragment has {} bytes \
                 (limit: {}).",
                 actual, limit
             ),
-            ScriptContextError::ImpossibleSatisfaction => {
+            Self::ImpossibleSatisfaction => {
                 write!(f, "Impossible to satisfy Miniscript under the current context")
             }
-            ScriptContextError::TaprootMultiDisabled => {
+            Self::TaprootMultiDisabled => {
                 write!(f, "Invalid use of Multi node in taproot context")
             }
-            ScriptContextError::StackSizeLimitExceeded { actual, limit } => {
+            Self::StackSizeLimitExceeded { actual, limit } => {
                 write!(
                     f,
                     "Stack limit {} can exceed the allowed limit {} in at least one script path during script execution",
                     actual, limit
                 )
             }
-            ScriptContextError::MultiANotAllowed => {
+            Self::MultiANotAllowed => {
                 write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
             }
         }

@@ -92,7 +92,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
                 ShInner::Ms(sub)
             }
         };
-        Ok(Sh { inner })
+        Ok(Self { inner })
     }
 }
 

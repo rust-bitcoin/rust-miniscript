@@ -194,7 +194,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
 
         let sub = Miniscript::from_tree(top)?;
         Segwitv0::top_level_checks(&sub)?;
-        Ok(Wsh { ms: sub })
+        Ok(Self { ms: sub })
     }
 }
 
@@ -212,7 +212,7 @@ impl<Pk: FromStrKey> core::str::FromStr for Wsh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let top = expression::Tree::from_str(s)?;
-        Wsh::<Pk>::from_tree(top.root())
+        Self::from_tree(top.root())
     }
 }
 
@@ -234,7 +234,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
         // do the top-level checks
         match Segwitv0::check_pk(&pk) {
-            Ok(_) => Ok(Wpkh { pk }),
+            Ok(_) => Ok(Self { pk }),
             Err(e) => Err(e),
         }
     }
@@ -404,7 +404,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
         let pk = top
             .verify_terminal_parent("wpkh", "public key")
             .map_err(Error::Parse)?;
-        Wpkh::new(pk).map_err(Error::ContextError)
+        Self::new(pk).map_err(Error::ContextError)
     }
 }
 
