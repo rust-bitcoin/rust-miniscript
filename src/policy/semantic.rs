@@ -25,7 +25,7 @@ use crate::{
 /// representing the same policy are lifted to the same abstract `Policy`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Policy<Pk: MiniscriptKey> {
+pub enum Semantic<Pk: MiniscriptKey> {
     /// Unsatisfiable.
     Unsatisfiable,
     /// Trivially satisfiable.
@@ -48,7 +48,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     Thresh(Threshold<Arc<Self>, 0>),
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Semantic<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         self.pre_order_iter().all(|policy| match policy {
             Self::Key(ref pk) => pred(pk),
@@ -57,7 +57,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: MiniscriptKey> Semantic<Pk> {
     /// Converts a policy using one kind of public key to another type of public key.
     ///
     /// # Examples
@@ -66,10 +66,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// use std::collections::HashMap;
     /// use std::str::FromStr;
     /// use miniscript::bitcoin::{hashes::hash160, PublicKey};
-    /// use miniscript::{translate_hash_fail, policy::semantic::Policy, Translator};
+    /// use miniscript::{translate_hash_fail, policy::semantic::Semantic, Translator};
     /// let alice_pk = "02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7";
     /// let bob_pk = "03d008a849fbf474bd17e9d2c1a827077a468150e58221582ec3410ab309f5afe4";
-    /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
+    /// let placeholder_policy = Semantic::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
     ///
     /// // Information to translate abstract string type keys to concrete `bitcoin::PublicKey`s.
     /// // In practice, wallets would map from string key names to BIP32 keys.
@@ -99,14 +99,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// let real_policy = placeholder_policy.translate_pk(&mut t).unwrap();
     ///
-    /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
+    /// let expected_policy = Semantic::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
-    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Policy<T::TargetPk>, T::Error>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Semantic<T::TargetPk>, T::Error>
     where
         T: Translator<Pk>,
     {
-        use Policy::*;
+        use Semantic::*;
 
         let mut translated = vec![];
         for data in self.rtl_post_order_iter() {
@@ -168,7 +168,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     // Helper function to compute the number of constraints in policy.
     fn n_terminals(&self) -> usize {
-        use Policy::*;
+        use Semantic::*;
 
         let mut n_terminals = vec![];
         for data in self.rtl_post_order_iter() {
@@ -201,7 +201,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub(crate) fn satisfy_constraint(self, witness: &Self, available: bool) -> Self {
         debug_assert!(self.clone().normalized() == self);
         if let Self::Thresh { .. } = *witness {
-            // We can't debug_assert on Policy::Thresh.
+            // We can't debug_assert on Semantic::Thresh.
             panic!("should be unreachable")
         }
 
@@ -223,7 +223,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
+impl<Pk: MiniscriptKey> fmt::Debug for Semantic<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
@@ -248,7 +248,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
+impl<Pk: MiniscriptKey> fmt::Display for Semantic<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Unsatisfiable => f.write_str("UNSATISFIABLE"),
@@ -273,7 +273,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
+impl<Pk: FromStrKey> str::FromStr for Semantic<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Error> {
         let tree = expression::Tree::from_str(s)?;
@@ -281,9 +281,9 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     }
 }
 
-serde_string_impl_pk!(Policy, "a miniscript semantic policy");
+serde_string_impl_pk!(Semantic, "a miniscript semantic policy");
 
-impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
+impl<Pk: FromStrKey> expression::FromTree for Semantic<Pk> {
     fn from_tree(root: expression::TreeIterItem) -> Result<Self, Error> {
         root.verify_no_curly_braces()
             .map_err(From::from)
@@ -319,25 +319,31 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                 }
                 "pk" => node
                     .verify_terminal_parent("pk", "public key")
-                    .map(Policy::Key)
+                    .map(Semantic::Key)
                     .map_err(Error::Parse),
-                "after" => node.verify_after().map_err(Error::Parse).map(Policy::After),
-                "older" => node.verify_older().map_err(Error::Parse).map(Policy::Older),
+                "after" => node
+                    .verify_after()
+                    .map_err(Error::Parse)
+                    .map(Semantic::After),
+                "older" => node
+                    .verify_older()
+                    .map_err(Error::Parse)
+                    .map(Semantic::Older),
                 "sha256" => node
                     .verify_terminal_parent("sha256", "hash")
-                    .map(Policy::Sha256)
+                    .map(Semantic::Sha256)
                     .map_err(Error::Parse),
                 "hash256" => node
                     .verify_terminal_parent("hash256", "hash")
-                    .map(Policy::Hash256)
+                    .map(Semantic::Hash256)
                     .map_err(Error::Parse),
                 "ripemd160" => node
                     .verify_terminal_parent("ripemd160", "hash")
-                    .map(Policy::Ripemd160)
+                    .map(Semantic::Ripemd160)
                     .map_err(Error::Parse),
                 "hash160" => node
                     .verify_terminal_parent("hash160", "hash")
-                    .map(Policy::Hash160)
+                    .map(Semantic::Hash160)
                     .map_err(Error::Parse),
                 "and" => {
                     node.verify_n_children("and", 2..)
@@ -385,7 +391,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: MiniscriptKey> Semantic<Pk> {
     /// Flattens out trees of `And`s and `Or`s; eliminate `Trivial` and
     /// `Unsatisfiable`s. Does not reorder any branches; use `.sort`.
     pub fn normalized(self) -> Self {
@@ -459,14 +465,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Detects a true/trivial policy.
     ///
-    /// Only checks whether the policy is `Policy::Trivial`, to check if the
+    /// Only checks whether the policy is `Semantic::Trivial`, to check if the
     /// normalized form is trivial, the caller is expected to normalize the
     /// policy first.
     pub fn is_trivial(&self) -> bool { matches!(*self, Self::Trivial) }
 
     /// Detects a false/unsatisfiable policy.
     ///
-    /// Only checks whether the policy is `Policy::Unsatisfiable`, to check if
+    /// Only checks whether the policy is `Semantic::Unsatisfiable`, to check if
     /// the normalized form is unsatisfiable, the caller is expected to
     /// normalize the policy first.
     pub fn is_unsatisfiable(&self) -> bool { matches!(*self, Self::Unsatisfiable) }
@@ -512,7 +518,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Filters a policy by eliminating relative timelock constraints
     /// that are not satisfied at the given `age`.
     pub fn at_age(self, age: relative::LockTime) -> Self {
-        use Policy::*;
+        use Semantic::*;
 
         let mut at_age = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
@@ -542,7 +548,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Filters a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
     pub fn at_lock_time(self, n: absolute::LockTime) -> Self {
-        use Policy::*;
+        use Semantic::*;
 
         let mut at_age = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
@@ -584,7 +590,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// Returns `None` if the policy is not satisfiable.
     pub fn minimum_n_keys(&self) -> Option<usize> {
-        use Policy::*;
+        use Semantic::*;
 
         let mut minimum_n_keys = vec![];
         for data in self.rtl_post_order_iter() {
@@ -613,14 +619,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: MiniscriptKey> Semantic<Pk> {
     /// "Sorts" a policy to bring it into a canonical form to allow comparisons.
     ///
     /// Does **not** allow policies to be compared for functional equivalence;
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
     pub fn sorted(self) -> Self {
-        use Policy::*;
+        use Semantic::*;
 
         let mut sorted = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
@@ -644,14 +650,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
-    type NaryChildren = &'a [Arc<Policy<Pk>>];
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Semantic<Pk> {
+    type NaryChildren = &'a [Arc<Semantic<Pk>>];
 
     fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
     fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
-        use Policy::*;
+        use Semantic::*;
 
         match *self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
@@ -661,14 +667,14 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for &'a Arc<Policy<Pk>> {
-    type NaryChildren = &'a [Arc<Policy<Pk>>];
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Arc<Semantic<Pk>> {
+    type NaryChildren = &'a [Arc<Semantic<Pk>>];
 
     fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
     fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
-        use Policy::*;
+        use Semantic::*;
 
         match ***self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
@@ -686,7 +692,7 @@ mod tests {
 
     use super::*;
 
-    type StringPolicy = Policy<String>;
+    type StringPolicy = Semantic<String>;
 
     #[test]
     fn parse_policy_err() {
@@ -697,14 +703,14 @@ mod tests {
 
         assert!(StringPolicy::from_str("or(or)").is_err());
 
-        assert!(Policy::<PublicKey>::from_str("pk()").is_err());
-        assert!(Policy::<PublicKey>::from_str(
+        assert!(Semantic::<PublicKey>::from_str("pk()").is_err());
+        assert!(Semantic::<PublicKey>::from_str(
             "pk(\
              0200000000000000000000000000000000000002\
              )"
         )
         .is_err());
-        assert!(Policy::<PublicKey>::from_str(
+        assert!(Semantic::<PublicKey>::from_str(
             "pk(\
                 02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7\
              )"
@@ -715,7 +721,7 @@ mod tests {
     #[test]
     fn semantic_analysis() {
         let policy = StringPolicy::from_str("pk()").unwrap();
-        assert_eq!(policy, Policy::Key("".to_owned()));
+        assert_eq!(policy, Semantic::Key("".to_owned()));
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), policy);
@@ -729,15 +735,15 @@ mod tests {
         assert_eq!(policy.minimum_n_keys(), Some(1));
 
         let policy = StringPolicy::from_str("older(1000)").unwrap();
-        assert_eq!(policy, Policy::Older(RelLockTime::from_height(1000).unwrap()));
+        assert_eq!(policy, Semantic::Older(RelLockTime::from_height(1000).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.relative_timelocks(), vec![1000]);
-        assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Semantic::Unsatisfiable);
         assert_eq!(
             policy
                 .clone()
                 .at_age(RelLockTime::from_height(999).unwrap().into()),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
@@ -757,19 +763,19 @@ mod tests {
         let policy = StringPolicy::from_str("or(pk(),older(1000))").unwrap();
         assert_eq!(
             policy,
-            Policy::Thresh(Threshold::or(
-                Policy::Key("".to_owned()).into(),
-                Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
+            Semantic::Thresh(Threshold::or(
+                Semantic::Key("".to_owned()).into(),
+                Semantic::Older(RelLockTime::from_height(1000).unwrap()).into(),
             ))
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Policy::Key("".to_owned()));
+        assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Semantic::Key("".to_owned()));
         assert_eq!(
             policy
                 .clone()
                 .at_age(RelLockTime::from_height(999).unwrap().into()),
-            Policy::Key("".to_owned())
+            Semantic::Key("".to_owned())
         );
         assert_eq!(
             policy
@@ -789,9 +795,9 @@ mod tests {
         let policy = StringPolicy::from_str("or(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Thresh(Threshold::or(
-                Policy::Key("".to_owned()).into(),
-                Policy::Unsatisfiable.into()
+            Semantic::Thresh(Threshold::or(
+                Semantic::Key("".to_owned()).into(),
+                Semantic::Unsatisfiable.into()
             ))
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
@@ -802,9 +808,9 @@ mod tests {
         let policy = StringPolicy::from_str("and(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Thresh(Threshold::and(
-                Policy::Key("".to_owned()).into(),
-                Policy::Unsatisfiable.into()
+            Semantic::Thresh(Threshold::and(
+                Semantic::Key("".to_owned()).into(),
+                Semantic::Unsatisfiable.into()
             ))
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
@@ -820,15 +826,15 @@ mod tests {
         .unwrap();
         assert_eq!(
             policy,
-            Policy::Thresh(
+            Semantic::Thresh(
                 Threshold::new(
                     2,
                     vec![
-                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(10000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(2000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(2000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(10000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(2000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(2000).unwrap()).into(),
                     ]
                 )
                 .unwrap()
@@ -847,15 +853,15 @@ mod tests {
         .unwrap();
         assert_eq!(
             policy,
-            Policy::Thresh(
+            Semantic::Thresh(
                 Threshold::new(
                     2,
                     vec![
-                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(10000).unwrap()).into(),
-                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
-                        Policy::Unsatisfiable.into(),
-                        Policy::Unsatisfiable.into(),
+                        Semantic::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(10000).unwrap()).into(),
+                        Semantic::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Semantic::Unsatisfiable.into(),
+                        Semantic::Unsatisfiable.into(),
                     ]
                 )
                 .unwrap()
@@ -870,15 +876,15 @@ mod tests {
 
         // Block height 1000.
         let policy = StringPolicy::from_str("after(1000)").unwrap();
-        assert_eq!(policy, Policy::After(AbsLockTime::from_consensus(1000).unwrap()));
+        assert_eq!(policy, Semantic::After(AbsLockTime::from_consensus(1000).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Semantic::Unsatisfiable);
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_height(999).expect("valid block height")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
@@ -897,48 +903,48 @@ mod tests {
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
         // UNIX timestamp of 10 seconds after the epoch.
         let policy = StringPolicy::from_str("after(500000010)").unwrap();
-        assert_eq!(policy, Policy::After(AbsLockTime::from_consensus(500_000_010).unwrap()));
+        assert_eq!(policy, Semantic::After(AbsLockTime::from_consensus(500_000_010).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
-        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Semantic::Unsatisfiable);
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_height(999).expect("valid block height")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_height(1000).expect("valid block height")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_height(10000).expect("valid block height")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         // And now pass a UNIX timestamp to at_lock_time while policy also uses a timestamp.
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_time(500_000_000).expect("valid timestamp")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
-            Policy::Unsatisfiable
+            Semantic::Unsatisfiable
         );
         assert_eq!(
             policy
@@ -964,7 +970,7 @@ mod tests {
         // Very bad idea to add master key,pk but let's have it have 50M blocks
         let master_key = StringPolicy::from_str("and(older(50000000),pk(master))").unwrap();
         let new_liquid_pol =
-            Policy::Thresh(Threshold::or(liquid_pol.clone().into(), master_key.into()));
+            Semantic::Thresh(Threshold::or(liquid_pol.clone().into(), master_key.into()));
 
         assert!(liquid_pol.clone().entails(new_liquid_pol.clone()).unwrap());
         assert!(!new_liquid_pol.entails(liquid_pol.clone()).unwrap());
