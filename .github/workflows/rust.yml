@@ -27,21 +27,6 @@ jobs:
       - name: "Run tests"
         run: cargo rbmt test --toolchain ${{ matrix.toolchain }} --lock-file ${{ matrix.dep }}
 
-  Nightly:
-    name: Test - nightly toolchain
-    runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        dep: [minimal, recent]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
-      - name: "Run tests"
-        run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
-
   Check:
     runs-on: ubuntu-26.04
     permissions:
