@@ -42,60 +42,21 @@ jobs:
       - name: "Run tests"
         run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
 
-  Lint:
-    name: Lint - nightly toolchain
+  Check:
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        dep: [recent]
+        task: [lint, docs, docsrs, bench]
     steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          toolchain: nightly
-          components: clippy
-      - name: "Run lint"
-        run: cargo rbmt lint
-
-  Docs:
-    name: Docs - stable toolchain
-    runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: stable
-      - name: "Build docs"
-        run: cargo rbmt docs
-
-  Docsrs:
-    name: Docs - nightly toolchain
-    runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
-      - name: "Build docs.rs docs"
-        run: cargo rbmt docsrs
-
-  Bench:
-    name: Bench - nightly toolchain
-    runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
-      - name: "Run bench"
-        run: cargo rbmt bench
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rbmt
+      - name: "Run ${{ matrix.task }}"
+        run: cargo rbmt ${{ matrix.task }}
 
   Format:
     name: Format - nightly toolchain
