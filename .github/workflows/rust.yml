@@ -11,7 +11,7 @@ name: Continuous integration
 jobs:
   Stable:
     name: Test - stable toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +27,7 @@ jobs:
 
   Nightly:
     name: Test - nightly toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +42,7 @@ jobs:
 
   MSRV:
     name: Test - 1.63.0 toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +63,7 @@ jobs:
 
   Lint:
     name: Lint - nightly toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -79,7 +79,7 @@ jobs:
 
   Docs:
     name: Docs - stable toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
     steps:
@@ -92,7 +92,7 @@ jobs:
 
   Docsrs:
     name: Docs - nightly toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
     steps:
@@ -105,7 +105,7 @@ jobs:
 
   Bench:
     name: Bench - nightly toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
     steps:
@@ -118,7 +118,7 @@ jobs:
 
   Format:
     name: Format - nightly toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
     steps:
@@ -132,7 +132,7 @@ jobs:
 
   Integration:
     name: Integration tests - stable toolchain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -162,7 +162,7 @@ jobs:
         run: cargo rbmt integration
 
   Embedded:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
