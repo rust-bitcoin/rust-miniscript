@@ -109,13 +109,13 @@ impl GetKey for DescriptorSecretKey {
         secp: &Secp256k1<C>,
     ) -> Result<Option<PrivateKey>, Self::Error> {
         match (self, key_request) {
-            (DescriptorSecretKey::Single(single_priv), key_request) => {
+            (Self::Single(single_priv), key_request) => {
                 let sk = single_priv.key;
                 let pk = sk.public_key(secp);
                 let pubkey_map = BTreeMap::from([(pk, sk)]);
                 pubkey_map.get_key(key_request, secp)
             }
-            (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Pubkey(public_key)) => {
+            (Self::XPrv(descriptor_xkey), KeyRequest::Pubkey(public_key)) => {
                 let xpriv = descriptor_xkey
                     .xkey
                     .derive_priv(secp, &descriptor_xkey.derivation_path)
@@ -129,7 +129,7 @@ impl GetKey for DescriptorSecretKey {
                 }
             }
             (
-                DescriptorSecretKey::XPrv(descriptor_xkey),
+                Self::XPrv(descriptor_xkey),
                 ref key_request @ KeyRequest::Bip32(ref key_source),
             ) => {
                 if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
@@ -152,11 +152,11 @@ impl GetKey for DescriptorSecretKey {
 
                 Ok(None)
             }
-            (DescriptorSecretKey::XPrv(_), KeyRequest::XOnlyPubkey(_)) => {
+            (Self::XPrv(_), KeyRequest::XOnlyPubkey(_)) => {
                 Err(GetKeyError::NotSupported)
             }
             (
-                desc_multi_sk @ DescriptorSecretKey::MultiXPrv(_descriptor_multi_xkey),
+                desc_multi_sk @ Self::MultiXPrv(_descriptor_multi_xkey),
                 key_request,
             ) => {
                 for desc_sk in &desc_multi_sk.clone().into_single_keys() {
