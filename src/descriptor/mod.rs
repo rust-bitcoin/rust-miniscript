@@ -650,6 +650,50 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
     }
 }
 
+/// Result of [`Descriptor::derive_at_index`].
+///
+/// When the source descriptor has no wildcard,
+/// [`or_fallback`](DerivationResult::or_fallback) recovers the definite
+/// descriptor instead of returning an error.
+#[derive(Debug)]
+#[must_use]
+pub enum DerivationResult {
+    /// Derivation succeeded.
+    Ok(Descriptor<DefiniteDescriptorKey>),
+    /// The descriptor has no wildcard. Carries the original for fallback.
+    WithoutWildcard(Descriptor<DescriptorPublicKey>),
+    /// An error other than NoWildcard.
+    Error(NonDefiniteKeyError),
+}
+
+impl DerivationResult {
+    /// Converts into a `Result`.
+    ///
+    /// Use [`or_fallback`](DerivationResult::or_fallback) if you want
+    /// `NoWildcard` errors to be recovered automatically.
+    pub fn into_result(self) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        match self {
+            DerivationResult::Ok(d) => Ok(d),
+            DerivationResult::WithoutWildcard(_) => Err(NonDefiniteKeyError::NoWildcard),
+            DerivationResult::Error(e) => Err(e),
+        }
+    }
+
+    /// Converts into a `Result`, recovering from `NoWildcard` by calling
+    /// [`into_definite`](Descriptor::into_definite) on the original descriptor.
+    pub fn or_fallback(self) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        match self {
+            DerivationResult::Ok(d) => Ok(d),
+            DerivationResult::WithoutWildcard(original) => original.into_definite(),
+            DerivationResult::Error(e) => Err(e),
+        }
+    }
+
+    /// Unwraps the result, panicking on non-recoverable errors. Ignores
+    /// `NoWildcard` errors by calling [`or_fallback`](DerivationResult::or_fallback).
+    pub fn unwrap(self) -> Descriptor<DefiniteDescriptorKey> { self.or_fallback().unwrap() }
+}
+
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
@@ -703,15 +747,15 @@ impl Descriptor<DescriptorPublicKey> {
     /// - If the descriptor contains no wildcards
     /// - If index >= 2^31
     /// - If the descriptor contains multi-path derivations
-    pub fn derive_at_index(
-        &self,
-        index: u32,
-    ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+    #[allow(deprecated)]
+    pub fn derive_at_index(&self, index: u32) -> DerivationResult {
         if !self.has_wildcard() {
-            return Err(NonDefiniteKeyError::NoWildcard);
+            return DerivationResult::WithoutWildcard(self.clone());
         }
-        #[allow(deprecated)]
-        self.at_derivation_index(index)
+        match self.at_derivation_index(index) {
+            Ok(d) => DerivationResult::Ok(d),
+            Err(e) => DerivationResult::Error(e),
+        }
     }
 
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
@@ -926,7 +970,10 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         for i in range {
-            let concrete = self.derive_at_index(i)?.derived_descriptor(secp);
+            let concrete = self
+                .derive_at_index(i)
+                .into_result()?
+                .derived_descriptor(secp);
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((i, concrete)));
             }
@@ -2827,7 +2874,10 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
         ).unwrap();
         assert!(!desc.has_wildcard());
-        assert!(matches!(desc.derive_at_index(0), Err(NonDefiniteKeyError::NoWildcard)));
+        assert!(matches!(
+            desc.derive_at_index(0).into_result(),
+            Err(NonDefiniteKeyError::NoWildcard)
+        ));
     }
 
     #[test]
@@ -2838,7 +2888,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             "wsh(multi(1,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/*,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/2))"
         ).unwrap();
         assert!(desc.has_wildcard());
-        assert!(desc.derive_at_index(0).is_ok());
+        assert!(matches!(desc.derive_at_index(0), DerivationResult::Ok(_)));
     }
 
     #[test]
