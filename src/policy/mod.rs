@@ -19,7 +19,7 @@ pub mod concrete;
 pub mod semantic;
 
 pub use self::concrete::Policy as Concrete;
-pub use self::semantic::Policy as Semantic;
+pub use self::semantic::Semantic;
 use crate::descriptor::Descriptor;
 use crate::iter::TreeLike as _;
 use crate::miniscript::{Miniscript, ScriptContext};
