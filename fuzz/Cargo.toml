@@ -81,3 +81,9 @@ path = "fuzz_targets/roundtrip_miniscript_str.rs"
 [[bin]]
 name = "roundtrip_semantic"
 path = "fuzz_targets/roundtrip_semantic.rs"
+
+[package.metadata.rbmt.lint]
+allowed_duplicates = [
+    "miniscript",        # We explicitly depend on old miniscript here
+    "hex-conservative",  # From old miniscript.
+]

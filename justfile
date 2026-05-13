@@ -11,7 +11,7 @@ check:
 
 # Lint everything.
 lint:
-  cargo +nightly clippy --all-targets --all-features -- --deny warnings
+  RUSTUP_TOOLCHAIN=$(cat ./nightly-version) cargo rbmt lint
 
 # Run the formatter.
 fmt:
