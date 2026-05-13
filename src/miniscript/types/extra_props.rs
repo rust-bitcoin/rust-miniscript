@@ -29,7 +29,7 @@ pub struct TimelockInfo {
 impl TimelockInfo {
     /// Creates a new `TimelockInfo` with all fields set to false.
     pub const fn new() -> Self {
-        TimelockInfo {
+        Self {
             csv_with_height: false,
             csv_with_time: false,
             cltv_with_height: false,
@@ -52,9 +52,9 @@ impl TimelockInfo {
     }
 
     /// Combines timelocks, if threshold `k` is greater than one we check for any unspendable paths.
-    pub(crate) fn combine_threshold<I>(k: usize, timelocks: I) -> TimelockInfo
+    pub(crate) fn combine_threshold<I>(k: usize, timelocks: I) -> Self
     where
-        I: IntoIterator<Item = TimelockInfo>,
+        I: IntoIterator<Item = Self>,
     {
         // Propagate all fields of `TimelockInfo` from each of the node's children to the node
         // itself (by taking the logical-or of all of them). In case `k == 1` (this is a disjunction)
@@ -65,7 +65,7 @@ impl TimelockInfo {
         // timelock requirements, this represents an inaccessible spending branch.
         timelocks
             .into_iter()
-            .fold(TimelockInfo::default(), |mut acc, t| {
+            .fold(Self::default(), |mut acc, t| {
                 // If more than one branch may be taken, and some other branch has a requirement
                 // that conflicts with this one, set `contains_combination`.
                 if k > 1 {
@@ -163,7 +163,7 @@ pub struct ExtData {
 
 impl ExtData {
     /// Extra data for the `0` combinator
-    pub const FALSE: Self = ExtData {
+    pub const FALSE: Self = Self {
         pk_cost: 1,
         has_free_verify: false,
         static_ops: 0,
@@ -180,7 +180,7 @@ impl ExtData {
     };
 
     /// Extra data for the `1` combinator
-    pub const TRUE: Self = ExtData {
+    pub const TRUE: Self = Self {
         pk_cost: 1,
         has_free_verify: false,
         static_ops: 0,
@@ -208,7 +208,7 @@ impl ExtData {
             crate::SigType::Schnorr => (33, 66),
         };
 
-        ExtData {
+        Self {
             pk_cost: key_bytes,
             has_free_verify: false,
             static_ops: 0,
@@ -244,7 +244,7 @@ impl ExtData {
             (crate::SigType::Schnorr, _) => (33, 66),
         };
 
-        ExtData {
+        Self {
             pk_cost: 24,
             has_free_verify: false,
             static_ops: 3,
@@ -278,7 +278,7 @@ impl ExtData {
             (true, false) => 3,
             (false, false) => 2,
         };
-        ExtData {
+        Self {
             pk_cost: num_cost
                 + thresh
                     .iter()
@@ -322,7 +322,7 @@ impl ExtData {
             (true, false) => 3,
             (false, false) => 2,
         };
-        ExtData {
+        Self {
             pk_cost: num_cost + 33 * n /*pks*/ + (n - 1) /*checksigadds*/ + 1,
             has_free_verify: true,
             static_ops: 0, // irrelevant; no ops limit in Taproot
@@ -350,7 +350,7 @@ impl ExtData {
 
     /// Extra properties for the `sha256` fragment.
     pub const fn sha256() -> Self {
-        ExtData {
+        Self {
             pk_cost: 33 + 6,
             has_free_verify: true,
             static_ops: 4,
@@ -375,7 +375,7 @@ impl ExtData {
 
     /// Extra properties for the `hash256` fragment.
     pub const fn hash256() -> Self {
-        ExtData {
+        Self {
             pk_cost: 33 + 6,
             has_free_verify: true,
             static_ops: 4,
@@ -400,7 +400,7 @@ impl ExtData {
 
     /// Extra properties for the `ripemd160` fragment.
     pub const fn ripemd160() -> Self {
-        ExtData {
+        Self {
             pk_cost: 21 + 6,
             has_free_verify: true,
             static_ops: 4,
@@ -425,7 +425,7 @@ impl ExtData {
 
     /// Extra properties for the `hash160` fragment.
     pub const fn hash160() -> Self {
-        ExtData {
+        Self {
             pk_cost: 21 + 6,
             has_free_verify: true,
             static_ops: 4,
@@ -450,7 +450,7 @@ impl ExtData {
 
     /// Extra properties for the `after` fragment.
     pub fn after(t: AbsLockTime) -> Self {
-        ExtData {
+        Self {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
             static_ops: 1,
@@ -475,7 +475,7 @@ impl ExtData {
 
     /// Extra properties for the `older` fragment.
     pub fn older(t: RelLockTime) -> Self {
-        ExtData {
+        Self {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
             static_ops: 1,
@@ -500,7 +500,7 @@ impl ExtData {
 
     /// Extra properties for the `a:` fragment.
     pub const fn cast_alt(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 2,
             has_free_verify: false,
             static_ops: 2 + self.static_ops,
@@ -513,7 +513,7 @@ impl ExtData {
 
     /// Extra properties for the `s:` fragment.
     pub const fn cast_swap(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 1,
             has_free_verify: self.has_free_verify,
             static_ops: 1 + self.static_ops,
@@ -526,7 +526,7 @@ impl ExtData {
 
     /// Extra properties for the `c:` fragment.
     pub const fn cast_check(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 1,
             has_free_verify: true,
             static_ops: 1 + self.static_ops,
@@ -539,7 +539,7 @@ impl ExtData {
 
     /// Extra properties for the `d:` fragment.
     pub fn cast_dupif(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 3,
             has_free_verify: false,
             static_ops: 3 + self.static_ops,
@@ -566,7 +566,7 @@ impl ExtData {
     /// Extra properties for the `v:` fragment.
     pub fn cast_verify(self) -> Self {
         let verify_cost = usize::from(!self.has_free_verify);
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + usize::from(!self.has_free_verify),
             has_free_verify: false,
             static_ops: verify_cost + self.static_ops,
@@ -579,7 +579,7 @@ impl ExtData {
 
     /// Extra properties for the `j:` fragment.
     pub const fn cast_nonzero(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 4,
             has_free_verify: false,
             static_ops: 4 + self.static_ops,
@@ -598,7 +598,7 @@ impl ExtData {
 
     /// Extra properties for the `n:` fragment.
     pub const fn cast_zeronotequal(self) -> Self {
-        ExtData {
+        Self {
             pk_cost: self.pk_cost + 1,
             has_free_verify: false,
             static_ops: 1 + self.static_ops,
@@ -625,7 +625,7 @@ impl ExtData {
 
     /// Extra properties for the `and_b` fragment.
     pub fn and_b(l: Self, r: Self) -> Self {
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
             static_ops: 1 + l.static_ops + r.static_ops,
@@ -654,7 +654,7 @@ impl ExtData {
 
     /// Extra properties for the `and_v` fragment.
     pub fn and_v(l: Self, r: Self) -> Self {
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
             static_ops: l.static_ops + r.static_ops,
@@ -686,7 +686,7 @@ impl ExtData {
             })
         };
 
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
             static_ops: 1 + l.static_ops + r.static_ops,
@@ -712,7 +712,7 @@ impl ExtData {
             })
         };
 
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
             static_ops: 3 + l.static_ops + r.static_ops,
@@ -735,7 +735,7 @@ impl ExtData {
             })
         };
 
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost + 2,
             has_free_verify: false,
             static_ops: 2 + l.static_ops + r.static_ops,
@@ -763,7 +763,7 @@ impl ExtData {
             max_exec_op_count: data.max_exec_op_count,
         };
 
-        ExtData {
+        Self {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
             static_ops: 3 + l.static_ops + r.static_ops,
@@ -789,7 +789,7 @@ impl ExtData {
             })
         };
 
-        ExtData {
+        Self {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_free_verify: false,
             static_ops: 3 + a.static_ops + b.static_ops + c.static_ops,
@@ -928,7 +928,7 @@ impl ExtData {
             None
         };
 
-        ExtData {
+        Self {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
             has_free_verify: true,
             static_ops: static_ops + 1 + (n - 1), // adds and equal

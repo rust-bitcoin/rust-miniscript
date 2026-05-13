@@ -29,10 +29,10 @@ impl Eq for OrdF64 {}
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
 // to derive both or neither. Better to be explicit.
 impl PartialOrd for OrdF64 {
-    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 impl Ord for OrdF64 {
-    fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         // will panic if given NaN
         self.0.partial_cmp(&other.0).unwrap()
     }
@@ -76,28 +76,28 @@ pub enum CompilerError {
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CompilerError::NonBinaryArgAnd => {
+            Self::NonBinaryArgAnd => {
                 f.write_str("And policy fragment must take 2 arguments")
             }
-            CompilerError::NonBinaryArgOr => {
+            Self::NonBinaryArgOr => {
                 f.write_str("Or policy fragment must take 2 arguments")
             }
-            CompilerError::TopLevelNonSafe => {
+            Self::TopLevelNonSafe => {
                 f.write_str("Top Level script is not safe on some spendpath")
             }
-            CompilerError::ImpossibleNonMalleableCompilation => {
+            Self::ImpossibleNonMalleableCompilation => {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
-            CompilerError::LimitsExceeded => f.write_str(
+            Self::LimitsExceeded => f.write_str(
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
-            CompilerError::NoInternalKey => {
+            Self::NoInternalKey => {
                 f.write_str("Taproot compilation had no internal key available")
             }
-            CompilerError::TooManyTapleaves { n, max } => {
+            Self::TooManyTapleaves { n, max } => {
                 write!(f, "Policy had too many Tapleaves (found {}, maximum {})", n, max)
             }
-            CompilerError::IfFragmentInNativeLeaf { leaf_index } => {
+            Self::IfFragmentInNativeLeaf { leaf_index } => {
                 write!(
                     f,
                     "native Taproot compilation produced a leaf with OP_IF/NOTIF at leaf index {}; \
@@ -105,7 +105,7 @@ impl fmt::Display for CompilerError {
                     leaf_index
                 )
             }
-            CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
+            Self::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -131,7 +131,7 @@ impl error::Error for CompilerError {
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
+    fn from(e: policy::concrete::PolicyError) -> Self { Self::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
@@ -169,8 +169,8 @@ impl CompilationKey {
     }
 
     /// Helper to create compilation key from components
-    fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> CompilationKey {
-        CompilationKey { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
+    fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> Self {
+        Self { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
     }
 }
 
@@ -190,13 +190,13 @@ struct CompilerExtData {
 }
 
 impl CompilerExtData {
-    const TRUE: Self = CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None };
+    const TRUE: Self = Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None };
 
     const FALSE: Self =
-        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
+        Self { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
 
     fn pk_k<Ctx: ScriptContext>() -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 73.0,
@@ -207,7 +207,7 @@ impl CompilerExtData {
     }
 
     fn pk_h<Ctx: ScriptContext>() -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 73.0 + 34.0,
@@ -223,7 +223,7 @@ impl CompilerExtData {
     }
 
     fn multi(k: usize, _n: usize) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: 1.0 + 73.0 * k as f64,
             dissat_cost: Some(1.0 * (k + 1) as f64),
@@ -231,7 +231,7 @@ impl CompilerExtData {
     }
 
     fn sortedmulti(k: usize, _n: usize) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: 1.0 + 73.0 * k as f64,
             dissat_cost: Some(1.0 * (k + 1) as f64),
@@ -239,7 +239,7 @@ impl CompilerExtData {
     }
 
     fn multi_a(k: usize, n: usize) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: 66.0 * k as f64 + (n - k) as f64,
             dissat_cost: Some(n as f64), /* <w_n> ... <w_1> := 0x00 ... 0x00 (n times) */
@@ -249,13 +249,13 @@ impl CompilerExtData {
     fn sortedmulti_a(k: usize, n: usize) -> Self { Self::multi_a(k, n) }
 
     fn hash() -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
+        Self { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
-    fn time() -> Self { CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
+    fn time() -> Self { Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
 
     fn cast_alt(self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
@@ -263,7 +263,7 @@ impl CompilerExtData {
     }
 
     fn cast_swap(self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
@@ -271,7 +271,7 @@ impl CompilerExtData {
     }
 
     fn cast_check(self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
@@ -279,19 +279,19 @@ impl CompilerExtData {
     }
 
     fn cast_dupif(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
+        Self { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
     }
 
     fn cast_verify(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
     }
 
     fn cast_nonzero(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) }
     }
 
     fn cast_zeronotequal(self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
@@ -299,19 +299,19 @@ impl CompilerExtData {
     }
 
     fn cast_true(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
     }
 
     fn cast_unlikely(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
+        Self { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
     }
 
     fn cast_likely(self) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 1.0 + self.sat_cost, dissat_cost: Some(2.0) }
+        Self { branch_prob: None, sat_cost: 1.0 + self.sat_cost, dissat_cost: Some(2.0) }
     }
 
     fn and_b(left: Self, right: Self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: match (left.dissat_cost, right.dissat_cost) {
@@ -322,7 +322,7 @@ impl CompilerExtData {
     }
 
     fn and_v(left: Self, right: Self) -> Self {
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: None,
@@ -336,7 +336,7 @@ impl CompilerExtData {
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
@@ -351,7 +351,7 @@ impl CompilerExtData {
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
@@ -365,7 +365,7 @@ impl CompilerExtData {
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: None,
@@ -380,7 +380,7 @@ impl CompilerExtData {
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: lprob * (2.0 + l.sat_cost) + rprob * (1.0 + r.sat_cost),
             dissat_cost: if let (Some(ldis), Some(rdis)) = (l.dissat_cost, r.dissat_cost) {
@@ -408,7 +408,7 @@ impl CompilerExtData {
             .dissat_cost
             .expect("BUG: and_or first arg(a) must be dissatisfiable");
         debug_assert_eq!(aprob, bprob); //A and B must have same branch prob.
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
             dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
@@ -427,7 +427,7 @@ impl CompilerExtData {
             sat_cost += sub.sat_cost;
             dissat_cost += sub.dissat_cost.unwrap();
         }
-        CompilerExtData {
+        Self {
             branch_prob: None,
             sat_cost: sat_cost * k_over_n + dissat_cost * (1.0 - k_over_n),
             dissat_cost: Some(dissat_cost),
@@ -558,15 +558,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
-    fn terminal(ms: Miniscript<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
-        AstElemExt { comp_ext_data: CompilerExtData::type_check(ms.as_inner()), ms: Arc::new(ms) }
+    fn terminal(ms: Miniscript<Pk, Ctx>) -> Self {
+        Self { comp_ext_data: CompilerExtData::type_check(ms.as_inner()), ms: Arc::new(ms) }
     }
 
     fn binary(
         ast: Terminal<Pk, Ctx>,
-        l: &AstElemExt<Pk, Ctx>,
-        r: &AstElemExt<Pk, Ctx>,
-    ) -> Result<AstElemExt<Pk, Ctx>, types::Error> {
+        l: &Self,
+        r: &Self,
+    ) -> Result<Self, types::Error> {
         let lookup_ext = |n| match n {
             0 => l.comp_ext_data,
             1 => r.comp_ext_data,
@@ -577,7 +577,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ty = types::Type::type_check(&ast)?;
         let ext = types::ExtData::type_check(&ast);
         let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
-        Ok(AstElemExt {
+        Ok(Self {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
@@ -585,10 +585,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 
     fn ternary(
         ast: Terminal<Pk, Ctx>,
-        a: &AstElemExt<Pk, Ctx>,
-        b: &AstElemExt<Pk, Ctx>,
-        c: &AstElemExt<Pk, Ctx>,
-    ) -> Result<AstElemExt<Pk, Ctx>, types::Error> {
+        a: &Self,
+        b: &Self,
+        c: &Self,
+    ) -> Result<Self, types::Error> {
         let lookup_ext = |n| match n {
             0 => a.comp_ext_data,
             1 => b.comp_ext_data,
@@ -600,7 +600,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ty = types::Type::type_check(&ast)?;
         let ext = types::ExtData::type_check(&ast);
         let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
-        Ok(AstElemExt {
+        Ok(Self {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })

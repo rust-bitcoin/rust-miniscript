@@ -104,41 +104,41 @@ impl From<checksum::Error> for ParseTreeError {
 impl fmt::Display for ParseTreeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ParseTreeError::Checksum(ref e) => e.fmt(f),
-            ParseTreeError::MaxRecursionDepthExceeded { actual, maximum } => {
+            Self::Checksum(ref e) => e.fmt(f),
+            Self::MaxRecursionDepthExceeded { actual, maximum } => {
                 write!(f, "maximum recursion depth exceeded (max {}, got {})", maximum, actual)
             }
-            ParseTreeError::ExpectedParenOrComma { ch, pos } => {
+            Self::ExpectedParenOrComma { ch, pos } => {
                 write!(
                     f,
                     "invalid character `{}` (position {}); expected comma or close-paren",
                     ch, pos
                 )
             }
-            ParseTreeError::UnmatchedOpenParen { ch, pos } => {
+            Self::UnmatchedOpenParen { ch, pos } => {
                 write!(f, "`{}` (position {}) not closed", ch, pos)
             }
-            ParseTreeError::UnmatchedCloseParen { ch, pos } => {
+            Self::UnmatchedCloseParen { ch, pos } => {
                 write!(f, "`{}` (position {}) not opened", ch, pos)
             }
-            ParseTreeError::MismatchedParens { open_ch, open_pos, close_ch, close_pos } => {
+            Self::MismatchedParens { open_ch, open_pos, close_ch, close_pos } => {
                 write!(
                     f,
                     "`{}` (position {}) closed by `{}` (position {})",
                     open_ch, open_pos, close_ch, close_pos
                 )
             }
-            ParseTreeError::IllegalCurlyBrace { pos } => {
+            Self::IllegalCurlyBrace { pos } => {
                 write!(f, "illegal `{{` at position {} (Taproot branches not allowed here)", pos)
             }
-            ParseTreeError::IncorrectName { actual, expected } => {
+            Self::IncorrectName { actual, expected } => {
                 if expected.is_empty() {
                     write!(f, "found node '{}', expected nameless node", actual)
                 } else {
                     write!(f, "expected node '{}', found '{}'", expected, actual)
                 }
             }
-            ParseTreeError::IncorrectNumberOfChildren {
+            Self::IncorrectNumberOfChildren {
                 description,
                 n_children,
                 minimum,
@@ -156,17 +156,17 @@ impl fmt::Display for ParseTreeError {
                 }?;
                 write!(f, ", but found {}", n_children)
             }
-            ParseTreeError::MultipleSeparators { separator, pos } => {
+            Self::MultipleSeparators { separator, pos } => {
                 write!(
                     f,
                     "separator '{}' occurred multiple times (second time at position {})",
                     separator, pos
                 )
             }
-            ParseTreeError::TrailingCharacter { ch, pos } => {
+            Self::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
-            ParseTreeError::UnknownName { name } => write!(f, "unrecognized name '{}'", name),
+            Self::UnknownName { name } => write!(f, "unrecognized name '{}'", name),
         }
     }
 }
@@ -174,18 +174,18 @@ impl fmt::Display for ParseTreeError {
 impl std::error::Error for ParseTreeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            ParseTreeError::Checksum(ref e) => Some(e),
-            ParseTreeError::MaxRecursionDepthExceeded { .. }
-            | ParseTreeError::ExpectedParenOrComma { .. }
-            | ParseTreeError::UnmatchedOpenParen { .. }
-            | ParseTreeError::UnmatchedCloseParen { .. }
-            | ParseTreeError::MismatchedParens { .. }
-            | ParseTreeError::IllegalCurlyBrace { .. }
-            | ParseTreeError::IncorrectName { .. }
-            | ParseTreeError::IncorrectNumberOfChildren { .. }
-            | ParseTreeError::MultipleSeparators { .. }
-            | ParseTreeError::TrailingCharacter { .. }
-            | ParseTreeError::UnknownName { .. } => None,
+            Self::Checksum(ref e) => Some(e),
+            Self::MaxRecursionDepthExceeded { .. }
+            | Self::ExpectedParenOrComma { .. }
+            | Self::UnmatchedOpenParen { .. }
+            | Self::UnmatchedCloseParen { .. }
+            | Self::MismatchedParens { .. }
+            | Self::IllegalCurlyBrace { .. }
+            | Self::IncorrectName { .. }
+            | Self::IncorrectNumberOfChildren { .. }
+            | Self::MultipleSeparators { .. }
+            | Self::TrailingCharacter { .. }
+            | Self::UnknownName { .. } => None,
         }
     }
 }
@@ -209,11 +209,11 @@ pub enum ParseNumError {
 impl fmt::Display for ParseNumError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ParseNumError::StdParse(ref e) => e.fmt(f),
-            ParseNumError::InvalidLeadingDigit(ch) => {
+            Self::StdParse(ref e) => e.fmt(f),
+            Self::InvalidLeadingDigit(ch) => {
                 write!(f, "numbers must start with 1-9, not {}", ch)
             }
-            ParseNumError::IllegalZero { context } => {
+            Self::IllegalZero { context } => {
                 write!(f, "{} may not be 0", context)
             }
         }
@@ -224,9 +224,9 @@ impl fmt::Display for ParseNumError {
 impl std::error::Error for ParseNumError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            ParseNumError::StdParse(ref e) => Some(e),
-            ParseNumError::InvalidLeadingDigit(..) => None,
-            ParseNumError::IllegalZero { .. } => None,
+            Self::StdParse(ref e) => Some(e),
+            Self::InvalidLeadingDigit(..) => None,
+            Self::IllegalZero { .. } => None,
         }
     }
 }

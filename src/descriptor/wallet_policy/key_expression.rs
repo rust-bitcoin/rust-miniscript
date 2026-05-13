@@ -27,7 +27,7 @@ pub struct KeyExpression {
 pub struct KeyIndex(pub u32);
 
 impl KeyExpression {
-    pub fn is_disjoint(&self, other: &KeyExpression) -> bool {
+    pub fn is_disjoint(&self, other: &Self) -> bool {
         let lhs: BTreeSet<_> = self
             .derivation_paths
             .paths()
@@ -57,7 +57,7 @@ impl TryFrom<&str> for KeyExpression {
         }
         let (ki, derivation_paths, wildcard) =
             parse_xkey_deriv(&s.replace(RECEIVE_CHANGE_SHORTHAND, RECEIVE_CHANGE_PATH))?;
-        Ok(KeyExpression {
+        Ok(Self {
             index: ki,
             derivation_paths: DerivPaths::new(derivation_paths)
                 .ok_or(WalletPolicyError::KeyExpressionParseMustHaveDerivPath)?,
@@ -125,7 +125,7 @@ impl FromStr for KeyIndex {
                 let index = index_str
                     .parse()
                     .map_err(|_| WalletPolicyError::KeyIndexParseInvalidIndex(index_str))?;
-                Ok(KeyIndex(index))
+                Ok(Self(index))
             }
             Some(ch) => Err(WalletPolicyError::KeyIndexParseExpectedAtSign(ch)),
             None => Err(WalletPolicyError::KeyIndexParseInvalidIndex(s.into())),
