@@ -9,7 +9,7 @@ on:   # yamllint disable-line rule:truthy
 name: Continuous integration
 
 jobs:
-  Stable:                       # 2 jobs, one per lock file.
+  Stable:
     name: Test - stable toolchain
     runs-on: ubuntu-latest
     strategy:
@@ -25,7 +25,7 @@ jobs:
       - name: "Run tests"
         run: cargo rbmt test stable --lock-file ${{ matrix.dep }}
 
-  Nightly:                      # 2 jobs, one per lock file.
+  Nightly:
     name: Test - nightly toolchain
     runs-on: ubuntu-latest
     strategy:
@@ -40,7 +40,7 @@ jobs:
       - name: "Run tests"
         run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
 
-  MSRV:                         # 2 jobs, one per lock file.
+  MSRV:
     name: Test - 1.63.0 toolchain
     runs-on: ubuntu-latest
     strategy:
@@ -116,7 +116,7 @@ jobs:
       - name: "Run bench"
         run: cargo rbmt bench
 
-  Format:                       #  1 job, run cargo fmt directly.
+  Format:
     name: Format - nightly toolchain
     runs-on: ubuntu-latest
     strategy:
@@ -130,7 +130,7 @@ jobs:
       - name: "Check formatting"
         run: cargo fmt --all -- --check
 
-  Integration:                  # 1 job for each bitcoind version we support.
+  Integration:
     name: Integration tests - stable toolchain
     runs-on: ubuntu-latest
     strategy:
