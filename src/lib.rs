@@ -143,6 +143,7 @@ pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, S
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
+pub use crate::policy::semantic::MathSyntaxError;
 use crate::prelude::*;
 pub use crate::primitives::absolute_locktime::{AbsLockTime, AbsLockTimeError};
 pub use crate::primitives::relative_locktime::{RelLockTime, RelLockTimeError};
