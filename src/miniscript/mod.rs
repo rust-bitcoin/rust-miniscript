@@ -449,11 +449,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 
     /// Helper function to produce Taproot leaf hashes
-    fn leaf_hash_internal(&self) -> TapLeafHash
+    fn leaf_hash_internal(&self) -> Option<TapLeafHash>
     where
         Pk: ToPublicKey,
     {
-        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+        use crate::blanket_traits::DowncastMiniscript as _;
+        self.downcast::<Tap>().map(Miniscript::<Pk, Tap>::leaf_hash)
     }
 
     /// Attempt to produce non-malleable satisfying witness for the
@@ -467,7 +468,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             &satisfier,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
     }
@@ -485,7 +486,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             &satisfier,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
     }
@@ -514,7 +515,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             provider,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         )
     }
 
@@ -530,16 +531,18 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             provider,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         )
     }
 }
 
-impl Miniscript<<Tap as ScriptContext>::Key, Tap> {
+impl<Pk: ToPublicKey> Miniscript<Pk, Tap> {
     /// Returns the leaf hash used within a Taproot signature for this script.
     ///
     /// Note that this method is only implemented for Taproot Miniscripts.
-    pub fn leaf_hash(&self) -> TapLeafHash { self.leaf_hash_internal() }
+    pub fn leaf_hash(&self) -> TapLeafHash {
+        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+    }
 }
 
 impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
