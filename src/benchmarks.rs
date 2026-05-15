@@ -303,7 +303,7 @@ mod compiler_benches {
     use crate::descriptor::Descriptor;
     use crate::miniscript::Tap;
     use crate::policy::compiler::CompilerError;
-    use crate::policy::Concrete;
+    use crate::policy::Policy;
     use crate::prelude::*;
     use crate::{Error, Miniscript};
 
@@ -312,7 +312,7 @@ mod compiler_benches {
 
     #[bench]
     pub fn compile_large_tap(bh: &mut Bencher) {
-        let pol = Concrete::<String>::from_str(
+        let pol = Policy::<String>::from_str(
             "thresh(20,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H),pk(I),pk(J),pk(K),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T),pk(U),pk(V),pk(W),pk(X),pk(Y),pk(Z))",
         )
         .expect("parsing");
@@ -325,7 +325,7 @@ mod compiler_benches {
     #[bench]
     pub fn compile_basic(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let pol = Concrete::<String>::from_str(&format!(
+        let pol = Policy::<String>::from_str(&format!(
             "and(thresh(2,and(sha256({}),or(sha256({}),pk(A))),pk(B),pk(C),pk(D),sha256({})),pk(E))",
             h, h, h
         ))
@@ -339,7 +339,7 @@ mod compiler_benches {
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let pol = Concrete::<String>::from_str(
+        let pol = Policy::<String>::from_str(
             &format!("or(pk(L),thresh(9,sha256({}),pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)),after(100),pk(F),pk(G),pk(H),pk(I),and(pk(J),pk(K))))", h)
         ).expect("parsing");
         bh.iter(|| {
@@ -350,7 +350,7 @@ mod compiler_benches {
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let pol = Concrete::<String>::from_str(
+        let pol = Policy::<String>::from_str(
             "or(pk(A),thresh(4,pk(B),older(100),pk(C),and(after(100),or(pk(D),or(pk(E),and(pk(F),thresh(2,pk(G),or(pk(H),and(thresh(5,pk(I),or(pk(J),pk(K)),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T)),pk(U))),pk(V),or(and(pk(W),pk(X)),pk(Y)),after(100)))))),pk(Z)))"
         ).expect("parsing");
         bh.iter(|| {
