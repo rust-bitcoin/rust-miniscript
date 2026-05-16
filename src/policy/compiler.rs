@@ -76,24 +76,16 @@ pub enum CompilerError {
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::NonBinaryArgAnd => {
-                f.write_str("And policy fragment must take 2 arguments")
-            }
-            Self::NonBinaryArgOr => {
-                f.write_str("Or policy fragment must take 2 arguments")
-            }
-            Self::TopLevelNonSafe => {
-                f.write_str("Top Level script is not safe on some spendpath")
-            }
+            Self::NonBinaryArgAnd => f.write_str("And policy fragment must take 2 arguments"),
+            Self::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
+            Self::TopLevelNonSafe => f.write_str("Top Level script is not safe on some spendpath"),
             Self::ImpossibleNonMalleableCompilation => {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
             Self::LimitsExceeded => f.write_str(
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
-            Self::NoInternalKey => {
-                f.write_str("Taproot compilation had no internal key available")
-            }
+            Self::NoInternalKey => f.write_str("Taproot compilation had no internal key available"),
             Self::TooManyTapleaves { n, max } => {
                 write!(f, "Policy had too many Tapleaves (found {}, maximum {})", n, max)
             }
@@ -192,8 +184,7 @@ struct CompilerExtData {
 impl CompilerExtData {
     const TRUE: Self = Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None };
 
-    const FALSE: Self =
-        Self { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
+    const FALSE: Self = Self { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
 
     fn pk_k<Ctx: ScriptContext>() -> Self {
         Self {
@@ -248,34 +239,20 @@ impl CompilerExtData {
 
     fn sortedmulti_a(k: usize, n: usize) -> Self { Self::multi_a(k, n) }
 
-    fn hash() -> Self {
-        Self { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
-    }
+    fn hash() -> Self { Self { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) } }
 
     fn time() -> Self { Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
 
     fn cast_alt(self) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: self.dissat_cost,
-        }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
     }
 
     fn cast_swap(self) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: self.dissat_cost,
-        }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
     }
 
     fn cast_check(self) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: self.dissat_cost,
-        }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
     }
 
     fn cast_dupif(self) -> Self {
@@ -291,11 +268,7 @@ impl CompilerExtData {
     }
 
     fn cast_zeronotequal(self) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: self.dissat_cost,
-        }
+        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
     }
 
     fn cast_true(self) -> Self {
@@ -322,11 +295,7 @@ impl CompilerExtData {
     }
 
     fn and_v(left: Self, right: Self) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: left.sat_cost + right.sat_cost,
-            dissat_cost: None,
-        }
+        Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
     }
 
     fn or_b(l: Self, r: Self) -> Self {
@@ -562,11 +531,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         Self { comp_ext_data: CompilerExtData::type_check(ms.as_inner()), ms: Arc::new(ms) }
     }
 
-    fn binary(
-        ast: Terminal<Pk, Ctx>,
-        l: &Self,
-        r: &Self,
-    ) -> Result<Self, types::Error> {
+    fn binary(ast: Terminal<Pk, Ctx>, l: &Self, r: &Self) -> Result<Self, types::Error> {
         let lookup_ext = |n| match n {
             0 => l.comp_ext_data,
             1 => r.comp_ext_data,
@@ -583,12 +548,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         })
     }
 
-    fn ternary(
-        ast: Terminal<Pk, Ctx>,
-        a: &Self,
-        b: &Self,
-        c: &Self,
-    ) -> Result<Self, types::Error> {
+    fn ternary(ast: Terminal<Pk, Ctx>, a: &Self, b: &Self, c: &Self) -> Result<Self, types::Error> {
         let lookup_ext = |n| match n {
             0 => a.comp_ext_data,
             1 => b.comp_ext_data,

@@ -256,9 +256,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Self::Swap(..) => "s",
             Self::Check(ref sub) if matches!(sub.as_inner(), Self::PkK(..)) => "pk",
             Self::Check(ref sub) if matches!(sub.as_inner(), Self::PkH(..)) => "pkh",
-            Self::Check(ref sub) if matches!(sub.as_inner(), Self::RawPkH(..)) => {
-                "expr_raw_pkh"
-            }
+            Self::Check(ref sub) if matches!(sub.as_inner(), Self::RawPkH(..)) => "expr_raw_pkh",
             Self::Check(..) => "c",
             Self::DupIf(..) => "d",
             Self::Verify(..) => "v",

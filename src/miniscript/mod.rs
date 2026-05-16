@@ -796,9 +796,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 
 /// `Ord` of `Miniscript` must depend only on node and not the type information.
@@ -1108,14 +1106,8 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                     .verify_terminal_parent("pk_h", "public key")
                     .map(Self::pk_h)
                     .map_err(Error::Parse),
-                "after" => node
-                    .verify_after()
-                    .map(Self::after)
-                    .map_err(Error::Parse),
-                "older" => node
-                    .verify_older()
-                    .map(Self::older)
-                    .map_err(Error::Parse),
+                "after" => node.verify_after().map(Self::after).map_err(Error::Parse),
+                "older" => node.verify_older().map(Self::older).map_err(Error::Parse),
                 "sha256" => node
                     .verify_terminal_parent("sha256", "hash")
                     .map(Self::sha256)
