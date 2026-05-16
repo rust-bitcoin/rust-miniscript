@@ -128,9 +128,7 @@ impl fmt::Display for Error {
             ),
             Self::CannotInferTrDescriptors => write!(f, "Cannot infer taproot descriptors"),
             Self::ControlBlockParse(ref e) => write!(f, "Control block parse error {}", e),
-            Self::ControlBlockVerificationError => {
-                f.write_str("Control block verification failed")
-            }
+            Self::ControlBlockVerificationError => f.write_str("Control block verification failed"),
             Self::EcdsaSig(ref s) => write!(f, "Ecdsa sig error: {}", s),
             Self::ExpectedPush => f.write_str("expected push in script"),
             Self::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
@@ -172,17 +170,13 @@ impl fmt::Display for Error {
             Self::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
             Self::SighashError(ref e) => fmt::Display::fmt(e, f),
             Self::TapAnnexUnsupported => f.write_str("Encountered annex element"),
-            Self::UncompressedPubkey => {
-                f.write_str("uncompressed pubkey in non-legacy descriptor")
-            }
+            Self::UncompressedPubkey => f.write_str("uncompressed pubkey in non-legacy descriptor"),
             Self::UnexpectedStackBoolean => {
                 f.write_str("Expected Stack Push operation, found stack bool")
             }
             Self::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
             Self::UnexpectedStackEnd => f.write_str("unexpected end of stack"),
-            Self::VerifyFailed => {
-                f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
-            }
+            Self::VerifyFailed => f.write_str("Expected Satisfied Boolean at stack top for VERIFY"),
         }
     }
 }

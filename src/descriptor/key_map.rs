@@ -128,10 +128,7 @@ impl GetKey for DescriptorSecretKey {
                     Ok(None)
                 }
             }
-            (
-                Self::XPrv(descriptor_xkey),
-                ref key_request @ KeyRequest::Bip32(ref key_source),
-            ) => {
+            (Self::XPrv(descriptor_xkey), ref key_request @ KeyRequest::Bip32(ref key_source)) => {
                 if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
                     return Ok(Some(key));
                 }
@@ -152,13 +149,8 @@ impl GetKey for DescriptorSecretKey {
 
                 Ok(None)
             }
-            (Self::XPrv(_), KeyRequest::XOnlyPubkey(_)) => {
-                Err(GetKeyError::NotSupported)
-            }
-            (
-                desc_multi_sk @ Self::MultiXPrv(_descriptor_multi_xkey),
-                key_request,
-            ) => {
+            (Self::XPrv(_), KeyRequest::XOnlyPubkey(_)) => Err(GetKeyError::NotSupported),
+            (desc_multi_sk @ Self::MultiXPrv(_descriptor_multi_xkey), key_request) => {
                 for desc_sk in &desc_multi_sk.clone().into_single_keys() {
                     // If any key is an error, then all of them will, so here we propagate errors with ?.
                     if let Some(pk) = desc_sk.get_key(key_request.clone(), secp)? {

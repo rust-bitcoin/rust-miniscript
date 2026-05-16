@@ -1353,12 +1353,8 @@ impl PsbtSighashMsg {
     pub fn to_secp_msg(&self) -> secp256k1::Message {
         match *self {
             Self::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
-            Self::LegacySighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
-            Self::SegwitV0Sighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
+            Self::LegacySighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
+            Self::SegwitV0Sighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
         }
     }
 }

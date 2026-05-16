@@ -184,17 +184,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Clone for Terminal<Pk, Ctx> {
             Self::DupIf(ref sub) => Self::DupIf(Arc::new(Miniscript::clone(sub))),
             Self::Verify(ref sub) => Self::Verify(Arc::new(Miniscript::clone(sub))),
             Self::NonZero(ref sub) => Self::NonZero(Arc::new(Miniscript::clone(sub))),
-            Self::ZeroNotEqual(ref sub) => {
-                Self::ZeroNotEqual(Arc::new(Miniscript::clone(sub)))
+            Self::ZeroNotEqual(ref sub) => Self::ZeroNotEqual(Arc::new(Miniscript::clone(sub))),
+            Self::AndV(ref left, ref right) => {
+                Self::AndV(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
             }
-            Self::AndV(ref left, ref right) => Self::AndV(
-                Arc::new(Miniscript::clone(left)),
-                Arc::new(Miniscript::clone(right)),
-            ),
-            Self::AndB(ref left, ref right) => Self::AndB(
-                Arc::new(Miniscript::clone(left)),
-                Arc::new(Miniscript::clone(right)),
-            ),
+            Self::AndB(ref left, ref right) => {
+                Self::AndB(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
+            }
             Self::AndOr(ref a, ref b, ref c) => Self::AndOr(
                 Arc::new(Miniscript::clone(a)),
                 Arc::new(Miniscript::clone(b)),
@@ -237,13 +233,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Terminal<Pk, Ctx> {
                 (Self::Ripemd160(h1), Self::Ripemd160(h2)) if h1 != h2 => return false,
                 (Self::Hash160(h1), Self::Hash160(h2)) if h1 != h2 => return false,
                 (Self::Multi(th1), Self::Multi(th2)) if th1 != th2 => return false,
-                (Self::SortedMulti(th1), Self::SortedMulti(th2)) if th1 != th2 => {
-                    return false
-                }
+                (Self::SortedMulti(th1), Self::SortedMulti(th2)) if th1 != th2 => return false,
                 (Self::MultiA(th1), Self::MultiA(th2)) if th1 != th2 => return false,
-                (Self::SortedMultiA(th1), Self::SortedMultiA(th2)) if th1 != th2 => {
-                    return false
-                }
+                (Self::SortedMultiA(th1), Self::SortedMultiA(th2)) if th1 != th2 => return false,
                 _ => {
                     if mem::discriminant(me) != mem::discriminant(you) {
                         return false;

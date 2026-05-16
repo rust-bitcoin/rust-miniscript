@@ -83,9 +83,7 @@ impl From<RelLockTime> for Sequence {
 }
 
 impl From<RelLockTime> for relative::LockTime {
-    fn from(lock_time: RelLockTime) -> Self {
-        lock_time.0.to_relative_lock_time().unwrap()
-    }
+    fn from(lock_time: RelLockTime) -> Self { lock_time.0.to_relative_lock_time().unwrap() }
 }
 
 impl cmp::PartialOrd for RelLockTime {

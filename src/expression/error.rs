@@ -138,12 +138,7 @@ impl fmt::Display for ParseTreeError {
                     write!(f, "expected node '{}', found '{}'", expected, actual)
                 }
             }
-            Self::IncorrectNumberOfChildren {
-                description,
-                n_children,
-                minimum,
-                maximum,
-            } => {
+            Self::IncorrectNumberOfChildren { description, n_children, minimum, maximum } => {
                 write!(f, "{} must have ", description)?;
                 match (minimum, maximum) {
                     (_, Some(0)) => f.write_str("no children"),
