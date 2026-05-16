@@ -172,9 +172,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Create a new sh for a given redeem script
     /// Errors when miniscript exceeds resource limits under p2sh context
     /// or does not type check at the top level
-    pub fn new_sh(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
-        Ok(Self::Sh(Sh::new(ms)?))
-    }
+    pub fn new_sh(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> { Ok(Self::Sh(Sh::new(ms)?)) }
 
     /// Create a new wsh descriptor from witness script
     /// Errors when miniscript exceeds resource limits under p2sh context

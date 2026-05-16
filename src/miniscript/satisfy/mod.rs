@@ -763,9 +763,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Placeholder<Pk> {
             Self::Hash160Preimage(h) => sat.lookup_hash160(h).map(|p| p.to_vec()),
             Self::Ripemd160Preimage(h) => sat.lookup_ripemd160(h).map(|p| p.to_vec()),
             Self::EcdsaSigPk(pk) => sat.lookup_ecdsa_sig(pk).map(|s| s.to_vec()),
-            Self::EcdsaSigPkHash(pkh) => {
-                sat.lookup_raw_pkh_ecdsa_sig(pkh).map(|(_, s)| s.to_vec())
-            }
+            Self::EcdsaSigPkHash(pkh) => sat.lookup_raw_pkh_ecdsa_sig(pkh).map(|(_, s)| s.to_vec()),
             Self::SchnorrSigPk(pk, SchnorrSigType::ScriptSpend { leaf_hash }, size) => sat
                 .lookup_tap_leaf_script_sig(pk, leaf_hash)
                 .map(|s| s.to_vec())

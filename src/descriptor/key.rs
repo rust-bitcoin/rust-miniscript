@@ -630,9 +630,7 @@ impl DescriptorSecretKey {
         let pk = match self {
             Self::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
             Self::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
-            Self::MultiXPrv(xprv) => {
-                DescriptorPublicKey::MultiXPub(xprv.to_public(secp)?)
-            }
+            Self::MultiXPrv(xprv) => DescriptorPublicKey::MultiXPub(xprv.to_public(secp)?),
         };
 
         Ok(pk)
@@ -851,13 +849,11 @@ impl DescriptorPublicKey {
                 };
                 Some(origin_path.extend(&xpub.derivation_path))
             }
-            Self::Single(ref single) => {
-                Some(if let Some((_, ref path)) = single.origin {
-                    path.clone()
-                } else {
-                    bip32::DerivationPath::from(vec![])
-                })
-            }
+            Self::Single(ref single) => Some(if let Some((_, ref path)) = single.origin {
+                path.clone()
+            } else {
+                bip32::DerivationPath::from(vec![])
+            }),
             Self::MultiXPub(_) => None,
         }
     }

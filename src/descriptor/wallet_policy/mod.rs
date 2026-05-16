@@ -211,9 +211,7 @@ pub enum WalletPolicyError {
 }
 
 impl From<WalletPolicyError> for DescriptorKeyParseError {
-    fn from(err: WalletPolicyError) -> Self {
-        Self::XKeyParseError(XKeyParseError::Bip388(err))
-    }
+    fn from(err: WalletPolicyError) -> Self { Self::XKeyParseError(XKeyParseError::Bip388(err)) }
 }
 
 #[cfg(feature = "std")]

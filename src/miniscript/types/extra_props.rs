@@ -63,26 +63,24 @@ impl TimelockInfo {
         //
         // If `k > 1` we have the additional consideration that if any two children have conflicting
         // timelock requirements, this represents an inaccessible spending branch.
-        timelocks
-            .into_iter()
-            .fold(Self::default(), |mut acc, t| {
-                // If more than one branch may be taken, and some other branch has a requirement
-                // that conflicts with this one, set `contains_combination`.
-                if k > 1 {
-                    let height_and_time = (acc.csv_with_height && t.csv_with_time)
-                        || (acc.csv_with_time && t.csv_with_height)
-                        || (acc.cltv_with_time && t.cltv_with_height)
-                        || (acc.cltv_with_height && t.cltv_with_time);
+        timelocks.into_iter().fold(Self::default(), |mut acc, t| {
+            // If more than one branch may be taken, and some other branch has a requirement
+            // that conflicts with this one, set `contains_combination`.
+            if k > 1 {
+                let height_and_time = (acc.csv_with_height && t.csv_with_time)
+                    || (acc.csv_with_time && t.csv_with_height)
+                    || (acc.cltv_with_time && t.cltv_with_height)
+                    || (acc.cltv_with_height && t.cltv_with_time);
 
-                    acc.contains_combination |= height_and_time;
-                }
-                acc.csv_with_height |= t.csv_with_height;
-                acc.csv_with_time |= t.csv_with_time;
-                acc.cltv_with_height |= t.cltv_with_height;
-                acc.cltv_with_time |= t.cltv_with_time;
-                acc.contains_combination |= t.contains_combination;
-                acc
-            })
+                acc.contains_combination |= height_and_time;
+            }
+            acc.csv_with_height |= t.csv_with_height;
+            acc.csv_with_time |= t.csv_with_time;
+            acc.cltv_with_height |= t.cltv_with_height;
+            acc.cltv_with_time |= t.cltv_with_time;
+            acc.contains_combination |= t.contains_combination;
+            acc
+        })
     }
 }
 

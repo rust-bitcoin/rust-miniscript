@@ -23,9 +23,7 @@ impl<Pk: MiniscriptKey> ItemSize for Placeholder<Pk> {
             Self::Pubkey(_, size) => *size,
             Self::PubkeyHash(_, size) => *size,
             Self::EcdsaSigPk(_) | Self::EcdsaSigPkHash(_) => 73,
-            Self::SchnorrSigPk(_, _, size) | Self::SchnorrSigPkHash(_, _, size) => {
-                size + 1
-            } // +1 for the OP_PUSH
+            Self::SchnorrSigPk(_, _, size) | Self::SchnorrSigPkHash(_, _, size) => size + 1, // +1 for the OP_PUSH
             Self::HashDissatisfaction
             | Self::Sha256Preimage(_)
             | Self::Hash256Preimage(_)

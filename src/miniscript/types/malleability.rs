@@ -73,8 +73,7 @@ impl Malleability {
     pub const TRUE: Self = Self { dissat: Dissat::None, safe: false, non_malleable: true };
 
     /// Malleability data for the `0` combinator
-    pub const FALSE: Self =
-        Self { dissat: Dissat::Unique, safe: true, non_malleable: true };
+    pub const FALSE: Self = Self { dissat: Dissat::Unique, safe: true, non_malleable: true };
 
     /// Check whether the `self` is a subtype of `other` argument.
     ///
@@ -90,14 +89,10 @@ impl Malleability {
 
 impl Malleability {
     /// Constructor for the malleabilitiy properties of the `pk_k` fragment.
-    pub const fn pk_k() -> Self {
-        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
-    }
+    pub const fn pk_k() -> Self { Self { dissat: Dissat::Unique, safe: true, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `pk_h` fragment.
-    pub const fn pk_h() -> Self {
-        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
-    }
+    pub const fn pk_h() -> Self { Self { dissat: Dissat::Unique, safe: true, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `multi` fragment.
     pub const fn multi() -> Self {
@@ -125,9 +120,7 @@ impl Malleability {
     }
 
     /// Constructor for the malleabilitiy properties of either `after` or `older`.
-    pub const fn time() -> Self {
-        Self { dissat: Dissat::None, safe: false, non_malleable: true }
-    }
+    pub const fn time() -> Self { Self { dissat: Dissat::None, safe: false, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `a:` fragment.
     pub const fn cast_alt(self) -> Self { self }
