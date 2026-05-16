@@ -34,9 +34,9 @@ impl Dissat {
     const fn constfn_eq(self, other: Self) -> bool {
         matches!(
             (self, other),
-            (Dissat::None, Dissat::None)
-                | (Dissat::Unique, Dissat::Unique)
-                | (Dissat::Unknown, Dissat::Unknown)
+            (Self::None, Self::None)
+                | (Self::Unique, Self::Unique)
+                | (Self::Unknown, Self::Unknown)
         )
     }
 
@@ -45,7 +45,7 @@ impl Dissat {
     const fn is_subtype(&self, other: Self) -> bool {
         match (*self, other) {
             (x, y) if x.constfn_eq(y) => true,
-            (_, Dissat::Unknown) => true,
+            (_, Self::Unknown) => true,
             _ => false,
         }
     }
@@ -70,11 +70,10 @@ pub struct Malleability {
 
 impl Malleability {
     /// Malleability data for the `1` combinator
-    pub const TRUE: Self = Malleability { dissat: Dissat::None, safe: false, non_malleable: true };
+    pub const TRUE: Self = Self { dissat: Dissat::None, safe: false, non_malleable: true };
 
     /// Malleability data for the `0` combinator
-    pub const FALSE: Self =
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true };
+    pub const FALSE: Self = Self { dissat: Dissat::Unique, safe: true, non_malleable: true };
 
     /// Check whether the `self` is a subtype of `other` argument.
     ///
@@ -90,44 +89,38 @@ impl Malleability {
 
 impl Malleability {
     /// Constructor for the malleabilitiy properties of the `pk_k` fragment.
-    pub const fn pk_k() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
-    }
+    pub const fn pk_k() -> Self { Self { dissat: Dissat::Unique, safe: true, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `pk_h` fragment.
-    pub const fn pk_h() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
-    }
+    pub const fn pk_h() -> Self { Self { dissat: Dissat::Unique, safe: true, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `multi` fragment.
     pub const fn multi() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
+        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     /// Constructor for the malleabilitiy properties of the `sortedmulti` fragment.
     pub const fn sortedmulti() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
+        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     /// Constructor for the malleabilitiy properties of the `multi_a` fragment.
     pub const fn multi_a() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
+        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     /// Constructor for the malleabilitiy properties of the `sortedmulti_a` fragment.
     pub const fn sortedmulti_a() -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
+        Self { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     /// Constructor for the malleabilitiy properties of any of the hash fragments.
     pub const fn hash() -> Self {
-        Malleability { dissat: Dissat::Unknown, safe: false, non_malleable: true }
+        Self { dissat: Dissat::Unknown, safe: false, non_malleable: true }
     }
 
     /// Constructor for the malleabilitiy properties of either `after` or `older`.
-    pub const fn time() -> Self {
-        Malleability { dissat: Dissat::None, safe: false, non_malleable: true }
-    }
+    pub const fn time() -> Self { Self { dissat: Dissat::None, safe: false, non_malleable: true } }
 
     /// Constructor for the malleabilitiy properties of the `a:` fragment.
     pub const fn cast_alt(self) -> Self { self }
@@ -140,7 +133,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `d:` fragment.
     pub const fn cast_dupif(self) -> Self {
-        Malleability {
+        Self {
             dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
@@ -153,12 +146,12 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `v:` fragment.
     pub const fn cast_verify(self) -> Self {
-        Malleability { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
+        Self { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
     }
 
     /// Constructor for the malleabilitiy properties of the `j:` fragment.
     pub const fn cast_nonzero(self) -> Self {
-        Malleability {
+        Self {
             dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
@@ -174,12 +167,12 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `t:` fragment.
     pub const fn cast_true(self) -> Self {
-        Malleability { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
+        Self { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
     }
 
     /// Constructor for the malleabilitiy properties of the `l:` or `u:` fragments.
     pub const fn cast_or_i_false(self) -> Self {
-        Malleability {
+        Self {
             dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
@@ -192,7 +185,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `and_b` fragment.
     pub const fn and_b(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: match (left.dissat, right.dissat) {
                 (Dissat::None, Dissat::None) => Dissat::None,
                 (Dissat::None, _) if left.safe => Dissat::None,
@@ -213,7 +206,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `and_v` fragment.
     pub const fn and_v(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: match (left.safe, right.dissat) {
                 (_, Dissat::None) => Dissat::None, // fy
                 (true, _) => Dissat::None,         // sx
@@ -226,7 +219,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `or_b` fragment.
     pub const fn or_b(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: Dissat::Unique,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
@@ -239,7 +232,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `or_d` fragment.
     pub const fn or_d(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: right.dissat,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
@@ -251,7 +244,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `or_c` fragment.
     pub const fn or_c(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: Dissat::None,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
@@ -263,7 +256,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `or_i` fragment.
     pub const fn or_i(left: Self, right: Self) -> Self {
-        Malleability {
+        Self {
             dissat: match (left.dissat, right.dissat) {
                 (Dissat::None, Dissat::None) => Dissat::None,
                 (Dissat::Unique, Dissat::None) => Dissat::Unique,
@@ -277,7 +270,7 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `andor` fragment.
     pub const fn and_or(a: Self, b: Self, c: Self) -> Self {
-        Malleability {
+        Self {
             dissat: match (a.safe, b.dissat, c.dissat) {
                 (_, Dissat::None, Dissat::Unique) => Dissat::Unique, //E: ez fy
                 (true, _, Dissat::Unique) => Dissat::Unique,         // E: ez sx
@@ -310,7 +303,7 @@ impl Malleability {
             all_are_non_malleable &= subtype.non_malleable;
         }
 
-        Malleability {
+        Self {
             dissat: if all_are_dissat_unique && safe_count == n {
                 Dissat::Unique
             } else {

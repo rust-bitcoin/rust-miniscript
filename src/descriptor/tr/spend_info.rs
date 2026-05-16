@@ -149,7 +149,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
         let (output_key, output_key_parity) =
             internal_key.tap_tweak(&secp, nodes.first().map(|node| node.sibling_hash));
 
-        TrSpendInfo { internal_key, output_key, output_key_parity, nodes }
+        Self { internal_key, output_key, output_key_parity, nodes }
     }
 
     /// If this [`TrSpendInfo`] has an associated Taproot tree, return its Merkle root.

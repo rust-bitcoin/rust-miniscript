@@ -11,8 +11,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
-use crate::policy::semantic::Policy;
-use crate::policy::Liftable;
+use crate::policy::{Liftable, Semantic};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
@@ -360,7 +359,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
             .map_err(Error::Parse)?;
 
         let tap_tree = match root_children.next() {
-            None => return Tr::new(internal_key, None),
+            None => return Self::new(internal_key, None),
             Some(tree) => tree,
         };
 
@@ -391,7 +390,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 tap_tree_iter.skip_descendants();
             }
         }
-        Tr::new(internal_key, Some(tree_builder.finalize()))
+        Self::new(internal_key, Some(tree_builder.finalize()))
     }
 }
 
@@ -418,13 +417,13 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
         match &self.tree {
-            Some(root) => Ok(Policy::Thresh(Threshold::or(
-                Arc::new(Policy::Key(self.internal_key.clone())),
+            Some(root) => Ok(Semantic::Thresh(Threshold::or(
+                Arc::new(Semantic::Key(self.internal_key.clone())),
                 Arc::new(root.lift()?),
             ))),
-            None => Ok(Policy::Key(self.internal_key.clone())),
+            None => Ok(Semantic::Key(self.internal_key.clone())),
         }
     }
 }

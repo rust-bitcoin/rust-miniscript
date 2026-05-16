@@ -206,10 +206,10 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl MiniscriptKey for String {
-    type Sha256 = String;
-    type Hash256 = String;
-    type Ripemd160 = String;
-    type Hash160 = String;
+    type Sha256 = Self;
+    type Hash256 = Self;
+    type Ripemd160 = Self;
+    type Hash160 = Self;
 
     fn is_x_only_key(&self) -> bool { false }
     fn num_der_paths(&self) -> usize { 0 }
@@ -505,48 +505,48 @@ const MAX_RECURSION_DEPTH: u32 = 402;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::ScriptLexer(ref e) => e.fmt(f),
-            Error::AddrError(ref e) => fmt::Display::fmt(e, f),
-            Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
-            Error::UnexpectedStart => f.write_str("unexpected start of script"),
-            Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
-            Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
-            Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
-            Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
-            Error::CouldNotSatisfy => f.write_str("could not satisfy"),
-            Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
-            Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::ContextError(ref e) => fmt::Display::fmt(e, f),
-            Error::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
+            Self::ScriptLexer(ref e) => e.fmt(f),
+            Self::AddrError(ref e) => fmt::Display::fmt(e, f),
+            Self::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
+            Self::UnexpectedStart => f.write_str("unexpected start of script"),
+            Self::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
+            Self::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
+            Self::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
+            Self::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
+            Self::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
+            Self::CouldNotSatisfy => f.write_str("could not satisfy"),
+            Self::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
+            Self::Secp(ref e) => fmt::Display::fmt(e, f),
+            Self::ContextError(ref e) => fmt::Display::fmt(e, f),
+            Self::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
-            Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Error::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
-            Error::LiftError(ref e) => fmt::Display::fmt(e, f),
-            Error::MaxRecursiveDepthExceeded => write!(
+            Self::CompilerError(ref e) => fmt::Display::fmt(e, f),
+            Self::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
+            Self::LiftError(ref e) => fmt::Display::fmt(e, f),
+            Self::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",
                 MAX_RECURSION_DEPTH
             ),
-            Error::NonStandardBareScript => write!(
+            Self::NonStandardBareScript => write!(
                 f,
                 "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
                 up to n=3 is invalid by standardness (bare).
                 "
             ),
-            Error::AnalysisError(ref e) => e.fmt(f),
-            Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
-            Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
-            Error::PubKeyCtxError(ref pk, ref ctx) => {
+            Self::AnalysisError(ref e) => e.fmt(f),
+            Self::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
+            Self::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
+            Self::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
-            Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
-            Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
-            Error::AbsoluteLockTime(ref e) => e.fmt(f),
-            Error::RelativeLockTime(ref e) => e.fmt(f),
-            Error::Threshold(ref e) => e.fmt(f),
-            Error::ParseThreshold(ref e) => e.fmt(f),
-            Error::Parse(ref e) => e.fmt(f),
+            Self::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
+            Self::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
+            Self::AbsoluteLockTime(ref e) => e.fmt(f),
+            Self::RelativeLockTime(ref e) => e.fmt(f),
+            Self::Threshold(ref e) => e.fmt(f),
+            Self::ParseThreshold(ref e) => e.fmt(f),
+            Self::Parse(ref e) => e.fmt(f),
         }
     }
 }
@@ -594,53 +594,53 @@ impl std::error::Error for Error {
 
 #[doc(hidden)]
 impl From<miniscript::lex::Error> for Error {
-    fn from(e: miniscript::lex::Error) -> Error { Error::ScriptLexer(e) }
+    fn from(e: miniscript::lex::Error) -> Self { Self::ScriptLexer(e) }
 }
 
 #[doc(hidden)]
 impl From<miniscript::types::Error> for Error {
-    fn from(e: miniscript::types::Error) -> Error { Error::TypeCheck(e.to_string()) }
+    fn from(e: miniscript::types::Error) -> Self { Self::TypeCheck(e.to_string()) }
 }
 
 #[doc(hidden)]
 impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
+    fn from(e: policy::LiftError) -> Self { Self::LiftError(e) }
 }
 
 #[doc(hidden)]
 impl From<crate::descriptor::TapTreeDepthError> for Error {
-    fn from(e: crate::descriptor::TapTreeDepthError) -> Error { Error::TapTreeDepthError(e) }
+    fn from(e: crate::descriptor::TapTreeDepthError) -> Self { Self::TapTreeDepthError(e) }
 }
 
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
+    fn from(e: miniscript::context::ScriptContextError) -> Self { Self::ContextError(e) }
 }
 
 #[doc(hidden)]
 impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error { Error::AnalysisError(e) }
+    fn from(e: miniscript::analyzable::AnalysisError) -> Self { Self::AnalysisError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for Error {
-    fn from(e: bitcoin::secp256k1::Error) -> Error { Error::Secp(e) }
+    fn from(e: bitcoin::secp256k1::Error) -> Self { Self::Secp(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::address::ParseError> for Error {
-    fn from(e: bitcoin::address::ParseError) -> Error { Error::AddrError(e) }
+    fn from(e: bitcoin::address::ParseError) -> Self { Self::AddrError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::address::P2shError> for Error {
-    fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
+    fn from(e: bitcoin::address::P2shError) -> Self { Self::AddrP2shError(e) }
 }
 
 #[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
-    fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
+    fn from(e: crate::policy::compiler::CompilerError) -> Self { Self::CompilerError(e) }
 }
 
 /// The size of an encoding of a number in Script
@@ -760,7 +760,7 @@ mod prelude {
         }
 
         impl<T> Mutex<T> {
-            pub fn new(inner: T) -> Mutex<T> { Mutex { inner: RefCell::new(inner) } }
+            pub fn new(inner: T) -> Self { Self { inner: RefCell::new(inner) } }
 
             pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
                 Ok(MutexGuard { lock: self.inner.borrow_mut() })

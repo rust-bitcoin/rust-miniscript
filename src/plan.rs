@@ -433,7 +433,7 @@ pub struct CanSign {
 }
 
 impl Default for CanSign {
-    fn default() -> Self { CanSign { ecdsa: true, taproot: TaprootCanSign::default() } }
+    fn default() -> Self { Self { ecdsa: true, taproot: TaprootCanSign::default() } }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -460,7 +460,7 @@ impl TaprootCanSign {
 
 impl Default for TaprootCanSign {
     fn default() -> Self {
-        TaprootCanSign {
+        Self {
             key_spend: true,
             script_spend: TaprootAvailableLeaves::Any,
             sighash_default: true,
@@ -640,7 +640,7 @@ impl FromIterator<DescriptorPublicKey> for Assets {
                 keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
             }
         }
-        Assets { keys, ..Default::default() }
+        Self { keys, ..Default::default() }
     }
 }
 

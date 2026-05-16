@@ -57,11 +57,11 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
-            Error::WrongInputCount { in_tx, in_map } => {
+            Self::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
+            Self::WrongInputCount { in_tx, in_map } => {
                 write!(f, "PSBT had {} inputs in transaction but {} inputs in map", in_tx, in_map)
             }
-            Error::InputIdxOutofBounds { psbt_inp, index } => write!(
+            Self::InputIdxOutofBounds { psbt_inp, index } => write!(
                 f,
                 "psbt input index {} out of bounds: psbt.inputs.len() {}",
                 index, psbt_inp
@@ -176,44 +176,44 @@ impl error::Error for InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            InputError::InvalidSignature { ref pubkey, ref sig } => {
+            Self::InvalidSignature { ref pubkey, ref sig } => {
                 write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
             }
-            InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
-            InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
-            InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
-            InputError::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
+            Self::KeyErr(ref e) => write!(f, "Key Err: {}", e),
+            Self::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
+            Self::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
+            Self::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
                 f,
                 "Redeem script {} does not match the p2sh script {}",
                 redeem, p2sh_expected
             ),
-            InputError::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
+            Self::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
                 f,
                 "Witness script {} does not match the p2wsh script {}",
                 witness_script, p2wsh_expected
             ),
-            InputError::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
-            InputError::MissingWitness => write!(f, "PSBT is missing witness"),
-            InputError::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
-            InputError::MissingUtxo => {
+            Self::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
+            Self::MissingWitness => write!(f, "PSBT is missing witness"),
+            Self::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
+            Self::MissingUtxo => {
                 write!(f, "PSBT is missing both witness and non-witness UTXO")
             }
-            InputError::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
-            InputError::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
-            InputError::NonEmptyRedeemScript => {
+            Self::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
+            Self::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
+            Self::NonEmptyRedeemScript => {
                 write!(f, "PSBT has non-empty redeem script at for legacy transactions")
             }
-            InputError::NonEmptyWitnessScript => {
+            Self::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
-            InputError::WrongSighashFlag { required, got, pubkey } => write!(
+            Self::WrongSighashFlag { required, got, pubkey } => write!(
                 f,
                 "PSBT: signature with key {:?} had \
                  sighashflag {:?} rather than required {:?}",
                 pubkey, got, required
             ),
-            InputError::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
-            InputError::NonStandardSighashType(ref e) => {
+            Self::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
+            Self::NonStandardSighashType(ref e) => {
                 write!(f, "Non-standard sighash type {}", e)
             }
         }
@@ -222,17 +222,17 @@ impl fmt::Display for InputError {
 
 #[doc(hidden)]
 impl From<super::Error> for InputError {
-    fn from(e: super::Error) -> InputError { InputError::MiniscriptError(e) }
+    fn from(e: super::Error) -> Self { Self::MiniscriptError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for InputError {
-    fn from(e: bitcoin::secp256k1::Error) -> InputError { InputError::SecpErr(e) }
+    fn from(e: bitcoin::secp256k1::Error) -> Self { Self::SecpErr(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::key::FromSliceError> for InputError {
-    fn from(e: bitcoin::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
+    fn from(e: bitcoin::key::FromSliceError) -> Self { Self::KeyErr(e) }
 }
 
 /// Psbt satisfier for at inputs at a particular index.
@@ -1193,18 +1193,18 @@ pub enum UtxoUpdateError {
 impl fmt::Display for UtxoUpdateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UtxoUpdateError::IndexOutOfBounds(ind, len) => {
+            Self::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt input len: {}", ind, len)
             }
-            UtxoUpdateError::MissingInputUtxo => {
+            Self::MissingInputUtxo => {
                 write!(f, "Missing input in unsigned transaction")
             }
-            UtxoUpdateError::DerivationError(e) => write!(f, "Key derivation error {}", e),
-            UtxoUpdateError::UtxoCheck => write!(
+            Self::DerivationError(e) => write!(f, "Key derivation error {}", e),
+            Self::UtxoCheck => write!(
                 f,
                 "The input's witness_utxo and/or non_witness_utxo were invalid or missing"
             ),
-            UtxoUpdateError::MismatchedScriptPubkey => {
+            Self::MismatchedScriptPubkey => {
                 write!(f, "The input's witness_utxo and/or non_witness_utxo had a script pubkey that didn't match the descriptor")
             }
         }
@@ -1239,14 +1239,14 @@ pub enum OutputUpdateError {
 impl fmt::Display for OutputUpdateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OutputUpdateError::IndexOutOfBounds(ind, len) => {
+            Self::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt output len: {}", ind, len)
             }
-            OutputUpdateError::MissingTxOut => {
+            Self::MissingTxOut => {
                 write!(f, "Missing txout in the unsigned transaction")
             }
-            OutputUpdateError::DerivationError(e) => write!(f, "Key derivation error {}", e),
-            OutputUpdateError::MismatchedScriptPubkey => {
+            Self::DerivationError(e) => write!(f, "Key derivation error {}", e),
+            Self::MismatchedScriptPubkey => {
                 write!(f, "The output's script pubkey didn't match the descriptor")
             }
         }
@@ -1291,17 +1291,17 @@ pub enum SighashError {
 impl fmt::Display for SighashError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SighashError::IndexOutOfBounds(ind, len) => {
+            Self::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt input len: {}", ind, len)
             }
-            SighashError::MissingInputUtxo => write!(f, "Missing input utxo in pbst"),
-            SighashError::MissingSpendUtxos => write!(f, "Missing Psbt spend utxos"),
-            SighashError::InvalidSighashType => write!(f, "Invalid Sighash type"),
-            SighashError::MissingWitnessScript => write!(f, "Missing Witness Script"),
-            SighashError::MissingRedeemScript => write!(f, "Missing Redeem Script"),
-            SighashError::SighashTaproot(ref e) => write!(f, "sighash taproot: {}", e),
-            SighashError::SighashP2wpkh(ref e) => write!(f, "sighash p2wpkh: {}", e),
-            SighashError::TransactionInputsIndex(ref e) => write!(f, "tx inputs index: {}", e),
+            Self::MissingInputUtxo => write!(f, "Missing input utxo in pbst"),
+            Self::MissingSpendUtxos => write!(f, "Missing Psbt spend utxos"),
+            Self::InvalidSighashType => write!(f, "Invalid Sighash type"),
+            Self::MissingWitnessScript => write!(f, "Missing Witness Script"),
+            Self::MissingRedeemScript => write!(f, "Missing Redeem Script"),
+            Self::SighashTaproot(ref e) => write!(f, "sighash taproot: {}", e),
+            Self::SighashP2wpkh(ref e) => write!(f, "sighash p2wpkh: {}", e),
+            Self::TransactionInputsIndex(ref e) => write!(f, "tx inputs index: {}", e),
         }
     }
 }
@@ -1326,15 +1326,15 @@ impl error::Error for SighashError {
 }
 
 impl From<sighash::TaprootError> for SighashError {
-    fn from(e: sighash::TaprootError) -> Self { SighashError::SighashTaproot(e) }
+    fn from(e: sighash::TaprootError) -> Self { Self::SighashTaproot(e) }
 }
 
 impl From<sighash::P2wpkhError> for SighashError {
-    fn from(e: sighash::P2wpkhError) -> Self { SighashError::SighashP2wpkh(e) }
+    fn from(e: sighash::P2wpkhError) -> Self { Self::SighashP2wpkh(e) }
 }
 
 impl From<transaction::InputsIndexError> for SighashError {
-    fn from(e: transaction::InputsIndexError) -> Self { SighashError::TransactionInputsIndex(e) }
+    fn from(e: transaction::InputsIndexError) -> Self { Self::TransactionInputsIndex(e) }
 }
 
 /// Sighash message(signing data) for a given psbt transaction input.
@@ -1352,13 +1352,9 @@ impl PsbtSighashMsg {
     /// Convert the message to a [`secp256k1::Message`].
     pub fn to_secp_msg(&self) -> secp256k1::Message {
         match *self {
-            PsbtSighashMsg::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
-            PsbtSighashMsg::LegacySighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
-            PsbtSighashMsg::SegwitV0Sighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
+            Self::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
+            Self::LegacySighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
+            Self::SegwitV0Sighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
         }
     }
 }
@@ -1453,7 +1449,7 @@ mod tests {
         .unwrap();
         let first_leaf_hash = {
             let ms =
-                Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", &key_0_1)).unwrap();
+                Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", key_0_1)).unwrap();
             let first_script = ms.encode();
             assert!(psbt_input
                 .tap_scripts

@@ -20,7 +20,7 @@ use crate::miniscript::context::ScriptContext;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
+use crate::policy::{Liftable, Semantic};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -47,10 +47,10 @@ pub enum ShInner<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
+            ShInner::Wpkh(ref pk) => Ok(Semantic::Key(pk.as_inner().clone())),
             ShInner::Ms(ref ms) => ms.lift(),
         }
     }
@@ -92,7 +92,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
                 ShInner::Ms(sub)
             }
         };
-        Ok(Sh { inner })
+        Ok(Self { inner })
     }
 }
 

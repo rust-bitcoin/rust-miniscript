@@ -130,9 +130,9 @@ impl WalletPolicy {
     /// template.
     pub fn from_descriptor_unchecked(
         descriptor: &Descriptor<DescriptorPublicKey>,
-    ) -> Result<WalletPolicy, WalletPolicyError> {
+    ) -> Result<Self, WalletPolicyError> {
         let mut translator = WalletPolicyTranslator { key_info: descriptor.iter_pk().collect() };
-        Ok(WalletPolicy {
+        Ok(Self {
             template: descriptor.translate_pk(&mut translator).map_err(|e| {
                 e.expect_translator_err("converting descriptor to wallet policy template")
             })?,
@@ -144,8 +144,8 @@ impl WalletPolicy {
     /// validates the underyling template.
     pub fn from_descriptor(
         descriptor: &Descriptor<DescriptorPublicKey>,
-    ) -> Result<WalletPolicy, WalletPolicyError> {
-        WalletPolicy::from_descriptor_unchecked(descriptor).and_then(WalletPolicy::validate)
+    ) -> Result<Self, WalletPolicyError> {
+        Self::from_descriptor_unchecked(descriptor).and_then(Self::validate)
     }
 
     /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
@@ -170,7 +170,7 @@ impl WalletPolicy {
 
     /// Validates the wallet policy template.
     #[must_use = "Wallet policy won't be considered valid until this is called"]
-    fn validate(self) -> Result<WalletPolicy, WalletPolicyError> {
+    fn validate(self) -> Result<Self, WalletPolicyError> {
         // HACK: don't know how else to prevent the following invalid cases from
         // the test vectors while still using the current Descriptor parsing:
         // skipped or out of order placeholders, repeated placeholds,
@@ -198,7 +198,7 @@ impl TryFrom<&Descriptor<DescriptorPublicKey>> for WalletPolicy {
     type Error = WalletPolicyError;
 
     fn try_from(desc: &Descriptor<DescriptorPublicKey>) -> Result<Self, Self::Error> {
-        WalletPolicy::from_descriptor(desc)
+        Self::from_descriptor(desc)
     }
 }
 
@@ -207,9 +207,9 @@ impl TryFrom<&str> for WalletPolicy {
 
     fn try_from(desc: &str) -> Result<Self, Self::Error> {
         match Descriptor::<KeyExpression>::from_str(desc) {
-            Ok(template) => Ok(WalletPolicy { template, key_info: vec![] }.validate()?),
+            Ok(template) => Ok(Self { template, key_info: vec![] }.validate()?),
             Err(err1) => match Descriptor::<DescriptorPublicKey>::from_str(desc) {
-                Ok(desc) => Ok(WalletPolicy::from_descriptor(&desc)?),
+                Ok(desc) => Ok(Self::from_descriptor(&desc)?),
                 Err(err2) => Err(WalletPolicyError::WalletPolicyParseFromString(format!(
                     "Couldn't parse from descriptor [{err1}], or wallet policy template: [{err2}]"
                 ))),
@@ -253,9 +253,7 @@ pub enum WalletPolicyError {
 }
 
 impl From<WalletPolicyError> for DescriptorKeyParseError {
-    fn from(err: WalletPolicyError) -> Self {
-        DescriptorKeyParseError::XKeyParseError(XKeyParseError::Bip388(err))
-    }
+    fn from(err: WalletPolicyError) -> Self { Self::XKeyParseError(XKeyParseError::Bip388(err)) }
 }
 
 #[cfg(feature = "std")]
@@ -266,38 +264,38 @@ impl std::error::Error for WalletPolicyError {
 impl Display for WalletPolicyError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            WalletPolicyError::KeyExpressionParseMustHaveDerivPath => {
+            Self::KeyExpressionParseMustHaveDerivPath => {
                 write!(f, "Key expression placeholder must have a derivation path after it")
             }
-            WalletPolicyError::KeyExpressionParseInvalidDerivPath => {
+            Self::KeyExpressionParseInvalidDerivPath => {
                 write!(
                     f,
                     "Key expression placeholder must be of the format \"/**\" or \"/<NUM;NUM>/*\""
                 )
             }
-            WalletPolicyError::KeyIndexParseInvalidIndex(index_str) => {
+            Self::KeyIndexParseInvalidIndex(index_str) => {
                 write!(f, "Couldn't parse index, got {index_str}")
             }
-            WalletPolicyError::KeyIndexParseExpectedAtSign(ch) => {
+            Self::KeyIndexParseExpectedAtSign(ch) => {
                 write!(f, "Expected KeyIndex '@' sign, got {ch}")
             }
-            WalletPolicyError::KeyInfoInvalidKeyIndex(idx) => {
+            Self::KeyInfoInvalidKeyIndex(idx) => {
                 write!(f, "Invalid index [{idx}] into key info for wallet policy")
             }
-            WalletPolicyError::TemplateValidationKeyIndexOutOfOrder => {
+            Self::TemplateValidationKeyIndexOutOfOrder => {
                 write!(f, "The template has indexes that are out of order")
             }
-            WalletPolicyError::TemplateValidationNonDisjointPaths => {
+            Self::TemplateValidationNonDisjointPaths => {
                 write!(f, "The template has identical indexes but the paths are non-disjoint")
             }
-            WalletPolicyError::TranslatorEmptyDerivationPaths => {
+            Self::TranslatorEmptyDerivationPaths => {
                 write!(f, "Expected derivation paths when translating into KeyExpression")
             }
-            WalletPolicyError::TranslatorMissingWildcard => {
+            Self::TranslatorMissingWildcard => {
                 write!(f, "Missing wildcard. Not an xpub?")
             }
-            WalletPolicyError::WalletPolicyParseFromString(msg) => msg.fmt(f),
-            WalletPolicyError::WalletPolicyInvalidKeyInfo => {
+            Self::WalletPolicyParseFromString(msg) => msg.fmt(f),
+            Self::WalletPolicyInvalidKeyInfo => {
                 write!(f, "Invalid key information for WalletPolicy template")
             }
             WalletPolicyError::TranslatorInvalidHashHex(kind, raw) => {
@@ -308,7 +306,7 @@ impl Display for WalletPolicyError {
 }
 
 impl From<WalletPolicyError> for XKeyParseError {
-    fn from(err: WalletPolicyError) -> Self { XKeyParseError::Bip388(err) }
+    fn from(err: WalletPolicyError) -> Self { Self::Bip388(err) }
 }
 
 #[cfg(test)]
