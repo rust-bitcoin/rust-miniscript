@@ -2313,6 +2313,77 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
                 ScriptBuf::from_hex(expected).unwrap()
             );
         }
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,pk(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*))",
+        )
+        .unwrap();
+        for (index, expected) in [
+            (0, "512068983d461174afc90c26f3b2821d8a9ced9534586a756763b68371a404635cc8"),
+            (1, "5120368e2d864115181bdc8bb5dc8684be8d0760d5c33315570d71a21afce4afd43e"),
+            (2, "512097a1e6270b33ad85744677418bae5f59ea9136027223bc6e282c47c167b471d5"),
+        ] {
+            assert_eq!(
+                descriptor
+                    .derive_at_index(index)
+                    .unwrap()
+                    .derived_descriptor(&secp)
+                    .script_pubkey(),
+                ScriptBuf::from_hex(expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn bip390_musig_tap_miniscript_key_positions() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        for desc in [
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,multi_a(1,{},{}))",
+                musig, other_key
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,sortedmulti_a(1,{},{}))",
+                other_key, musig
+            ),
+        ] {
+            let descriptor = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap();
+            assert!(descriptor.to_string().contains("musig("));
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey();
+        }
+    }
+
+    #[test]
+    fn bip390_musig_invalid_placements() {
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        for desc in [
+            musig.to_owned(),
+            format!("pk({})", musig),
+            format!("pkh({})", musig),
+            format!("wpkh({})", musig),
+            format!("sh(wpkh({}))", musig),
+            format!("wsh(pk({}))", musig),
+            format!("sh(wsh(pk({})))", musig),
+            format!("wsh({})", musig),
+            format!("sh({})", musig),
+            format!(
+                "tr(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,{})",
+                musig
+            ),
+            format!(
+                "tr(musig({},02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))",
+                musig
+            ),
+        ] {
+            Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
+        }
     }
 
     #[test]
