@@ -2327,6 +2327,200 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
                 ScriptBuf::from_hex(expected).unwrap()
             );
         }
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,pk(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*))",
+        )
+        .unwrap();
+        for (index, expected) in [
+            (0, "512068983d461174afc90c26f3b2821d8a9ced9534586a756763b68371a404635cc8"),
+            (1, "5120368e2d864115181bdc8bb5dc8684be8d0760d5c33315570d71a21afce4afd43e"),
+            (2, "512097a1e6270b33ad85744677418bae5f59ea9136027223bc6e282c47c167b471d5"),
+        ] {
+            assert_eq!(
+                descriptor
+                    .derive_at_index(index)
+                    .unwrap()
+                    .derived_descriptor(&secp)
+                    .script_pubkey(),
+                ScriptBuf::from_hex(expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn bip390_musig_tap_miniscript_key_positions() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        for desc in [
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,multi_a(1,{},{}))",
+                musig, other_key
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,sortedmulti_a(1,{},{}))",
+                other_key, musig
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,pkh({}))",
+                musig
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,or_d(pk({}),pkh({})))",
+                other_key, musig
+            ),
+        ] {
+            let descriptor = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap();
+            assert!(descriptor.to_string().contains("musig("));
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey();
+        }
+    }
+
+    #[test]
+    fn bip390_musig_invalid_placements() {
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        for desc in [
+            musig.to_owned(),
+            format!("pk({})", musig),
+            format!("pkh({})", musig),
+            format!("wpkh({})", musig),
+            format!("sh(wpkh({}))", musig),
+            format!("wsh(pk({}))", musig),
+            format!("sh(wsh(pk({})))", musig),
+            format!("wsh({})", musig),
+            format!("sh({})", musig),
+            format!(
+                "tr(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,{})",
+                musig
+            ),
+            format!(
+                "tr(musig({},02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))",
+                musig
+            ),
+        ] {
+            Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
+        }
+
+        // musig() reports itself as an x-only key, so pkh() rejects it outside Taproot too, also
+        // below the root of the script.
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        for desc in [
+            format!("sh(pkh({}))", musig),
+            format!("wsh(pkh({}))", musig),
+            format!("sh(wsh(pkh({})))", musig),
+            format!("c:pk_h({})", musig),
+            format!("wsh(or_d(pk({}),pkh({})))", other_key, musig),
+            format!("wsh(and_v(v:pkh({}),older(144)))", musig),
+        ] {
+            assert!(
+                matches!(
+                    Descriptor::<DescriptorPublicKey>::from_str(&desc),
+                    Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
+                ),
+                "{}",
+                desc
+            );
+        }
+
+        // Participants must be compressed keys in every Taproot position.
+        let internal_key = "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+        let x_only = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+        let uncompressed = "0414fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267be5645686309c6e6736dbd93940707cc9143d3cf29f1b877ff340e2cb2d259cf";
+        let key_1 = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let key_2 = "03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
+        for desc in [
+            format!("tr({},pk(musig({},{})))", internal_key, x_only, key_2),
+            format!("tr({},multi_a(1,{},musig({},{})))", internal_key, key_1, uncompressed, key_2),
+            format!("tr(musig({},{}))", uncompressed, key_2),
+        ] {
+            let err = Descriptor::<DescriptorPublicKey>::from_str(&desc)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("musig participant keys must be compressed"), "{}: {}", desc, err);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn bip390_musig_compiler_placements() {
+        use crate::policy::compiler::CompilerError;
+        use crate::policy::concrete::DescriptorCtx;
+
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        // Neither pk_k() nor pk_h() accepts musig() outside Taproot, so there is nothing to compile
+        // to.
+        let policy =
+            policy::Concrete::<DescriptorPublicKey>::from_str(&format!("pk({})", musig)).unwrap();
+        for result in [
+            policy.compile_to_descriptor::<Legacy>(DescriptorCtx::Sh),
+            policy.compile_to_descriptor::<Segwitv0>(DescriptorCtx::Wsh),
+            policy.compile_to_descriptor::<Segwitv0>(DescriptorCtx::ShWsh),
+            policy.compile_to_descriptor::<BareCtx>(DescriptorCtx::Bare),
+        ] {
+            assert!(matches!(result, Err(Error::CompilerError(CompilerError::LimitsExceeded))));
+        }
+
+        // In Taproot, musig() compiles as the internal key or as a script key.
+        let descriptor = policy
+            .compile_to_descriptor::<Tap>(DescriptorCtx::Tr(None))
+            .unwrap();
+        assert_eq!(descriptor.internal_key().unwrap().to_string(), musig);
+        let policy = policy::Concrete::<DescriptorPublicKey>::from_str(&format!(
+            "or(99@pk({}),1@pk({}))",
+            other_key, musig
+        ))
+        .unwrap();
+        let descriptor = policy
+            .compile_to_descriptor::<Tap>(DescriptorCtx::Tr(None))
+            .unwrap();
+        assert_eq!(descriptor.internal_key().unwrap().to_string(), other_key);
+        assert!(descriptor.to_string().contains(&format!("({})", musig)));
+    }
+
+    #[test]
+    fn bip390_musig_descriptor_constructors() {
+        let musig = DescriptorPublicKey::from_str("musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)").unwrap();
+        let other_key = DescriptorPublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+
+        // The constructors reject musig() outside Taproot, like parsing does.
+        let thresh = || Threshold::new(1, vec![other_key.clone(), musig.clone()]).unwrap();
+        for result in [
+            Descriptor::new_sh_sortedmulti(thresh()),
+            Descriptor::new_wsh_sortedmulti(thresh()),
+            Descriptor::new_sh_wsh_sortedmulti(thresh()),
+            Descriptor::new_wsh(Miniscript::multi(thresh())),
+            Descriptor::new_sh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_wsh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_sh_wsh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_bare(Miniscript::pkh(musig.clone())),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
+            ));
+        }
+
+        // The Taproot constructors accept it.
+        assert_eq!(
+            Descriptor::new_tr(musig.clone(), None).unwrap(),
+            Descriptor::from_str(&format!("tr({})", musig)).unwrap()
+        );
+        let leaf = TapTree::leaf(Miniscript::<_, Tap>::pkh(musig.clone()));
+        assert_eq!(
+            Descriptor::new_tr(other_key.clone(), Some(leaf)).unwrap(),
+            Descriptor::from_str(&format!("tr({},pkh({}))", other_key, musig)).unwrap()
+        );
     }
 
     #[test]
