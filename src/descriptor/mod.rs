@@ -55,8 +55,9 @@ mod wallet_policy;
 
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
-    DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey, MalformedKeyDataKind,
-    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
+    DescriptorMusigKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
+    MalformedKeyDataKind, NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
 pub use self::wallet_policy::{WalletPolicy, WalletPolicyError};
@@ -962,6 +963,17 @@ impl Descriptor<DescriptorPublicKey> {
                     }
                     true
                 }
+                DescriptorPublicKey::Musig(musig) => {
+                    let n_paths = key.num_der_paths();
+                    if n_paths > 1 || musig.derivation_paths().paths().len() > 1 {
+                        for _ in 0..n_paths {
+                            descriptors.push(self.clone());
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
             }
         }) {
             // If there is no multipath key, return early.
@@ -981,6 +993,12 @@ impl Descriptor<DescriptorPublicKey> {
                         Ok(pk.clone())
                     }
                     DescriptorPublicKey::MultiXPub(_) => pk
+                        .clone()
+                        .into_single_keys()
+                        .get(self.0)
+                        .cloned()
+                        .ok_or(Error::MultipathDescLenMismatch),
+                    DescriptorPublicKey::Musig(_) => pk
                         .clone()
                         .into_single_keys()
                         .get(self.0)
@@ -1013,12 +1031,14 @@ impl Descriptor<DescriptorPublicKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.xkey_network() {
-                match first_network {
+            match key.xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -1103,12 +1123,14 @@ impl Descriptor<DefiniteDescriptorKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.as_descriptor_public_key().xkey_network() {
-                match first_network {
+            match key.as_descriptor_public_key().xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -2740,6 +2762,16 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let complex_tests = vec![
             // Taproot with mixed networks
             (format!("tr({},pk({}))", mainnet_xpubs[0], testnet_tpubs[0]), XKeyNetwork::Mixed),
+            // MuSig with mixed networks
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            // MuSig with raw keys and one xpub
+            (
+                format!("tr(musig({},{},{}))", single_keys[0], mainnet_xpubs[0], single_keys[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
             // Taproot with consistent mainnet keys
             (format!("tr({},pk({}))", mainnet_xpubs[0], mainnet_xpubs[1]), XKeyNetwork::Single(NetworkKind::Main)),
             // HTLC-like pattern with mixed networks
@@ -2804,6 +2836,10 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             (format!("tr({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
             (
                 format!("tr({},pk({}/0))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
                 XKeyNetwork::Mixed,
             ),
         ];
