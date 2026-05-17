@@ -234,6 +234,44 @@ impl Plan {
     /// the script sig weight and the witness weight)
     pub fn satisfaction_weight(&self) -> usize { self.witness_size() + self.scriptsig_size() * 4 }
 
+    /// Returns whether the witness was sized assuming `SIGHASH_DEFAULT` — the 64-byte
+    /// Taproot signature encoding.
+    ///
+    /// * `Some(true)` — every Schnorr placeholder in this plan is sized for a 64-byte
+    ///   signature; the witness assumes `SIGHASH_DEFAULT`.
+    /// * `Some(false)` — every Schnorr placeholder is sized for a 65-byte signature;
+    ///   the witness assumes any non-Default Taproot sighash flag.
+    /// * `None` — this plan has no Schnorr placeholders (e.g. non-Taproot plans, where
+    ///   signature size is invariant under the sighash flag), or its Schnorr placeholders
+    ///   have differing sizes — a mixed plan that cannot be expressed by a single uniform
+    ///   sighash policy per BIP-174.
+    ///
+    /// This mirrors the `sighash_default` flag recorded on each
+    /// [`TaprootCanSign`] when the plan was built. Callers constructing a PSBT
+    /// can use this to populate `PSBT_IN_SIGHASH_TYPE` consistently with the
+    /// witness-size assumption baked into [`Plan::satisfaction_weight`].
+    pub fn tap_sighash_default(&self) -> Option<bool> {
+        let mut acc: Option<bool> = None;
+        for placeholder in &self.template {
+            let size = match placeholder {
+                Placeholder::SchnorrSigPk(_, _, size) => *size,
+                Placeholder::SchnorrSigPkHash(_, _, size) => *size,
+                _ => continue,
+            };
+            let is_default = match size {
+                64 => true,
+                65 => false,
+                _ => return None,
+            };
+            match acc {
+                None => acc = Some(is_default),
+                Some(prev) if prev != is_default => return None,
+                _ => {}
+            }
+        }
+        acc
+    }
+
     /// The size in bytes of the script sig that satisfies this plan, including the size of the
     /// var-int prefix.
     pub fn scriptsig_size(&self) -> usize {
