@@ -234,6 +234,44 @@ impl Plan {
     /// the script sig weight and the witness weight)
     pub fn satisfaction_weight(&self) -> usize { self.witness_size() + self.scriptsig_size() * 4 }
 
+    /// Returns whether the witness was sized assuming `SIGHASH_DEFAULT` — the 64-byte
+    /// Taproot signature encoding.
+    ///
+    /// * `Some(true)` — every Schnorr placeholder in this plan is sized for a 64-byte
+    ///   signature; the witness assumes `SIGHASH_DEFAULT`.
+    /// * `Some(false)` — every Schnorr placeholder is sized for a 65-byte signature;
+    ///   the witness assumes any non-Default Taproot sighash flag.
+    /// * `None` — this plan has no Schnorr placeholders (e.g. non-Taproot plans, where
+    ///   signature size is invariant under the sighash flag), or its Schnorr placeholders
+    ///   have differing sizes — a mixed plan that cannot be expressed by a single uniform
+    ///   sighash policy per BIP-174.
+    ///
+    /// This mirrors the `sighash_default` flag recorded on each
+    /// [`TaprootCanSign`] when the plan was built. Callers constructing a PSBT
+    /// can use this to populate `PSBT_IN_SIGHASH_TYPE` consistently with the
+    /// witness-size assumption baked into [`Plan::satisfaction_weight`].
+    pub fn tap_sighash_default(&self) -> Option<bool> {
+        let mut acc: Option<bool> = None;
+        for placeholder in &self.template {
+            let size = match placeholder {
+                Placeholder::SchnorrSigPk(_, _, size) => *size,
+                Placeholder::SchnorrSigPkHash(_, _, size) => *size,
+                _ => continue,
+            };
+            let is_default = match size {
+                64 => true,
+                65 => false,
+                _ => return None,
+            };
+            match acc {
+                None => acc = Some(is_default),
+                Some(prev) if prev != is_default => return None,
+                _ => {}
+            }
+        }
+        acc
+    }
+
     /// The size in bytes of the script sig that satisfies this plan, including the size of the
     /// var-int prefix.
     pub fn scriptsig_size(&self) -> usize {
@@ -1153,5 +1191,49 @@ mod test {
         assert!(psbt_input.witness_script.is_some(), "Witness script missing");
         assert!(psbt_input.redeem_script.is_none(), "Redeem script present");
         assert_eq!(psbt_input.bip32_derivation.len(), 2, "Unexpected number of bip32_derivation");
+    }
+
+    /// Build an [`Assets`] containing a single key with a custom `sighash_default` flag.
+    fn assets_with_sighash_default(pk: &DescriptorPublicKey, sighash_default: bool) -> Assets {
+        let mut keys = BTreeSet::new();
+        for deriv_path in pk.full_derivation_paths() {
+            keys.insert((
+                (pk.master_fingerprint(), deriv_path),
+                CanSign {
+                    ecdsa: true,
+                    taproot: TaprootCanSign {
+                        key_spend: true,
+                        script_spend: TaprootAvailableLeaves::Any,
+                        sighash_default,
+                    },
+                },
+            ));
+        }
+        Assets { keys, ..Default::default() }
+    }
+
+    #[test]
+    fn test_tap_sighash_default() {
+        let pk = DescriptorPublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+
+        // Taproot key-path plan built with the default `sighash_default: true`
+        // assumes a 64-byte signature.
+        let tr_desc = Descriptor::<DefiniteDescriptorKey>::from_str(&format!("tr({})", pk)).unwrap();
+        let plan = tr_desc.clone().plan(&Assets::new().add(pk.clone())).unwrap();
+        assert_eq!(plan.tap_sighash_default(), Some(true));
+
+        // The same descriptor planned with `sighash_default: false` assumes 65-byte sigs.
+        let assets = assets_with_sighash_default(&pk, false);
+        let plan = tr_desc.plan(&assets).unwrap();
+        assert_eq!(plan.tap_sighash_default(), Some(false));
+
+        // Non-Taproot plans have no Schnorr placeholders, so the assumption is moot.
+        let wsh_desc =
+            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("wsh(pk({}))", pk)).unwrap();
+        let plan = wsh_desc.plan(&Assets::new().add(pk)).unwrap();
+        assert_eq!(plan.tap_sighash_default(), None);
     }
 }
