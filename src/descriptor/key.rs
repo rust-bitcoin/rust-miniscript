@@ -1377,6 +1377,16 @@ impl DescriptorMusigKey {
             .collect()
     }
 
+    pub(crate) fn derivation_suffix_string(&self) -> String {
+        use core::fmt::Write as _;
+
+        let mut suffix = String::new();
+        fmt_derivation_paths(&mut suffix, self.derivation_paths.paths())
+            .expect("writing to a string cannot fail");
+        write!(&mut suffix, "{}", self.wildcard).expect("writing to a string cannot fail");
+        suffix
+    }
+
     /// Get the network of the participant xpubs, if all present xpubs agree.
     pub fn xkey_network(&self) -> Option<NetworkKind> {
         match self.xkey_network_summary() {

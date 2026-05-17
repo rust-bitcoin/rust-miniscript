@@ -798,6 +798,35 @@ impl Descriptor<DescriptorPublicKey> {
             key_map: &mut KeyMap,
             secp: &secp256k1::Secp256k1<C>,
         ) -> Result<DescriptorPublicKey, Error> {
+            if s.starts_with("musig(") {
+                let tree = expression::Tree::from_str(s)?;
+                let root = tree.root();
+                let mut public_participants = Vec::with_capacity(root.n_children());
+                for child in root.children() {
+                    if child.name() == "musig" {
+                        return Err(Error::Parse(ParseError::box_from_str(
+                            DescriptorKeyParseError::MalformedKeyData(
+                                MalformedKeyDataKind::MusigNested,
+                            ),
+                        )));
+                    }
+                    public_participants.push(parse_key(&child.expression_string(), key_map, secp)?);
+                }
+
+                let mut public_musig = String::from("musig(");
+                for (i, participant) in public_participants.iter().enumerate() {
+                    if i > 0 {
+                        public_musig.push(',');
+                    }
+                    public_musig.push_str(&participant.to_string());
+                }
+                public_musig.push(')');
+                public_musig.push_str(root.postfix());
+                return public_musig
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)));
+            }
+
             match DescriptorSecretKey::from_str(s) {
                 Ok(sk) => {
                     let pk = key_map
@@ -893,6 +922,19 @@ impl Descriptor<DescriptorPublicKey> {
             pk: &DescriptorPublicKey,
             key_map: &KeyMap,
         ) -> Result<String, core::convert::Infallible> {
+            if let DescriptorPublicKey::Musig(ref musig) = *pk {
+                let mut musig_string = String::from("musig(");
+                for (i, participant) in musig.participants().iter().enumerate() {
+                    if i > 0 {
+                        musig_string.push(',');
+                    }
+                    musig_string.push_str(&key_to_string(participant, key_map)?);
+                }
+                musig_string.push(')');
+                musig_string.push_str(&musig.derivation_suffix_string());
+                return Ok(musig_string);
+            }
+
             Ok(match key_map.get(pk) {
                 Some(secret) => secret.to_string(),
                 None => pk.to_string(),
@@ -2125,6 +2167,33 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         assert_eq!(keymap.len(), 1);
 
         // try to turn it back into a string with the secrets
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+    }
+
+    #[test]
+    fn parse_musig_with_secrets() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor_str = "tr(musig(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0,xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1)/2)";
+        let descriptor_str = Descriptor::<String>::from_str(descriptor_str)
+            .unwrap()
+            .to_string();
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, &descriptor_str).unwrap();
+
+        assert_eq!(keymap.len(), 1);
+        assert!(descriptor
+            .to_string()
+            .contains("tr(musig([a12b02f4/44'/0'/0']"));
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+
+        let descriptor_str = "tr(musig(KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74sHUHy8S,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))";
+        let descriptor_str = Descriptor::<String>::from_str(descriptor_str)
+            .unwrap()
+            .to_string();
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, &descriptor_str).unwrap();
+
+        assert_eq!(keymap.len(), 1);
         assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
     }
 
