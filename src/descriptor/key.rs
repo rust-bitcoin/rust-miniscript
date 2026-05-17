@@ -1745,6 +1745,12 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if a musig aggregate public key is the point at infinity. BIP327 specifies this as a
+    /// key aggregation failure, but descriptor public key derivation is currently an infallible API
+    /// and this failure is cryptographically unreachable for non-adversarial participant keys.
     pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
@@ -1766,9 +1772,7 @@ impl DefiniteDescriptorKey {
             DescriptorPublicKey::MultiXPub(_) => {
                 unreachable!("impossible by construction of DefiniteDescriptorKey")
             }
-            DescriptorPublicKey::Musig(_) => {
-                unimplemented!("MuSig aggregate key derivation is implemented in a later commit")
-            }
+            DescriptorPublicKey::Musig(ref musig) => super::musig::derive_public_key(secp, musig),
         }
     }
 

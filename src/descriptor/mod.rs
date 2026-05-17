@@ -51,6 +51,7 @@ pub use self::tr::{
 pub mod checksum;
 mod key;
 mod key_map;
+mod musig;
 mod wallet_policy;
 
 pub use self::key::{
@@ -2151,6 +2152,98 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", comp_key)).unwrap();
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", x_only_key))
             .unwrap_err();
+    }
+
+    #[test]
+    fn bip390_musig_script_pubkey_vectors() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))",
+        )
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            ScriptBuf::from_hex(
+                "512079e6c3e628c9bfbce91de6b7fb28e2aec7713d377cf260ab599dcbc40e542312"
+            )
+            .unwrap()
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))",
+        )
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            ScriptBuf::from_hex(
+                "512079e6c3e628c9bfbce91de6b7fb28e2aec7713d377cf260ab599dcbc40e542312"
+            )
+            .unwrap()
+        );
+
+        let uncompressed_descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(0414fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267be5645686309c6e6736dbd93940707cc9143d3cf29f1b877ff340e2cb2d259cf,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659))",
+        )
+        .unwrap();
+        let compressed_descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(0314fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659))",
+        )
+        .unwrap();
+        assert_eq!(
+            uncompressed_descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            compressed_descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey()
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1,xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1)/2)",
+        )
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            ScriptBuf::from_hex(
+                "5120a17ceacd6422bd5ffd9f165807b254b7d68ad39f179cc4f11545a6835227e97c"
+            )
+            .unwrap()
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*,pk(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))",
+        )
+        .unwrap();
+        for (index, expected) in [
+            (0, "51201d377b637b5c73f670f5c8a96a2c0bb0d1a682a1fca6aba91fe673501a189782"),
+            (1, "51208950c83b117a6c208d5205ffefcf75b187b32512eb7f0d8577db8d9102833036"),
+            (2, "5120a49a477c61df73691b77fcd563a80a15ea67bb9c75470310ce5c0f25918db60d"),
+        ] {
+            assert_eq!(
+                descriptor
+                    .derive_at_index(index)
+                    .unwrap()
+                    .derived_descriptor(&secp)
+                    .script_pubkey(),
+                ScriptBuf::from_hex(expected).unwrap()
+            );
+        }
     }
 
     #[test]
