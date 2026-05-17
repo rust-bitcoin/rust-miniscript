@@ -877,6 +877,31 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
+        fn is_key_expression_node(node: expression::TreeIterItem) -> bool {
+            let mut child = node;
+            while let Some(parent) = child.parent() {
+                let parent_name = parent
+                    .name()
+                    .rsplit_once(':')
+                    .map(|(_, name)| name)
+                    .unwrap_or(parent.name());
+
+                if matches!(parent_name, "pk" | "pkh" | "pk_k" | "pk_h") && parent.n_children() == 1
+                {
+                    return true;
+                }
+
+                if matches!(parent_name, "multi" | "sortedmulti" | "multi_a" | "sortedmulti_a")
+                    && !child.is_first_child()
+                {
+                    return true;
+                }
+
+                child = parent;
+            }
+            false
+        }
+
         let mut stack = Vec::with_capacity(128);
         for (n, node) in root.pre_order_iter().enumerate().rev() {
             // Before doing anything else, check if this is the inner value of a terminal.
@@ -890,6 +915,10 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
             // We do not do this check on the root node, because its parent might be wsh or
             // sh or something, and actually these ARE single-child combinators, but we don't
             // want to skip their children.
+            if n > 0 && is_key_expression_node(node) {
+                continue;
+            }
+
             if n > 0 && node.n_children() == 0 {
                 let parent = node.parent().unwrap();
                 if parent.n_children() == 1 {
@@ -915,108 +944,119 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                 .map_err(Error::Parse)?;
 
             // "pk" and "pkh" are aliases for "c:pk_k" and "c:pk_h" respectively.
-            let new = match frag_name {
-                "expr_raw_pkh" => node
-                    .verify_terminal_parent("expr_raw_pkh", "public key hash")
-                    .map(Miniscript::expr_raw_pkh)
-                    .map_err(Error::Parse),
-                "pk" => node
-                    .verify_terminal_parent("pk", "public key")
-                    .map(Miniscript::pk)
-                    .map_err(Error::Parse),
-                "pkh" => node
-                    .verify_terminal_parent("pkh", "public key")
-                    .map(Miniscript::pkh)
-                    .map_err(Error::Parse),
-                "pk_k" => node
-                    .verify_terminal_parent("pk_k", "public key")
-                    .map(Miniscript::pk_k)
-                    .map_err(Error::Parse),
-                "pk_h" => node
-                    .verify_terminal_parent("pk_h", "public key")
-                    .map(Miniscript::pk_h)
-                    .map_err(Error::Parse),
-                "after" => node
-                    .verify_after()
-                    .map(Miniscript::after)
-                    .map_err(Error::Parse),
-                "older" => node
-                    .verify_older()
-                    .map(Miniscript::older)
-                    .map_err(Error::Parse),
-                "sha256" => node
-                    .verify_terminal_parent("sha256", "hash")
-                    .map(Miniscript::sha256)
-                    .map_err(Error::Parse),
-                "hash256" => node
-                    .verify_terminal_parent("hash256", "hash")
-                    .map(Miniscript::hash256)
-                    .map_err(Error::Parse),
-                "ripemd160" => node
-                    .verify_terminal_parent("ripemd160", "hash")
-                    .map(Miniscript::ripemd160)
-                    .map_err(Error::Parse),
-                "hash160" => node
-                    .verify_terminal_parent("hash160", "hash")
-                    .map(Miniscript::hash160)
-                    .map_err(Error::Parse),
-                "1" => {
-                    node.verify_n_children("1", 0..=0)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Ok(Miniscript::TRUE)
-                }
-                "0" => {
-                    node.verify_n_children("0", 0..=0)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Ok(Miniscript::FALSE)
-                }
-                "and_v" => binary(node, &mut stack, "and_v", Terminal::AndV),
-                "and_b" => binary(node, &mut stack, "and_b", Terminal::AndB),
-                "and_n" => binary(node, &mut stack, "and_n", |x, y| {
-                    Terminal::AndOr(x, y, Arc::new(Miniscript::FALSE))
-                }),
-                "andor" => {
-                    node.verify_n_children("andor", 3..=3)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Miniscript::from_ast(Terminal::AndOr(
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
-                    ))
-                }
-                "or_b" => binary(node, &mut stack, "or_b", Terminal::OrB),
-                "or_d" => binary(node, &mut stack, "or_d", Terminal::OrD),
-                "or_c" => binary(node, &mut stack, "or_c", Terminal::OrC),
-                "or_i" => binary(node, &mut stack, "or_i", Terminal::OrI),
-                "thresh" => node
-                    .verify_threshold(|_| Ok(stack.pop().unwrap()))
-                    .map(Terminal::Thresh)
-                    .and_then(Miniscript::from_ast),
-                "multi" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::Multi)
-                    .and_then(Miniscript::from_ast),
-                "sortedmulti" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::SortedMulti)
-                    .and_then(Miniscript::from_ast),
-                "multi_a" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::MultiA)
-                    .and_then(Miniscript::from_ast),
-                "sortedmulti_a" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::SortedMultiA)
-                    .and_then(Miniscript::from_ast),
-                x => {
-                    Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
-                        name: x.to_owned(),
-                    })))
-                }
-            }?;
+            let new =
+                match frag_name {
+                    "expr_raw_pkh" => node
+                        .verify_terminal_parent("expr_raw_pkh", "public key hash")
+                        .map(Miniscript::expr_raw_pkh)
+                        .map_err(Error::Parse),
+                    "pk" => node
+                        .verify_key_expression_parent("pk", "public key")
+                        .map(Miniscript::pk)
+                        .map_err(Error::Parse),
+                    "pkh" => node
+                        .verify_key_expression_parent("pkh", "public key")
+                        .map(Miniscript::pkh)
+                        .map_err(Error::Parse),
+                    "pk_k" => node
+                        .verify_key_expression_parent("pk_k", "public key")
+                        .map(Miniscript::pk_k)
+                        .map_err(Error::Parse),
+                    "pk_h" => node
+                        .verify_key_expression_parent("pk_h", "public key")
+                        .map(Miniscript::pk_h)
+                        .map_err(Error::Parse),
+                    "after" => node
+                        .verify_after()
+                        .map(Miniscript::after)
+                        .map_err(Error::Parse),
+                    "older" => node
+                        .verify_older()
+                        .map(Miniscript::older)
+                        .map_err(Error::Parse),
+                    "sha256" => node
+                        .verify_terminal_parent("sha256", "hash")
+                        .map(Miniscript::sha256)
+                        .map_err(Error::Parse),
+                    "hash256" => node
+                        .verify_terminal_parent("hash256", "hash")
+                        .map(Miniscript::hash256)
+                        .map_err(Error::Parse),
+                    "ripemd160" => node
+                        .verify_terminal_parent("ripemd160", "hash")
+                        .map(Miniscript::ripemd160)
+                        .map_err(Error::Parse),
+                    "hash160" => node
+                        .verify_terminal_parent("hash160", "hash")
+                        .map(Miniscript::hash160)
+                        .map_err(Error::Parse),
+                    "1" => {
+                        node.verify_n_children("1", 0..=0)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Ok(Miniscript::TRUE)
+                    }
+                    "0" => {
+                        node.verify_n_children("0", 0..=0)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Ok(Miniscript::FALSE)
+                    }
+                    "and_v" => binary(node, &mut stack, "and_v", Terminal::AndV),
+                    "and_b" => binary(node, &mut stack, "and_b", Terminal::AndB),
+                    "and_n" => binary(node, &mut stack, "and_n", |x, y| {
+                        Terminal::AndOr(x, y, Arc::new(Miniscript::FALSE))
+                    }),
+                    "andor" => {
+                        node.verify_n_children("andor", 3..=3)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Miniscript::from_ast(Terminal::AndOr(
+                            stack.pop().unwrap(),
+                            stack.pop().unwrap(),
+                            stack.pop().unwrap(),
+                        ))
+                    }
+                    "or_b" => binary(node, &mut stack, "or_b", Terminal::OrB),
+                    "or_d" => binary(node, &mut stack, "or_d", Terminal::OrD),
+                    "or_c" => binary(node, &mut stack, "or_c", Terminal::OrC),
+                    "or_i" => binary(node, &mut stack, "or_i", Terminal::OrI),
+                    "thresh" => node
+                        .verify_threshold(|_| Ok(stack.pop().unwrap()))
+                        .map(Terminal::Thresh)
+                        .and_then(Miniscript::from_ast),
+                    "multi" => node
+                        .verify_threshold(|sub| {
+                            sub.verify_key_expression("public_key")
+                                .map_err(Error::Parse)
+                        })
+                        .map(Terminal::Multi)
+                        .and_then(Miniscript::from_ast),
+                    "sortedmulti" => node
+                        .verify_threshold(|sub| {
+                            sub.verify_key_expression("public_key")
+                                .map_err(Error::Parse)
+                        })
+                        .map(Terminal::SortedMulti)
+                        .and_then(Miniscript::from_ast),
+                    "multi_a" => node
+                        .verify_threshold(|sub| {
+                            sub.verify_key_expression("public_key")
+                                .map_err(Error::Parse)
+                        })
+                        .map(Terminal::MultiA)
+                        .and_then(Miniscript::from_ast),
+                    "sortedmulti_a" => node
+                        .verify_threshold(|sub| {
+                            sub.verify_key_expression("public_key")
+                                .map_err(Error::Parse)
+                        })
+                        .map(Terminal::SortedMultiA)
+                        .and_then(Miniscript::from_ast),
+                    x => Err(Error::Parse(crate::ParseError::Tree(
+                        crate::ParseTreeError::UnknownName { name: x.to_owned() },
+                    ))),
+                }?;
 
             let mut new = Arc::new(new);
             if let Some(frag_wrap) = frag_wrap {
