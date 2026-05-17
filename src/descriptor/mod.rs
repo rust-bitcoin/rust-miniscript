@@ -55,8 +55,9 @@ mod wallet_policy;
 
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
-    DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey, MalformedKeyDataKind,
-    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
+    DescriptorMusigKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
+    MalformedKeyDataKind, NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
 pub use self::wallet_policy::{KeyInfo, WalletPolicy, WalletPolicyError};
@@ -991,6 +992,13 @@ impl Descriptor<DescriptorPublicKey> {
                     }
                     true
                 }
+                DescriptorPublicKey::Musig(_) if key.is_multipath() => {
+                    for _ in 0..key.num_der_paths() {
+                        descriptors.push(self.clone());
+                    }
+                    true
+                }
+                DescriptorPublicKey::Musig(_) => false,
             }
         }) {
             // If there is no multipath key, return early.
@@ -1009,7 +1017,10 @@ impl Descriptor<DescriptorPublicKey> {
                     DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
                         Ok(pk.clone())
                     }
-                    DescriptorPublicKey::MultiXPub(_) => pk
+                    // Like the keys above, a single-path `musig()` key goes into every descriptor
+                    // unchanged.
+                    DescriptorPublicKey::Musig(_) if !pk.is_multipath() => Ok(pk.clone()),
+                    DescriptorPublicKey::MultiXPub(_) | DescriptorPublicKey::Musig(_) => pk
                         .clone()
                         .into_single_keys()
                         .get(self.0)
@@ -1042,12 +1053,14 @@ impl Descriptor<DescriptorPublicKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.xkey_network() {
-                match first_network {
+            match key.xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -1132,12 +1145,14 @@ impl Descriptor<DefiniteDescriptorKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.as_descriptor_public_key().xkey_network() {
-                match first_network {
+            match key.as_descriptor_public_key().xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -2312,6 +2327,99 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn musig_multipath_descriptors() {
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)";
+        let key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let xpub_a = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        let xpub_b = "xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y";
+
+        for (desc, expected) in [
+            // A single-path musig() key goes into every descriptor unchanged.
+            (
+                format!("tr({},pk({}/<0;1>/*))", musig, xpub_a),
+                [
+                    format!("tr({},pk({}/0/*))", musig, xpub_a),
+                    format!("tr({},pk({}/1/*))", musig, xpub_a),
+                ],
+            ),
+            (
+                format!("tr({}/<0;1>/*,pk({}))", xpub_a, musig),
+                [
+                    format!("tr({}/0/*,pk({}))", xpub_a, musig),
+                    format!("tr({}/1/*,pk({}))", xpub_a, musig),
+                ],
+            ),
+            // Multipath participants and aggregate-level paths are split.
+            (
+                format!("tr(musig({}/<0;1>/*,{}),pk({}/<2;3>/*))", xpub_a, key, xpub_b),
+                [
+                    format!("tr(musig({}/0/*,{}),pk({}/2/*))", xpub_a, key, xpub_b),
+                    format!("tr(musig({}/1/*,{}),pk({}/3/*))", xpub_a, key, xpub_b),
+                ],
+            ),
+            (
+                format!("tr(musig({},{})/<0;1>/*)", xpub_a, xpub_b),
+                [
+                    format!("tr(musig({},{})/0/*)", xpub_a, xpub_b),
+                    format!("tr(musig({},{})/1/*)", xpub_a, xpub_b),
+                ],
+            ),
+        ] {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap();
+            assert!(desc.is_multipath());
+            let expected = expected
+                .iter()
+                .map(|desc| Descriptor::<DescriptorPublicKey>::from_str(desc).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(desc.into_single_descriptors().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn musig_policy_round_trip() {
+        use crate::policy::{Concrete, Liftable as _, Semantic};
+
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)";
+        let xpub_musig = "musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*";
+        let key_1 = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let key_2 = "023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66";
+
+        // Policies lifted from musig() descriptors parse back from both string notations.
+        for desc in [
+            format!("tr({})", musig),
+            format!("tr({},pk({}))", musig, key_1),
+            format!("tr({},pk({}))", key_1, xpub_musig),
+            format!("tr({},multi_a(2,{},{},{}))", key_1, musig, key_2, xpub_musig),
+        ] {
+            let policy = Descriptor::<DescriptorPublicKey>::from_str(&desc)
+                .unwrap()
+                .lift()
+                .unwrap();
+            for s in [policy.to_string(), policy.to_policy_syntax_string()] {
+                assert_eq!(Semantic::<DescriptorPublicKey>::from_str(&s).unwrap(), policy, "{}", s);
+            }
+        }
+
+        let policy = format!("or(99@pk({}),1@pk({}))", xpub_musig, key_1);
+        assert_eq!(
+            Concrete::<DescriptorPublicKey>::from_str(&policy)
+                .unwrap()
+                .to_string(),
+            policy
+        );
+
+        #[cfg(feature = "serde")]
+        {
+            // Serde uses the string form.
+            let policy = "(pk(musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)) ∨ pk(02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c))";
+            serde_test::assert_tokens(
+                &Semantic::<DescriptorPublicKey>::from_str(policy).unwrap(),
+                &[serde_test::Token::Str(policy)],
+            );
+        }
+    }
+
+    #[test]
     fn regression_736() {
         Descriptor::<DescriptorPublicKey>::from_str(
             "tr(0000000000000000000000000000000000000000000000000000000000000002,)",
@@ -2932,6 +3040,16 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let complex_tests = vec![
             // Taproot with mixed networks
             (format!("tr({},pk({}))", mainnet_xpubs[0], testnet_tpubs[0]), XKeyNetwork::Mixed),
+            // MuSig with mixed networks
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            // MuSig with raw keys and one xpub
+            (
+                format!("tr(musig({},{},{}))", single_keys[0], mainnet_xpubs[0], single_keys[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
             // Taproot with consistent mainnet keys
             (format!("tr({},pk({}))", mainnet_xpubs[0], mainnet_xpubs[1]), XKeyNetwork::Single(NetworkKind::Main)),
             // HTLC-like pattern with mixed networks
@@ -2996,6 +3114,10 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             (format!("tr({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
             (
                 format!("tr({},pk({}/0))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
                 XKeyNetwork::Mixed,
             ),
         ];
