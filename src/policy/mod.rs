@@ -278,6 +278,8 @@ mod tests {
         concrete_policy_rtt("or(1@pk(X),1@pk(Y))");
         concrete_policy_rtt("or(99@pk(X),1@pk(Y))");
         concrete_policy_rtt("and(pk(X),or(99@pk(Y),1@older(12960)))");
+        concrete_policy_rtt("or(99@pk(musig(X,Y)/0/*),1@pk(Z))");
+        concrete_policy_rtt("thresh(2,pk(musig(X,Y)),pk(Z),pk(W))");
 
         semantic_policy_rtt("pk()");
         semantic_policy_rtt("(pk(X) ∨ pk(Y))");

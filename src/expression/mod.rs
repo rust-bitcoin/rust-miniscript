@@ -28,8 +28,8 @@
 mod error;
 
 use core::num::NonZeroU32;
-use core::ops;
 use core::str::FromStr;
+use core::{fmt, ops};
 
 pub use self::error::{ParseNumError, ParseThresholdError, ParseTreeError};
 use crate::blanket_traits::StaticDebugAndDisplay;
@@ -49,6 +49,8 @@ pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVW
 struct TreeNode<'s> {
     name: &'s str,
     name_pos: usize,
+    postfix: &'s str,
+    postfix_pos: usize,
     parens: Parens,
     n_children: usize,
     index: usize,
@@ -62,6 +64,8 @@ impl TreeNode<'_> {
         TreeNode {
             name: "",
             name_pos: 0,
+            postfix: "",
+            postfix_pos: 0,
             parens: Parens::None,
             n_children: 0,
             index,
@@ -183,6 +187,9 @@ impl<'s> TreeIterItem<'s> {
     /// The name of this tree node.
     pub fn name(self) -> &'s str { self.nodes[self.index].name }
 
+    /// The suffix following a function-style key expression, such as `/0/*` in `musig(A,B)/0/*`.
+    pub fn postfix(self) -> &'s str { self.nodes[self.index].postfix }
+
     /// The 0-indexed byte-position of the name in the original expression tree.
     pub fn name_pos(self) -> usize { self.nodes[self.index].name_pos }
 
@@ -268,6 +275,14 @@ impl<'s> TreeIterItem<'s> {
         self,
         separator: char,
     ) -> Result<(Option<&'s str>, &'s str), ParseTreeError> {
+        if !self.postfix().is_empty() {
+            return Err(ParseTreeError::UnexpectedKeyExpressionSuffix {
+                name: self.name().to_owned(),
+                suffix: self.postfix().to_owned(),
+                pos: self.nodes[self.index].postfix_pos,
+            });
+        }
+
         let mut name_split = self.name().splitn(3, separator);
         match (name_split.next(), name_split.next(), name_split.next()) {
             (None, _, _) => unreachable!("'split' always yields at least one element"),
@@ -289,6 +304,14 @@ impl<'s> TreeIterItem<'s> {
         description: &'static str,
         n_children: impl ops::RangeBounds<usize>,
     ) -> Result<(), ParseTreeError> {
+        if !self.postfix().is_empty() {
+            return Err(ParseTreeError::UnexpectedKeyExpressionSuffix {
+                name: self.name().to_owned(),
+                suffix: self.postfix().to_owned(),
+                pos: self.nodes[self.index].postfix_pos,
+            });
+        }
+
         if n_children.contains(&self.n_children()) {
             Ok(())
         } else {
@@ -331,6 +354,12 @@ impl<'s> TreeIterItem<'s> {
 
         if self.name() != name {
             Err(ParseTreeError::IncorrectName { actual: self.name().to_owned(), expected: name })
+        } else if !self.postfix().is_empty() {
+            Err(ParseTreeError::UnexpectedKeyExpressionSuffix {
+                name: self.name().to_owned(),
+                suffix: self.postfix().to_owned(),
+                pos: self.nodes[self.index].postfix_pos,
+            })
         } else if self.parens() == Parens::Curly {
             Err(ParseTreeError::IllegalCurlyBrace { pos: self.children_pos() })
         } else {
@@ -411,6 +440,73 @@ impl<'s> TreeIterItem<'s> {
             .verify_terminal(inner_description)
     }
 
+    /// Check that a tree node has exactly one child, which is a descriptor key expression.
+    ///
+    /// If so, parse the child as [`Self::verify_key_expression`] does.
+    ///
+    /// The `description` argument is only used to populate the error return,
+    /// and is not validated in any way.
+    pub fn verify_key_expression_parent<T>(
+        &self,
+        description: &'static str,
+    ) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        self.verify_n_children(description, 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.first_child().unwrap().verify_key_expression()
+    }
+
+    /// Parse a tree node as a descriptor key expression.
+    ///
+    /// A terminal is parsed from its name. A function-style expression, such as
+    /// `musig(A,B)/0/*`, is serialized back to expression syntax and parsed from that.
+    pub fn verify_key_expression<T>(&self) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        let key = if self.n_children() == 0 {
+            T::from_str(self.name())
+        } else {
+            T::from_str(&self.expression_string())
+        };
+        key.map_err(ParseError::box_from_str)
+    }
+
+    /// Serialize this tree node and all descendants back to expression syntax.
+    pub fn expression_string(&self) -> String {
+        let mut ret = String::new();
+        self.fmt_expression(&mut ret)
+            .expect("writing to a string cannot fail");
+        ret
+    }
+
+    fn fmt_expression<W: fmt::Write>(&self, f: &mut W) -> fmt::Result {
+        f.write_str(self.name())?;
+        match self.parens() {
+            Parens::None => {}
+            Parens::Round | Parens::Curly => {
+                let (open, close) = match self.parens() {
+                    Parens::Round => ('(', ')'),
+                    Parens::Curly => ('{', '}'),
+                    Parens::None => unreachable!(),
+                };
+                f.write_char(open)?;
+                for (i, child) in self.children().enumerate() {
+                    if i > 0 {
+                        f.write_char(',')?;
+                    }
+                    child.fmt_expression(f)?;
+                }
+                f.write_char(close)?;
+            }
+        }
+        f.write_str(self.postfix())
+    }
+
     /// Check that a tree node has exactly two children.
     ///
     /// If so, return them.
@@ -445,6 +541,15 @@ impl<'s> TreeIterItem<'s> {
         &'s self,
         mut map_child: F,
     ) -> Result<Threshold<T, MAX>, E> {
+        if !self.postfix().is_empty() {
+            return Err(ParseThresholdError::UnexpectedKeyExpressionSuffix {
+                name: self.name().to_owned(),
+                suffix: self.postfix().to_owned(),
+                pos: self.nodes[self.index].postfix_pos,
+            }
+            .into());
+        }
+
         let mut child_iter = self.children();
         let kchild = match child_iter.next() {
             Some(k) => k,
@@ -517,13 +622,17 @@ impl<'a> Tree<'a> {
         let mut n_nodes = 1;
         let mut max_depth = 0;
         let mut open_paren_stack = Vec::with_capacity(128);
-        for (pos, ch) in s.bytes().enumerate() {
+        let mut pos = 0;
+        let bytes = s.as_bytes();
+        while pos < s.len() {
+            let ch = bytes[pos];
             if ch == b'(' || ch == b'{' {
                 open_paren_stack.push((ch, pos));
                 if max_depth < open_paren_stack.len() {
                     max_depth = open_paren_stack.len();
                 }
             } else if ch == b')' || ch == b'}' {
+                let next_pos;
                 if let Some((open_ch, open_pos)) = open_paren_stack.pop() {
                     if (open_ch == b'(' && ch == b'}') || (open_ch == b'{' && ch == b')') {
                         return Err(ParseTreeError::MismatchedParens {
@@ -534,30 +643,31 @@ impl<'a> Tree<'a> {
                         });
                     }
 
+                    next_pos = scan_key_expression_postfix(s, pos + 1)?;
                     if let Some(&(paren_ch, paren_pos)) = open_paren_stack.last() {
                         // not last paren; this should not be the end of the string,
                         // and the next character should be a , ) or }.
-                        if pos == s.len() - 1 {
+                        if next_pos == s.len() {
                             return Err(ParseTreeError::UnmatchedOpenParen {
                                 ch: paren_ch.into(),
                                 pos: paren_pos,
                             });
                         } else {
-                            let next_byte = s.as_bytes()[pos + 1];
+                            let next_byte = s.as_bytes()[next_pos];
                             if next_byte != b')' && next_byte != b'}' && next_byte != b',' {
                                 return Err(ParseTreeError::ExpectedParenOrComma {
                                     ch: next_byte.into(),
-                                    pos: pos + 1,
+                                    pos: next_pos,
                                 });
                                 //
                             }
                         }
                     } else {
                         // last paren; this SHOULD be the end of the string
-                        if pos < s.len() - 1 {
+                        if next_pos < s.len() {
                             return Err(ParseTreeError::TrailingCharacter {
-                                ch: s.as_bytes()[pos + 1].into(),
-                                pos: pos + 1,
+                                ch: s.as_bytes()[next_pos].into(),
+                                pos: next_pos,
                             });
                         }
                     }
@@ -574,6 +684,8 @@ impl<'a> Tree<'a> {
                 }
 
                 n_nodes += 1;
+                pos = next_pos;
+                continue;
             } else if ch == b',' {
                 if open_paren_stack.is_empty() {
                     // We consider commas outside of the tree to be "trailing characters"
@@ -582,6 +694,7 @@ impl<'a> Tree<'a> {
 
                 n_nodes += 1;
             }
+            pos += 1;
         }
         // Catch "early end of string"
         if let Some((ch, pos)) = open_paren_stack.pop() {
@@ -631,7 +744,10 @@ impl<'a> Tree<'a> {
         // as the string serialization lists all the nodes in pre-order.
         let mut parent_stack = Vec::with_capacity(max_depth);
         let mut current_node = Some(TreeNode::null(0));
-        for (pos, ch) in s.bytes().enumerate() {
+        let mut pos = 0;
+        let bytes = s.as_bytes();
+        while pos < s.len() {
+            let ch = bytes[pos];
             if ch == b'(' || ch == b'{' {
                 let mut current = current_node.expect("'(' only occurs after a node name");
                 current.name = &s[current.name_pos..pos];
@@ -663,8 +779,16 @@ impl<'a> Tree<'a> {
                 }
 
                 current_node = None;
-                parent_stack.pop();
+                let closed_idx = parent_stack.pop().expect("checked by parse_pre_check");
+                let suffix_end = scan_key_expression_postfix(s, pos + 1)?;
+                if suffix_end > pos + 1 {
+                    nodes[closed_idx].postfix = &s[pos + 1..suffix_end];
+                    nodes[closed_idx].postfix_pos = pos + 1;
+                    pos = suffix_end;
+                    continue;
+                }
             }
+            pos += 1;
         }
         if let Some(mut current) = current_node {
             current.name = &s[current.name_pos..];
@@ -677,6 +801,26 @@ impl<'a> Tree<'a> {
 
         Ok(Tree { nodes })
     }
+}
+
+fn scan_key_expression_postfix(s: &str, mut pos: usize) -> Result<usize, ParseTreeError> {
+    let bytes = s.as_bytes();
+    if bytes.get(pos) != Some(&b'/') {
+        return Ok(pos);
+    }
+
+    while pos < s.len() {
+        match bytes[pos] {
+            b'0'..=b'9' | b'\'' | b'*' | b'/' | b';' | b'<' | b'>' | b'h' | b'H' => {
+                pos += 1;
+            }
+            b',' | b')' | b'}' => break,
+            ch => {
+                return Err(ParseTreeError::ExpectedParenOrComma { ch: ch.into(), pos });
+            }
+        }
+    }
+    Ok(pos)
 }
 
 /// Parse a string as a u32, forbidding zero.
@@ -897,6 +1041,47 @@ mod tests {
                 .close()
                 .into_tree()
         );
+    }
+
+    #[test]
+    fn parse_key_expression_postfix() {
+        let expr = Tree::from_str("pk(musig(A,B)/0/*)").unwrap();
+        let key_expr = expr.root().first_child().unwrap();
+        assert_eq!(key_expr.name(), "musig");
+        assert_eq!(key_expr.postfix(), "/0/*");
+        assert_eq!(key_expr.expression_string(), "musig(A,B)/0/*");
+        assert_eq!(key_expr.verify_key_expression::<String>().unwrap(), "musig(A,B)/0/*");
+
+        let expr = Tree::from_str("pk(A/0/*)").unwrap();
+        assert_eq!(
+            expr.root()
+                .verify_key_expression_parent::<String>("pk")
+                .unwrap(),
+            "A/0/*"
+        );
+    }
+
+    #[test]
+    fn non_key_expression_postfix_rejected() {
+        let expr = Tree::from_str("or_b(pk(A),pk(B))/0/*").unwrap();
+        let root = expr.root();
+
+        assert!(matches!(
+            root.name_separated(':').unwrap_err(),
+            ParseTreeError::UnexpectedKeyExpressionSuffix { .. }
+        ));
+        assert!(matches!(
+            root.verify_n_children("or_b", 2..=2).unwrap_err(),
+            ParseTreeError::UnexpectedKeyExpressionSuffix { .. }
+        ));
+
+        let expr = Tree::from_str("multi_a(1,A,B)/0/*").unwrap();
+        let root = expr.root();
+        assert!(matches!(
+            root.verify_threshold::<20, _, (), ParseThresholdError>(|_| Ok(()))
+                .unwrap_err(),
+            ParseThresholdError::UnexpectedKeyExpressionSuffix { .. }
+        ));
     }
 
     #[test]

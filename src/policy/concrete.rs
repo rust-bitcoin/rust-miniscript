@@ -1022,8 +1022,25 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
+        // Collect the nodes in pre-order, skipping the descendants of `pk`: it parses its key
+        // argument itself, and the key may be a function-style expression such as
+        // `musig(A,B)/0/*` with descendants of its own.
+        let mut iter = root.pre_order_iter();
+        let mut nodes = Vec::with_capacity(iter.len());
+        while let Some(node) = iter.next() {
+            nodes.push(node);
+            // A child of `or` may carry a probability, as in `9@pk(A)`.
+            let name = node
+                .name()
+                .rsplit_once('@')
+                .map_or(node.name(), |(_, name)| name);
+            if name == "pk" && node.n_children() == 1 {
+                iter.skip_descendants();
+            }
+        }
+
         let mut stack = Vec::<(NonZeroU32, _)>::with_capacity(128);
-        for node in root.pre_order_iter().rev() {
+        for node in nodes.into_iter().rev() {
             let allow_prob;
             // Before doing anything else, check if this is the inner value of a terminal.
             // In that case, just skip the node. Conveniently, there are no combinators
@@ -1076,7 +1093,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                         Ok(Self::Trivial)
                     }
                     "pk" => node
-                        .verify_terminal_parent("pk", "public key")
+                        .verify_key_expression_parent("pk")
                         .map(Policy::Key)
                         .map_err(Error::Parse),
                     "after" => node.verify_after().map_err(Error::Parse).map(Policy::After),
