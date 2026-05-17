@@ -840,7 +840,7 @@ impl FromStr for DescriptorPublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.starts_with("musig(") {
-            return parse_musig_key(s).map(DescriptorPublicKey::Musig);
+            return parse_musig_key(s, Self::from_str).map(DescriptorPublicKey::Musig);
         }
 
         // A "raw" public key without any origin is the least we accept.
@@ -910,7 +910,11 @@ impl FromStr for DescriptorPublicKey {
     }
 }
 
-fn parse_musig_key(s: &str) -> Result<DescriptorMusigKey, DescriptorKeyParseError> {
+/// Parses a `musig()` key expression, parsing each participant with `parse_participant`.
+pub(super) fn parse_musig_key(
+    s: &str,
+    mut parse_participant: impl FnMut(&str) -> Result<DescriptorPublicKey, DescriptorKeyParseError>,
+) -> Result<DescriptorMusigKey, DescriptorKeyParseError> {
     let tree = crate::expression::Tree::from_str(s).map_err(|_| {
         DescriptorKeyParseError::MalformedKeyData(MalformedKeyDataKind::InvalidMusigExpression)
     })?;
@@ -935,7 +939,7 @@ fn parse_musig_key(s: &str) -> Result<DescriptorMusigKey, DescriptorKeyParseErro
             };
             return Err(DescriptorKeyParseError::MalformedKeyData(kind));
         }
-        participants.push(DescriptorPublicKey::from_str(child.name())?);
+        participants.push(parse_participant(child.name())?);
     }
 
     let (mut derivation_paths, wildcard) = parse_derivation_suffix(root.postfix())?;
@@ -1446,6 +1450,16 @@ impl DescriptorMusigKey {
             .iter()
             .map(|participant| participant.clone().at_derivation_index(index))
             .collect()
+    }
+
+    pub(crate) fn derivation_suffix_string(&self) -> String {
+        use core::fmt::Write as _;
+
+        let mut suffix = String::new();
+        fmt_derivation_paths(&mut suffix, self.derivation_paths.paths())
+            .expect("writing to a string cannot fail");
+        write!(&mut suffix, "{}", self.wildcard).expect("writing to a string cannot fail");
+        suffix
     }
 
     /// Get the network of the participant xpubs, if all present xpubs agree.
