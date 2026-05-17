@@ -479,6 +479,43 @@ impl fmt::Display for NonDefiniteKeyError {
 #[cfg(feature = "std")]
 impl error::Error for NonDefiniteKeyError {}
 
+/// Error deriving a `musig()` aggregate public key.
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
+pub enum MusigKeyAggError {
+    /// The `musig()` key expression is not definite.
+    NonDefiniteKey(NonDefiniteKeyError),
+    /// BIP32 aggregate-level derivation failed.
+    AggregateDerivation(bip32::Error),
+    /// BIP327 key aggregation produced the point at infinity.
+    Infinity,
+}
+
+impl fmt::Display for MusigKeyAggError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonDefiniteKey(err) => err.fmt(f),
+            Self::AggregateDerivation(err) => err.fmt(f),
+            Self::Infinity => f.write_str("musig aggregate public key is infinity"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for MusigKeyAggError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::NonDefiniteKey(err) => Some(err),
+            Self::AggregateDerivation(err) => Some(err),
+            Self::Infinity => None,
+        }
+    }
+}
+
+impl From<NonDefiniteKeyError> for MusigKeyAggError {
+    fn from(err: NonDefiniteKeyError) -> Self { Self::NonDefiniteKey(err) }
+}
+
 /// Kinds of malformed key data
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
@@ -1872,6 +1909,12 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if derivation fails. [`Self::new`] rejects keys that BIP32 cannot derive, so this
+    /// only happens in cryptographic edge cases that are unreachable for non-adversarial keys,
+    /// such as a BIP327 `musig()` aggregate at the point at infinity.
     pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
@@ -1893,8 +1936,8 @@ impl DefiniteDescriptorKey {
             DescriptorPublicKey::MultiXPub(_) => {
                 unreachable!("impossible by construction of DefiniteDescriptorKey")
             }
-            DescriptorPublicKey::Musig(_) => {
-                unimplemented!("MuSig aggregate key derivation is implemented in a later commit")
+            DescriptorPublicKey::Musig(ref musig) => {
+                super::musig::derive_public_key(secp, musig).expect("failed to derive musig() key")
             }
         }
     }
