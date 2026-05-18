@@ -32,7 +32,7 @@ pub(super) fn derive_public_key<C: Verification>(
     }
 }
 
-fn aggregate_public_key<C: Verification>(
+pub(super) fn aggregate_public_key<C: Verification>(
     secp: &Secp256k1<C>,
     musig: &DescriptorMusigKey,
 ) -> Result<bitcoin::PublicKey, MusigKeyAggError> {
@@ -95,7 +95,7 @@ where
     aggregate.map_err(|_| MusigKeyAggError::Infinity)
 }
 
-fn synthetic_xpub(public_key: PublicKey, network: NetworkKind) -> bip32::Xpub {
+pub(super) fn synthetic_xpub(public_key: PublicKey, network: NetworkKind) -> bip32::Xpub {
     bip32::Xpub {
         network,
         depth: 0,

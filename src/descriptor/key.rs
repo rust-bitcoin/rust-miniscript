@@ -124,6 +124,20 @@ pub struct DescriptorMusigKey {
     wildcard: Wildcard,
 }
 
+/// The way a `musig()` key expression applies derivation.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum MusigDerivationKind<'a> {
+    /// Participant keys are derived first, then aggregated.
+    DeriveThenAggregate,
+    /// Participant xpubs are aggregated first, then the BIP328 synthetic xpub is derived.
+    AggregateThenDerive {
+        /// Derivation paths applied to the aggregate key.
+        derivation_paths: &'a DerivPaths,
+        /// Wildcard applied to the aggregate key.
+        wildcard: Wildcard,
+    },
+}
+
 /// Single public key without any origin or range information.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum SinglePubKey {
@@ -1148,6 +1162,21 @@ impl DescriptorPublicKey {
         }
     }
 
+    /// Applies `pred` to this key and any underlying `musig()` participant keys.
+    ///
+    /// For a `musig()` key expression, this walks the participant keys and does not call `pred`
+    /// on the aggregate key expression itself.
+    pub fn for_each_leaf_key<'a, F>(&'a self, mut pred: F) -> bool
+    where
+        F: FnMut(&'a Self) -> bool,
+    {
+        match self {
+            // `DescriptorMusigKey::new` rejects nested `musig()` participants.
+            Self::Musig(musig) => musig.participants.iter().all(pred),
+            _ => pred(self),
+        }
+    }
+
     /// Whether or not the key has a hardened step in path
     pub fn has_hardened_step(&self) -> bool {
         let paths = match self {
@@ -1355,6 +1384,69 @@ impl DescriptorMusigKey {
 
     /// Wildcard applied to the aggregate key expression.
     pub fn wildcard(&self) -> Wildcard { self.wildcard }
+
+    /// Returns whether this `musig()` derives participants before aggregation or derives the
+    /// aggregate through the BIP328 synthetic xpub.
+    pub fn derivation_kind(&self) -> MusigDerivationKind<'_> {
+        if Self::has_aggregate_derivation(&self.derivation_paths, self.wildcard) {
+            MusigDerivationKind::AggregateThenDerive {
+                derivation_paths: &self.derivation_paths,
+                wildcard: self.wildcard,
+            }
+        } else {
+            MusigDerivationKind::DeriveThenAggregate
+        }
+    }
+
+    /// Returns the BIP327 aggregate public key before aggregate-level BIP328 derivation.
+    ///
+    /// This requires all participants to be definite. If participant keys are ranged, first derive
+    /// the whole key with [`DescriptorPublicKey::at_derivation_index`], and call this on the
+    /// `musig()` key it returns.
+    pub fn aggregate_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<PublicKey, MusigKeyAggError> {
+        super::musig::aggregate_public_key(secp, self)
+    }
+
+    /// Returns the BIP328 synthetic xpub for aggregate-level derivation, if this `musig()` uses it.
+    pub fn synthetic_xpub(&self, aggregate: PublicKey) -> Option<bip32::Xpub> {
+        if Self::has_aggregate_derivation(&self.derivation_paths, self.wildcard) {
+            let network = self.xkey_network().unwrap_or(NetworkKind::Main);
+            Some(super::musig::synthetic_xpub(aggregate.inner, network))
+        } else {
+            None
+        }
+    }
+
+    /// Derives the final aggregate public key for a definite `musig()` key expression.
+    pub fn try_derive_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<PublicKey, MusigKeyAggError> {
+        // `aggregate_public_key` checks that the participants are definite, and `new` rejects
+        // hardened aggregate-level steps.
+        if self.wildcard != Wildcard::None {
+            return Err(NonDefiniteKeyError::Wildcard.into());
+        }
+        if self.derivation_paths.paths().len() > 1 {
+            return Err(NonDefiniteKeyError::Multipath.into());
+        }
+        super::musig::derive_public_key(secp, self)
+    }
+
+    /// Derives each participant key at `index`, as [`DescriptorPublicKey::at_derivation_index`]
+    /// does: ranged participants are derived at `index`, and the others are returned as-is.
+    pub fn derived_participants_at_index(
+        &self,
+        index: u32,
+    ) -> Result<Vec<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        self.participants
+            .iter()
+            .map(|participant| participant.clone().at_derivation_index(index))
+            .collect()
+    }
 
     /// Get the network of the participant xpubs, if all present xpubs agree.
     pub fn xkey_network(&self) -> Option<NetworkKind> {
@@ -1907,8 +1999,9 @@ impl DefiniteDescriptorKey {
     /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
     /// always return a compressed key
     ///
-    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
-    /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
+    /// Hardened derivation steps are rejected when constructing a `DefiniteDescriptorKey`. To
+    /// handle a `musig()` key aggregation error explicitly, use
+    /// [`DescriptorMusigKey::try_derive_public_key`].
     ///
     /// # Panics
     ///
@@ -2065,7 +2158,7 @@ mod test {
     use super::{
         DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, DescriptorMusigKey,
         DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, MalformedKeyDataKind,
-        MiniscriptKey, Wildcard,
+        MiniscriptKey, MusigDerivationKind, MusigKeyAggError, PublicKey, Wildcard,
     };
     use crate::descriptor::key::NonDefiniteKeyError;
     use crate::prelude::*;
@@ -2199,6 +2292,99 @@ mod test {
         let desc = format!("musig({0}/<0;1>/*,{0})", TPUB);
         let key = DescriptorPublicKey::from_str(&desc).unwrap();
         assert_eq!(key.at_derivation_index(7), Err(NonDefiniteKeyError::Multipath));
+    }
+
+    #[test]
+    fn musig_helper_apis() {
+        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
+
+        let desc = format!("musig({0}/*,{0})", TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        let musig = match &key {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("parsed musig key"),
+        };
+        assert_eq!(musig.derivation_kind(), MusigDerivationKind::DeriveThenAggregate);
+        assert!(musig
+            .synthetic_xpub(PublicKey::from_str(PUBKEY_1).unwrap())
+            .is_none());
+        assert!(matches!(
+            musig.try_derive_public_key(&secp),
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::Wildcard))
+        ));
+        assert_eq!(
+            musig
+                .derived_participants_at_index(7)
+                .unwrap()
+                .into_iter()
+                .map(|key| key.to_string())
+                .collect::<Vec<_>>(),
+            vec![format!("{}/7", TPUB), TPUB.to_owned()]
+        );
+        // Ranged participants are aggregated after deriving the whole key.
+        assert!(matches!(
+            musig.aggregate_public_key(&secp),
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::Wildcard))
+        ));
+        let definite = key.clone().at_derivation_index(7).unwrap();
+        let definite_musig = match definite.as_descriptor_public_key() {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("derived musig key"),
+        };
+        assert_eq!(
+            definite_musig.try_derive_public_key(&secp).unwrap(),
+            definite_musig.aggregate_public_key(&secp).unwrap()
+        );
+
+        let mut leaves = Vec::new();
+        key.for_each_leaf_key(|key| {
+            leaves.push(key.to_string());
+            true
+        });
+        assert_eq!(leaves, vec![format!("{}/{}", TPUB, "*"), TPUB.to_owned()]);
+
+        let desc = format!("musig({0},{0})/2", TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        let musig = match &key {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("parsed musig key"),
+        };
+        assert!(matches!(
+            musig.derivation_kind(),
+            MusigDerivationKind::AggregateThenDerive { wildcard: Wildcard::None, .. }
+        ));
+        let aggregate = musig.aggregate_public_key(&secp).unwrap();
+        assert_eq!(musig.synthetic_xpub(aggregate).unwrap().depth, 0);
+        assert_eq!(
+            musig.try_derive_public_key(&secp).unwrap(),
+            DefiniteDescriptorKey::new(key)
+                .unwrap()
+                .derive_public_key(&secp)
+        );
+
+        // Aggregate-level wildcards and multipath derivation are not definite either.
+        for (desc, err) in [
+            (format!("musig({0},{0})/0/*", TPUB), NonDefiniteKeyError::Wildcard),
+            (format!("musig({0},{0})/<0;1>", TPUB), NonDefiniteKeyError::Multipath),
+        ] {
+            let key = DescriptorPublicKey::from_str(&desc).unwrap();
+            let musig = match &key {
+                DescriptorPublicKey::Musig(ref musig) => musig,
+                _ => unreachable!("parsed musig key"),
+            };
+            assert_eq!(
+                musig.try_derive_public_key(&secp),
+                Err(MusigKeyAggError::NonDefiniteKey(err.clone()))
+            );
+            assert_eq!(DefiniteDescriptorKey::new(key), Err(err));
+        }
+
+        // A participant deeper than BIP32 allows is reported as an error, not a panic.
+        let musig = musig_with_too_deep_participant();
+        let too_deep =
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::MaximumDepthExceeded));
+        assert_eq!(musig.aggregate_public_key(&secp), too_deep);
+        assert_eq!(musig.try_derive_public_key(&secp), too_deep);
     }
 
     #[test]
