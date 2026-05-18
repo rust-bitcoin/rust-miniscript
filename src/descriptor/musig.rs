@@ -4,7 +4,7 @@ use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{constants, PublicKey, Scalar, Secp256k1, Verification};
 use bitcoin::{bip32, NetworkKind};
 
-use super::key::{DefiniteDescriptorKey, DescriptorMusigKey};
+use super::key::{DefiniteDescriptorKey, DescriptorMusigKey, MusigKeyAggError};
 use crate::prelude::*;
 
 const SYNTHETIC_XPUB_CHAIN_CODE: [u8; 32] = [
@@ -15,32 +15,41 @@ const SYNTHETIC_XPUB_CHAIN_CODE: [u8; 32] = [
 pub(super) fn derive_public_key<C: Verification>(
     secp: &Secp256k1<C>,
     musig: &DescriptorMusigKey,
-) -> bitcoin::PublicKey {
-    let aggregate = aggregate_public_key(
-        secp,
-        musig.participants().iter().map(|participant| {
-            DefiniteDescriptorKey::new(participant.clone())
-                .expect("musig participants are definite")
-                .derive_public_key(secp)
-                .inner
-        }),
-    );
+) -> Result<bitcoin::PublicKey, MusigKeyAggError> {
+    let aggregate = aggregate_public_key(secp, musig)?.inner;
 
     let derivation_path = &musig.derivation_paths().paths()[0];
     if derivation_path.is_empty() {
-        bitcoin::PublicKey::new(aggregate)
+        Ok(bitcoin::PublicKey::new(aggregate))
     } else {
         let network = musig.xkey_network().unwrap_or(NetworkKind::Main);
         let xpub = synthetic_xpub(aggregate, network);
-        bitcoin::PublicKey::new(
+        Ok(bitcoin::PublicKey::new(
             xpub.derive_pub(secp, derivation_path)
-                .expect("definite musig aggregate derivation path is unhardened")
+                .map_err(MusigKeyAggError::AggregateDerivation)?
                 .public_key,
-        )
+        ))
     }
 }
 
-fn aggregate_public_key<C, I>(secp: &Secp256k1<C>, keys: I) -> PublicKey
+pub(super) fn aggregate_public_key<C: Verification>(
+    secp: &Secp256k1<C>,
+    musig: &DescriptorMusigKey,
+) -> Result<bitcoin::PublicKey, MusigKeyAggError> {
+    let keys = musig
+        .participants()
+        .iter()
+        .map(|participant| {
+            Ok(DefiniteDescriptorKey::new(participant.clone())?
+                .derive_public_key(secp)
+                .inner)
+        })
+        .collect::<Result<Vec<_>, MusigKeyAggError>>()?;
+
+    aggregate_keys(secp, keys).map(bitcoin::PublicKey::new)
+}
+
+fn aggregate_keys<C, I>(secp: &Secp256k1<C>, keys: I) -> Result<PublicKey, MusigKeyAggError>
 where
     C: Verification,
     I: IntoIterator<Item = PublicKey>,
@@ -50,7 +59,7 @@ where
     key_agg_public_key(secp, keys)
 }
 
-fn key_agg_public_key<C, I>(secp: &Secp256k1<C>, keys: I) -> PublicKey
+fn key_agg_public_key<C, I>(secp: &Secp256k1<C>, keys: I) -> Result<PublicKey, MusigKeyAggError>
 where
     C: Verification,
     I: IntoIterator<Item = PublicKey>,
@@ -80,14 +89,10 @@ where
     let refs = weighted_keys.iter().collect::<Vec<_>>();
     let aggregate = PublicKey::combine_keys(&refs);
     debug_assert!(aggregate.is_ok(), "BIP327 KeyAgg output is not infinity");
-    // BIP327 specifies infinity as a KeyAgg failure. Descriptor public key derivation is
-    // currently infallible, matching the surrounding BIP32 derivation APIs after
-    // DefiniteDescriptorKey has ruled out malformed paths, so we treat this cryptographic edge as
-    // unreachable here.
-    aggregate.expect("BIP327 KeyAgg output is not infinity")
+    aggregate.map_err(|_| MusigKeyAggError::Infinity)
 }
 
-fn synthetic_xpub(public_key: PublicKey, network: NetworkKind) -> bip32::Xpub {
+pub(super) fn synthetic_xpub(public_key: PublicKey, network: NetworkKind) -> bip32::Xpub {
     bip32::Xpub {
         network,
         depth: 0,
@@ -197,7 +202,7 @@ mod tests {
                 .iter()
                 .map(|key| PublicKey::from_str(key).unwrap())
                 .collect::<Vec<_>>();
-            let aggregate = key_agg_public_key(&secp, keys);
+            let aggregate = key_agg_public_key(&secp, keys).unwrap();
             assert_eq!(aggregate.to_string(), expected_aggregate);
             let synthetic = synthetic_xpub(aggregate, NetworkKind::Main);
             assert_eq!(synthetic, bip32::Xpub::from_str(xpub).unwrap());

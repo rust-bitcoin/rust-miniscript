@@ -57,8 +57,8 @@ mod wallet_policy;
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
     DescriptorMusigKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
-    MalformedKeyDataKind, NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard,
-    XKeyNetwork,
+    MalformedKeyDataKind, MusigDerivationKind, MusigKeyAggError, NonDefiniteKeyError, SinglePriv,
+    SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
 pub use self::wallet_policy::{WalletPolicy, WalletPolicyError};
