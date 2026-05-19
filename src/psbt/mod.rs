@@ -1453,7 +1453,7 @@ mod tests {
         .unwrap();
         let first_leaf_hash = {
             let ms =
-                Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", &key_0_1)).unwrap();
+                Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", key_0_1)).unwrap();
             let first_script = ms.encode();
             assert!(psbt_input
                 .tap_scripts
