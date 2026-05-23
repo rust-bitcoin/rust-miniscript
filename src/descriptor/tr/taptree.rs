@@ -289,7 +289,10 @@ impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
     }
 
     #[inline]
-    pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
+    pub(super) fn finalize(self) -> TapTree<Pk> {
+        assert!(!self.depths_leaves.is_empty(), "TapTreeBuilder must not finalize an empty tree");
+        TapTree { depths_leaves: self.depths_leaves }
+    }
 }
 
 #[cfg(test)]
