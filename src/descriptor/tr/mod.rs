@@ -519,20 +519,30 @@ mod tests {
 
     use super::*;
 
+    fn strip_ws(desc: &str) -> String { desc.replace(&[' ', '\n'][..], "") }
+
     fn descriptor() -> String {
         let desc = "tr(acc0, {
-            multi_a(3, acc10, acc11, acc12), {
+            {
+              multi_a(3, acc10, acc11, acc12),
               and_v(
                 v:multi_a(2, acc10, acc11, acc12),
                 after(10)
-              ),
-              and_v(
-                v:multi_a(1, acc10, acc11, ac12),
-                after(100)
               )
-            }
+            },
+            and_v(
+              v:multi_a(1, acc10, acc11, ac12),
+              after(100)
+            )
          })";
-        desc.replace(&[' ', '\n'][..], "")
+        strip_ws(desc)
+    }
+
+    fn assert_display_roundtrip(desc: &str) {
+        let desc = strip_ws(desc);
+        let tr = Tr::<String>::from_str(&desc).unwrap();
+        assert_eq!(format!("{:#}", tr), desc);
+        Tr::<String>::from_str(&tr.to_string()).unwrap();
     }
 
     #[test]
@@ -541,6 +551,13 @@ mod tests {
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
         assert!(!tr.for_each_key(|k| k.starts_with("acc")));
+    }
+
+    #[test]
+    fn display_roundtrips_unbalanced_taptree() {
+        assert_display_roundtrip(&descriptor());
+        assert_display_roundtrip("tr(acc0,{pk(acc1),{pk(acc2),pk(acc3)}})");
+        assert_display_roundtrip("tr(acc0,{{pk(acc1),pk(acc2)},{pk(acc3),pk(acc4)}})");
     }
 
     #[test]

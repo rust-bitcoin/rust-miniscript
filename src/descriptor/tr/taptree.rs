@@ -291,3 +291,28 @@ impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
     #[inline]
     pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
 }
+
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use super::*;
+
+    fn leaf(ms: &str) -> TapTree<String> {
+        TapTree::leaf(Arc::new(Miniscript::<String, Tap>::from_str(ms).unwrap()))
+    }
+
+    #[test]
+    fn display_single_leaf_taptree() {
+        let tree = leaf("pk(A)");
+
+        assert_eq!(format!("{}", tree), "pk(A)");
+    }
+
+    #[test]
+    fn debug_binary_taptree() {
+        let tree = TapTree::combine(leaf("pk(A)"), leaf("pk(B)")).unwrap();
+
+        assert_eq!(format!("{:?}", tree), "{[B/onduesm]pk(\"A\"),[B/onduesm]pk(\"B\")}");
+    }
+}
