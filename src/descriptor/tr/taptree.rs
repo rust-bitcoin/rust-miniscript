@@ -89,27 +89,34 @@ fn fmt_helper<Pk: MiniscriptKey>(
     f: &mut fmt::Formatter,
     mut fmt_ms: impl FnMut(&mut fmt::Formatter, &Miniscript<Pk, Tap>) -> fmt::Result,
 ) -> fmt::Result {
-    let mut last_depth = 0;
+    let mut child_counts = Vec::<u8>::with_capacity(TAPROOT_CONTROL_MAX_NODE_COUNT);
+
     for item in view.leaves() {
-        if last_depth > 0 {
+        let depth = usize::from(item.depth());
+
+        if !child_counts.is_empty() {
             f.write_str(",")?;
         }
 
-        while last_depth < item.depth() {
+        while child_counts.len() < depth {
             f.write_str("{")?;
-            last_depth += 1;
+            child_counts.push(0);
         }
+
         fmt_ms(f, item.miniscript())?;
-        while last_depth > item.depth() {
+
+        if let Some(child_count) = child_counts.last_mut() {
+            *child_count += 1;
+        }
+        while let Some(2) = child_counts.last() {
             f.write_str("}")?;
-            last_depth -= 1;
+            child_counts.pop();
+            if let Some(child_count) = child_counts.last_mut() {
+                *child_count += 1;
+            }
         }
     }
 
-    while last_depth > 0 {
-        f.write_str("}")?;
-        last_depth -= 1;
-    }
     Ok(())
 }
 
