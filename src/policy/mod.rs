@@ -80,10 +80,10 @@ impl fmt::Display for LiftError {
 #[cfg(feature = "std")]
 impl error::Error for LiftError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::LiftError::*;
-
         match self {
-            HeightTimelockCombination | BranchExceedResourceLimits | RawDescriptorLift => None,
+            Self::HeightTimelockCombination
+            | Self::BranchExceedResourceLimits
+            | Self::RawDescriptorLift => None,
         }
     }
 }

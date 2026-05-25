@@ -168,13 +168,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     // Helper function to compute the number of constraints in policy.
     fn n_terminals(&self) -> usize {
-        use Policy::*;
-
         let mut n_terminals = vec![];
         for data in self.rtl_post_order_iter() {
             let num = match data.node {
-                Thresh(thresh) => (0..thresh.n()).map(|_| n_terminals.pop().unwrap()).sum(),
-                Trivial | Unsatisfiable => 0,
+                Self::Thresh(thresh) => (0..thresh.n()).map(|_| n_terminals.pop().unwrap()).sum(),
+                Self::Trivial | Self::Unsatisfiable => 0,
                 _leaf => 1,
             };
             n_terminals.push(num);
@@ -512,19 +510,19 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Filters a policy by eliminating relative timelock constraints
     /// that are not satisfied at the given `age`.
     pub fn at_age(self, age: relative::LockTime) -> Self {
-        use Policy::*;
-
         let mut at_age = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
             let new_policy = match data.node.as_ref() {
-                Older(ref t) => {
+                Self::Older(ref t) => {
                     if relative::LockTime::from(*t).is_implied_by(age) {
-                        Some(Older(*t))
+                        Some(Self::Older(*t))
                     } else {
-                        Some(Unsatisfiable)
+                        Some(Self::Unsatisfiable)
                     }
                 }
-                Thresh(ref thresh) => Some(Thresh(thresh.map_ref(|_| at_age.pop().unwrap()))),
+                Self::Thresh(ref thresh) => {
+                    Some(Self::Thresh(thresh.map_ref(|_| at_age.pop().unwrap())))
+                }
                 _ => None,
             };
             match new_policy {
@@ -542,19 +540,19 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Filters a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
     pub fn at_lock_time(self, n: absolute::LockTime) -> Self {
-        use Policy::*;
-
         let mut at_age = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
             let new_policy = match data.node.as_ref() {
-                After(t) => {
+                Self::After(t) => {
                     if absolute::LockTime::from(*t).is_implied_by(n) {
-                        Some(After(*t))
+                        Some(Self::After(*t))
                     } else {
-                        Some(Unsatisfiable)
+                        Some(Self::Unsatisfiable)
                     }
                 }
-                Thresh(ref thresh) => Some(Thresh(thresh.map_ref(|_| at_age.pop().unwrap()))),
+                Self::Thresh(ref thresh) => {
+                    Some(Self::Thresh(thresh.map_ref(|_| at_age.pop().unwrap())))
+                }
                 _ => None,
             };
             match new_policy {
@@ -584,16 +582,19 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// Returns `None` if the policy is not satisfiable.
     pub fn minimum_n_keys(&self) -> Option<usize> {
-        use Policy::*;
-
         let mut minimum_n_keys = vec![];
         for data in self.rtl_post_order_iter() {
             let minimum_n_key = match data.node {
-                Unsatisfiable => None,
-                Trivial | After(..) | Older(..) | Sha256(..) | Hash256(..) | Ripemd160(..)
-                | Hash160(..) => Some(0),
-                Key(..) => Some(1),
-                Thresh(ref thresh) => {
+                Self::Unsatisfiable => None,
+                Self::Trivial
+                | Self::After(..)
+                | Self::Older(..)
+                | Self::Sha256(..)
+                | Self::Hash256(..)
+                | Self::Ripemd160(..)
+                | Self::Hash160(..) => Some(0),
+                Self::Key(..) => Some(1),
+                Self::Thresh(ref thresh) => {
                     let mut sublens = (0..thresh.n())
                         .filter_map(|_| minimum_n_keys.pop().unwrap())
                         .collect::<Vec<usize>>();
@@ -620,15 +621,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
     pub fn sorted(self) -> Self {
-        use Policy::*;
-
         let mut sorted = vec![];
         for data in Arc::new(self).rtl_post_order_iter() {
             let new_policy = match data.node.as_ref() {
-                Thresh(ref thresh) => {
+                Self::Thresh(ref thresh) => {
                     let mut new_thresh = thresh.map_ref(|_| sorted.pop().unwrap());
                     new_thresh.data_mut().sort();
-                    Some(Thresh(new_thresh))
+                    Some(Self::Thresh(new_thresh))
                 }
                 _ => None,
             };
