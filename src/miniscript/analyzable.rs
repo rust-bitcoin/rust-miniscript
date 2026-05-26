@@ -43,8 +43,8 @@ pub struct ExtParams {
 
 impl ExtParams {
     /// Create a new ExtParams that with all the sanity rules
-    pub fn new() -> ExtParams {
-        ExtParams {
+    pub fn new() -> Self {
+        Self {
             top_unsafe: false,
             resource_limitations: false,
             timelock_mixing: false,
@@ -55,13 +55,13 @@ impl ExtParams {
     }
 
     /// Create a new ExtParams that allows all the sanity rules
-    pub fn sane() -> ExtParams { ExtParams::new() }
+    pub fn sane() -> Self { Self::new() }
 
     /// Create a new ExtParams that insanity rules
     /// This enables parsing well specified but "insane" miniscripts.
     /// Refer to the [`ExtParams`] documentation for more details on "insane" miniscripts.
-    pub fn insane() -> ExtParams {
-        ExtParams {
+    pub fn insane() -> Self {
+        Self {
             top_unsafe: true,
             resource_limitations: true,
             timelock_mixing: true,
@@ -72,8 +72,8 @@ impl ExtParams {
     }
 
     /// Enable all non-sane rules and experimental rules
-    pub fn allow_all() -> ExtParams {
-        ExtParams {
+    pub fn allow_all() -> Self {
+        Self {
             top_unsafe: true,
             resource_limitations: true,
             timelock_mixing: true,
@@ -84,37 +84,37 @@ impl ExtParams {
     }
 
     /// Builder that allows non-safe miniscripts.
-    pub fn top_unsafe(mut self) -> ExtParams {
+    pub fn top_unsafe(mut self) -> Self {
         self.top_unsafe = true;
         self
     }
 
     /// Builder that allows miniscripts with exceed resource limitations.
-    pub fn exceed_resource_limitations(mut self) -> ExtParams {
+    pub fn exceed_resource_limitations(mut self) -> Self {
         self.resource_limitations = true;
         self
     }
 
     /// Builder that allows miniscripts with timelock mixing.
-    pub fn timelock_mixing(mut self) -> ExtParams {
+    pub fn timelock_mixing(mut self) -> Self {
         self.timelock_mixing = true;
         self
     }
 
     /// Builder that allows malleable miniscripts.
-    pub fn malleability(mut self) -> ExtParams {
+    pub fn malleability(mut self) -> Self {
         self.malleability = true;
         self
     }
 
     /// Builder that allows miniscripts with repeated public keys.
-    pub fn repeated_pk(mut self) -> ExtParams {
+    pub fn repeated_pk(mut self) -> Self {
         self.repeated_pk = true;
         self
     }
 
     /// Builder that allows miniscripts with raw pkh fragments.
-    pub fn raw_pkh(mut self) -> ExtParams {
+    pub fn raw_pkh(mut self) -> Self {
         self.raw_pkh = true;
         self
     }
@@ -148,20 +148,20 @@ pub enum AnalysisError {
 impl fmt::Display for AnalysisError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AnalysisError::SiglessBranch => {
+            Self::SiglessBranch => {
                 f.write_str("All spend paths must require a signature")
             }
-            AnalysisError::RepeatedPubkeys => {
+            Self::RepeatedPubkeys => {
                 f.write_str("Miniscript contains repeated pubkeys or pubkeyhashes")
             }
-            AnalysisError::BranchExceedResouceLimits => {
+            Self::BranchExceedResouceLimits => {
                 f.write_str("At least one spend path exceeds the resource limits(stack depth/satisfaction size..)")
             }
-            AnalysisError::HeightTimelockCombination => {
+            Self::HeightTimelockCombination => {
                 f.write_str("Contains a combination of heightlock and timelock")
             }
-            AnalysisError::Malleable => f.write_str("Miniscript is malleable"),
-            AnalysisError::ContainsRawPkh => f.write_str("Miniscript contains raw pkh"),
+            Self::Malleable => f.write_str("Miniscript is malleable"),
+            Self::ContainsRawPkh => f.write_str("Miniscript contains raw pkh"),
         }
     }
 }
