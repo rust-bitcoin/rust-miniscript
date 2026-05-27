@@ -89,6 +89,31 @@ The full changelog:
   [#725](https://github.com/rust-bitcoin/rust-miniscript/pull/725)
 - **Update MSRV to Rust 1.63** [#719](https://github.com/rust-bitcoin/rust-miniscript/pull/719)
 
+# 12.3.7 - May 27, 2026
+
+- Preserve previously finalized PSBT inputs during finalization [#966](https://github.com/rust-bitcoin/rust-miniscript/pull/966)
+
+# 12.3.6 - April 21, 2026
+
+- Add `KeyMapWrapper` and `GetKey` implementations for PSBT signing [#860](https://github.com/rust-bitcoin/rust-miniscript/pull/860)
+- Append witness script for P2WSH in `Plan::satisfy()` [#909](https://github.com/rust-bitcoin/rust-miniscript/pull/909)
+
+# 12.3.5 - July 21, 2025
+
+- Add conversions from `PublicKey` and `XOnlyPublicKey` to descriptor key types [#819](https://github.com/rust-bitcoin/rust-miniscript/pull/819)
+
+# 12.3.4 - July 5, 2025
+
+- Reject hardened derivation steps in `DefiniteDescriptorKey` [#840](https://github.com/rust-bitcoin/rust-miniscript/pull/840)
+
+# 12.3.3 - July 3, 2025
+
+- Reject multipath keys in `DefiniteDescriptorKey` [#831](https://github.com/rust-bitcoin/rust-miniscript/pull/831)
+
+# 12.3.2 - April 29, 2025
+
+- Fix crash in `Descriptor::parse_desc` [#810](https://github.com/rust-bitcoin/rust-miniscript/pull/810)
+
 # 12.3.1 - April 1, 2025
 
 - Silent fix for CVE-2025-43707 (crash on satisfaction of particularly crafted `thresh` fragments) [#798](https://github.com/rust-bitcoin/rust-miniscript/pull/798)
