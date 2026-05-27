@@ -2152,6 +2152,26 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
     }
 
+    // https://github.com/bitcoinfuzz/bitcoinfuzz/issues/70
+    // https://github.com/rust-bitcoin/rust-miniscript/issues/785
+    #[test]
+    fn parse_descriptor_preserves_xprv_in_keymap() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+
+        for desc in [
+            "pk(xprv9s21ZrQH143K31xYSDQpPDxsXRTUcvj2iNHm5NUtrGiGG5e2DtALGdso3pGz6ssrdK4PFmM8NSpSBHNqPqm55Qn3LqFtT2emdEXVYsCzC2U/*)#dl4n4vmp",
+            // xprv containing "pub"
+            "pk(xprv9s21ZrQH143K3MByafknWupz9D5c3Wz3MrAZpC5KFxUuwwbefg6BVSWFwyUbEcqxGTpubCGtQyC3m3vm8rZkmN1TNoc7n6VdZBt5NeXdxwV/*)#nyw8pgdu",
+        ] {
+            assert_eq!(desc.parse::<Descriptor<DescriptorPublicKey>>().unwrap_err().to_string(), DescriptorKeyParseError::UnexpectedXPrivateKey.to_string());
+
+            let (descriptor, key_map) =
+                Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, desc).unwrap();
+            assert_eq!(key_map.len(), 1);
+            assert_eq!(descriptor.to_string_with_secret(&key_map), desc);
+        }
+    }
+
     #[test]
     fn checksum_for_nested_sh() {
         let descriptor_str = "sh(wpkh(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL))";
