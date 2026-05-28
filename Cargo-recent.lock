@@ -112,7 +112,7 @@ version = "0.0.1"
 dependencies = [
  "honggfuzz",
  "miniscript 12.3.0",
- "miniscript 13.0.0",
+ "miniscript 13.0.1",
  "regex",
 ]
 
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "miniscript"
-version = "13.0.0"
+version = "13.0.1"
 dependencies = [
  "bech32",
  "bitcoin",
