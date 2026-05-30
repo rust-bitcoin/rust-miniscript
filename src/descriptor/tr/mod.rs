@@ -356,7 +356,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
         let internal_key: Pk = root_children
             .next()
             .unwrap() // `verify_toplevel` above checked that first child existed
-            .verify_terminal("internal key")
+            .verify_key_expression("internal key")
             .map_err(Error::Parse)?;
 
         let tap_tree = match root_children.next() {

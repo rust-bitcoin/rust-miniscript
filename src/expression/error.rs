@@ -83,6 +83,15 @@ pub enum ParseTreeError {
         /// The position of the second separator.
         pos: usize,
     },
+    /// A descriptor key expression suffix appeared where only a script expression is allowed.
+    UnexpectedKeyExpressionSuffix {
+        /// The expression name.
+        name: String,
+        /// The suffix following the expression.
+        suffix: String,
+        /// The position of the suffix.
+        pos: usize,
+    },
     /// Data occurred after the final ).
     TrailingCharacter {
         /// The first trailing character.
@@ -163,6 +172,13 @@ impl fmt::Display for ParseTreeError {
                     separator, pos
                 )
             }
+            ParseTreeError::UnexpectedKeyExpressionSuffix { name, suffix, pos } => {
+                write!(
+                    f,
+                    "unexpected key expression suffix '{}' after '{}' (position {})",
+                    suffix, name, pos
+                )
+            }
             ParseTreeError::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
@@ -184,6 +200,7 @@ impl std::error::Error for ParseTreeError {
             | ParseTreeError::IncorrectName { .. }
             | ParseTreeError::IncorrectNumberOfChildren { .. }
             | ParseTreeError::MultipleSeparators { .. }
+            | ParseTreeError::UnexpectedKeyExpressionSuffix { .. }
             | ParseTreeError::TrailingCharacter { .. }
             | ParseTreeError::UnknownName { .. } => None,
         }
@@ -242,6 +259,15 @@ pub enum ParseThresholdError {
     IllegalOr,
     /// A n-of-n threshold was used in a context it was not allowed.
     IllegalAnd,
+    /// A descriptor key expression suffix appeared where only a script expression is allowed.
+    UnexpectedKeyExpressionSuffix {
+        /// The expression name.
+        name: String,
+        /// The suffix following the expression.
+        suffix: String,
+        /// The position of the suffix.
+        pos: usize,
+    },
     /// Failed to parse the threshold value.
     ParseK(ParseNumError),
     /// Threshold parameters were invalid.
@@ -261,6 +287,11 @@ impl fmt::Display for ParseThresholdError {
             IllegalAnd => f.write_str(
                 "n-of-n thresholds not allowed here; please use an 'and' fragment instead",
             ),
+            UnexpectedKeyExpressionSuffix { ref name, ref suffix, pos } => write!(
+                f,
+                "unexpected key expression suffix '{}' after '{}' (position {})",
+                suffix, name, pos
+            ),
             ParseK(ref x) => write!(f, "failed to parse threshold value: {}", x),
             Threshold(ref e) => e.fmt(f),
         }
@@ -273,7 +304,11 @@ impl std::error::Error for ParseThresholdError {
         use ParseThresholdError::*;
 
         match *self {
-            NoChildren | KNotTerminal | IllegalOr | IllegalAnd => None,
+            NoChildren
+            | KNotTerminal
+            | IllegalOr
+            | IllegalAnd
+            | UnexpectedKeyExpressionSuffix { .. } => None,
             ParseK(ref e) => Some(e),
             Threshold(ref e) => Some(e),
         }
