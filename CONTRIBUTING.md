@@ -1,0 +1,278 @@
+# Contributing to rust-miniscript
+
+:+1::tada: First off, thanks for taking the time to contribute! :tada::+1:
+
+The following is a set of guidelines for contributing to the rust-miniscript
+project. They are substantially based on the contributing guidelines for the
+[rust-bitcoin project](https://github.com/rust-bitcoin/rust-bitcoin/blob/master/CONTRIBUTING.md).
+These are guidelines, not rules. Use your best judgment.
+
+#### Table Of Contents
+
+- [General](#general)
+- [Communication channels](#communication-channels)
+- [Asking questions](#asking-questions)
+- [Getting Started](#getting-started)
+  * [Installing Rust](#installing-rust)
+  * [Building](#building)
+- [Development Tools](#development-tools)
+  * [Building the docs](#building-the-docs)
+- [Contribution workflow](#contribution-workflow)
+  * [Preparing PRs](#preparing-prs)
+  * [Peer review](#peer-review)
+  * [CI and Merging](#ci-and-merging)
+  * [Repository maintainers](#repository-maintainers)
+  * [Unsafe code](#unsafe-code)
+- [Security](#security)
+- [Testing](#testing)
+  * [Unit/Integration tests](#unitintegration-tests)
+  * [Benchmarks](#benchmarks)
+- [Going further](#going-further)
+
+
+## General
+
+The Rust Bitcoin project operates an open contributor model where anyone is
+welcome to contribute towards development in the form of peer review,
+documentation, testing and patches.
+
+Anyone is invited to contribute without regard to technical experience,
+"expertise", OSS experience, age, or other concern. However, the development of
+standards & reference implementations demands a high-level of rigor, adversarial
+thinking, thorough testing and risk-minimization. Any bug may cost users real
+money. That being said, we deeply welcome people contributing for the first time
+to an open source project or pick up Rust while contributing. Don't be shy,
+you'll learn.
+
+## Communication channels
+
+Communication about rust-miniscript happens primarily in
+[#bitcoin-rust](https://web.libera.chat/?channel=#bitcoin-rust) IRC chat on
+[Libera](https://libera.chat/) with the logs available at
+<https://gnusha.org/bitcoin-rust/> (starting from Jun 2021 and now on) and
+<https://gnusha.org/rust-bitcoin/> (historical archive before Jun 2021).
+
+Discussion about code base improvements happens in GitHub issues and on pull
+requests.
+
+
+## Asking questions
+
+> **Note:** Please don't file an issue to ask a question. You'll get faster
+> results by using the resources below.
+
+We have a dedicated developer channel on IRC, #bitcoin-rust@libera.chat where
+you may get helpful advice if you have questions.
+
+
+## Getting Started
+
+### Installing Rust
+
+Rust can be installed using your package manager of choice or [rustup.rs](https://rustup.rs). The
+former way is considered more secure since it typically doesn't involve trust in the CA system. But
+you should be aware that the version of Rust shipped by your distribution might be out of date.
+Generally this isn't a problem for `rust-miniscript` since we support much older versions than the
+current stable one (see MSRV section in [README.md](./README.md)).
+
+### Building
+
+The library can be built and tested using [`cargo`](https://github.com/rust-lang/cargo/):
+
+```
+git clone git@github.com:rust-bitcoin/rust-miniscript.git
+cd rust-miniscript
+cargo build
+```
+
+You can run tests with:
+
+```
+cargo test
+```
+
+Please refer to the [`cargo` documentation](https://doc.rust-lang.org/stable/cargo/) for more
+detailed instructions.
+
+
+## Development Tools
+
+### Building the docs
+
+We build docs with the nightly toolchain, you may wish to use the following shell alias to check
+your documentation changes build correctly.
+
+```
+alias build-docs='RUSTDOCFLAGS="--cfg docsrs" cargo +nightly rustdoc --features="$FEATURES" -- -D rustdoc::broken-intra-doc-links'
+```
+
+
+## Contribution workflow
+
+The codebase is maintained using the "contributor workflow" where everyone
+without exception contributes patch proposals using "pull requests". This
+facilitates social contribution, easy testing and peer review.
+
+To contribute a patch, the workflow is as follows:
+
+1. Fork Repository
+2. Create topic branch
+3. Commit patches
+
+Please keep commits atomic and diffs easy to read. For this reason
+do not mix any formatting fixes or code moves with actual code changes.
+Further, each commit, individually, should compile and pass tests, in order to
+ensure git bisect and other automated tools function properly.
+
+Please cover every new feature with unit tests.
+
+When refactoring, structure your PR to make it easy to review and don't hesitate
+to split it into multiple small, focused PRs.
+
+Commits should cover both the issue fixed and the solution's rationale.
+Please keep these [guidelines](https://chris.beams.io/posts/git-commit/) in mind.
+
+
+## Preparing PRs
+
+The main library development happens in the `master` branch. This branch must
+always compile without errors (using GitHub CI). All external contributions are
+made within PRs into this branch.
+
+Prerequisites that a PR must satisfy for merging into the `master` branch:
+* each commit within a PR must compile and pass unit tests with no errors, with
+  every feature combination (including compiling the fuzztests) on some
+  reasonably recent compiler (this is partially automated with CI, so the rule
+  is that we will not accept commits which do not pass GitHub CI);
+* the tip of any PR branch must also compile and pass tests with no errors on
+  MSRV (check [README.md] on current MSRV requirements) and pass fuzz tests on
+  nightly rust;
+* contain all necessary tests for the introduced functionality (either as a part of
+  commits, or, more preferably, as separate commits, so that it's easy to
+  reorder them during review and check that the new tests fail without the new
+  code);
+* contain all inline docs for newly introduced API and pass doc tests including
+  running `just lint` without any errors or warnings;
+* be based on the recent `master` tip from the original repository at
+  <https://github.com/rust-bitcoin/rust-miniscript>.
+
+NB: reviewers may run more complex test/CI scripts, thus, satisfying all the
+requirements above is just a preliminary, but not necessary sufficient step for
+getting the PR accepted as a valid candidate PR for the `master` branch.
+
+High quality commits help us review and merge you contributions. We attempt to
+adhere to the ideas presented in the following two blog posts:
+
+- [How to Write a Git Commit Message](https://cbea.ms/git-commit/)
+- [Write Better Commits, Build Better Projects](https://github.blog/2022-06-30-write-better-commits-build-better-projects/)
+
+### Deprecation and Versioning
+
+Whenever any part of your code wants to mention the version number the code will
+be released in, primarily in deprecation notices, you should use the string
+`TBD` (verbatim), so that the release preparation script can detect the
+change and the correct version number can be filled in preparation of the
+release.
+
+```rust
+    #[deprecated(since = "TBD", note = "use `alternative_method()` instead")]
+```
+
+### Peer review
+
+Anyone may participate in peer review which is expressed by comments in the pull
+request. Typically, reviewers will review the code for obvious errors, as well as
+test out the patch set and opine on the technical merits of the patch. Please,
+first review PR on the conceptual level before focusing on code style or
+grammar fixes.
+
+### CI and Merging
+
+We use GitHub for CI as well to test the final state of each PR.
+
+Also we use a local CI box which runs a large matrix of feature combinations as
+well as testing each patch in a PR. This box is often very backlogged, sometimes
+by multiple days. Please be patient, we will get to merging your PRs when the
+backlog clears.
+
+### Repository maintainers
+
+Like all open source projects our maintainers are busy. Please take it easy on
+them and only bump if you get no response for a week or two.
+
+Pull request merge requirements:
+- all CI test should pass,
+- at least one "accepts"/ACKs from the repository maintainers
+- no reasonable "rejects"/NACKs from anybody who reviewed the code.
+
+Current list of the project maintainers:
+
+- [Andrew Poelstra](https://github.com/apoelstra)
+- [Sanket Kanjalkar](https://github.com/sanket1729)
+
+### Unsafe code
+
+Use of `unsafe` code is prohibited unless there is a unanimous decision among
+library maintainers on the exclusion from this rule. In such cases there is a
+requirement to test unsafe code with sanitizers including Miri.
+
+## Security
+
+Security is the primary focus for this library; disclosure of security
+vulnerabilities helps prevent user loss of funds. If you believe a vulnerability
+may affect other implementations, please disclose this information according to
+the [security guidelines](./SECURITY.md), work on which is currently in progress.
+Before it is completed, feel free to send disclosure to Andrew Poelstra,
+apoelstra@wpsoftware.net, encrypted with his public key from
+<https://www.wpsoftware.net/andrew/andrew.gpg>.
+
+
+## Testing
+
+Related to the security aspect, rust bitcoin developers take testing very
+seriously. Due to the modular nature of the project, writing new test cases is
+easy and good test coverage of the codebase is an important goal. Refactoring
+the project to enable fine-grained unit testing is also an ongoing effort.
+
+Unit and integration tests are available for those interested, along with benchmarks. For project
+developers, especially new contributors looking for something to work on, we do:
+
+- Fuzz testing with [`libfuzzer`](https://github.com/rust-fuzz/libfuzzer)
+- Mutation testing with [`cargo-mutants`](https://github.com/sourcefrog/cargo-mutants)
+- Code verification with [`Kani`](https://github.com/model-checking/kani)
+
+There are always more tests to write and more bugs to find. PRs are extremely welcomed.
+Please consider testing code as a first-class citizen. We definitely do take PRs
+improving and cleaning up test code.
+
+### Unit/Integration tests
+
+Run as for any other Rust project `cargo test --all-features`.
+
+### Benchmarks
+
+We use a custom Rust compiler configuration conditional to guard the benchmark code. To run the
+benchmarks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench`.
+
+
+## LLMs, GitHub bot accounts, and AI agents
+
+This project does not accept contributions from bot GitHub accounts. All
+PRs that appear to come from such an account will be closed.
+
+Patches created by LLMs and AI agents are also viewed with suspicion unless a
+human has reviewed them. All LLM generated patches MUST have text in the git log
+and in the PR description that indicates the patch was created using an LLM.
+First time contributions by way of LLM generated patches are not welcome. Thanks
+for your time, please be respectful of ours.
+
+
+## Going further
+
+You may be interested in the guide by Jon Atack on
+[How to review Bitcoin Core PRs](https://github.com/jonatack/bitcoin-development/blob/master/how-to-review-bitcoin-core-prs.md)
+and [How to make Bitcoin Core PRs](https://github.com/jonatack/bitcoin-development/blob/master/how-to-make-bitcoin-core-prs.md).
+While there are differences between the projects in terms of context and
+maturity, many of the suggestions offered apply to this project.
+
+Overall, have fun :)
