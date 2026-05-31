@@ -18,7 +18,6 @@ use bitcoin::hashes::hash160;
 use bitcoin::script;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
-use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
 use crate::prelude::*;
@@ -39,12 +38,13 @@ use core::cmp;
 
 use sync::Arc;
 
+pub use self::context::ScriptContext;
 use self::lex::{lex, TokenIter};
 use crate::expression::{FromTree, TreeIterItem};
-pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::{
     expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, Translator,
+    ValidationParams,
 };
 #[cfg(test)]
 mod ms_tests;
@@ -54,10 +54,13 @@ mod private {
 
     use super::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
     use super::types::{self, ExtData, Type};
+    use super::ScriptContext;
     use crate::iter::TreeLike as _;
-    pub use crate::miniscript::context::ScriptContext;
     use crate::prelude::sync::Arc;
-    use crate::{AbsLockTime, Error, MiniscriptKey, RelLockTime, Terminal, MAX_RECURSION_DEPTH};
+    use crate::{
+        AbsLockTime, Error, MiniscriptKey, RelLockTime, Terminal, ValidationError,
+        ValidationParams, MAX_RECURSION_DEPTH,
+    };
 
     /// The top-level miniscript abstract syntax tree (AST).
     pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
@@ -326,6 +329,7 @@ mod private {
                 node: t,
                 phantom: PhantomData,
             };
+
             // TODO: This recursion depth is based on segwitv0.
             // We can relax this in tapscript, but this should be good for almost
             // all practical cases and we can revisit this if needed.
@@ -348,6 +352,170 @@ mod private {
             ext: types::extra_props::ExtData,
         ) -> Miniscript<Pk, Ctx> {
             Miniscript { node, ty, ext, phantom: PhantomData }
+        }
+
+        /// Validates whether a given fragment meets the given set of
+        /// validation parameters.
+        pub fn validate(&self, params: &ValidationParams) -> Result<(), ValidationError>
+        where
+            Pk: MiniscriptKey,
+            Ctx: ScriptContext,
+        {
+            self.validate_non_top_level(params)?;
+
+            // Malleability is only a top-level check since you can fix malleability
+            // in some cases by adding wrappers.
+            if !params.allow_malleability && !self.is_non_malleable() {
+                return Err(ValidationError::Malleable);
+            }
+
+            // The B check is inherently top-level.
+            if !params.allow_non_b && self.ty.corr.base != types::Base::B {
+                return Err(ValidationError::NonBase(self.ty.corr.base));
+            }
+
+            // Sigless branches can be fixed by adding a conjunction with a signature.
+            if !params.allow_sigless_branch && !self.requires_sig() {
+                return Err(ValidationError::SiglessBranch);
+            }
+
+            // Unsatisifiable scripts can be fixed by adding a disjunction with something
+            // satisfiable.
+            if !params.allow_unsatisfiable && self.ext.sat_data.is_none() {
+                return Err(ValidationError::Unsatisfiable);
+            }
+
+            // All checks passed.
+            Ok(())
+        }
+
+        /// Validates a miniscript, doing only the checks that are applicable to all nodes,
+        /// not just top-level ones.
+        ///
+        /// In particular this excludes the "must be B" and "no sigless branches" checks.
+        /// To get these, run [`Self::validate`] which also calls through to this method.
+        pub fn validate_non_top_level(
+            &self,
+            params: &ValidationParams,
+        ) -> Result<(), ValidationError> {
+            if self.ext.tree_height > params.max_recursive_depth {
+                return Err(ValidationError::MaxRecursiveDepthExceeded {
+                    limit: params.max_recursive_depth,
+                });
+            }
+            if !params.allow_duplicate_keys && self.has_repeated_keys() {
+                return Err(ValidationError::DuplicateKeys);
+            }
+            if !params.allow_mixed_time_locks && self.has_mixed_timelocks() {
+                return Err(ValidationError::MixedTimeLocks);
+            }
+
+            let mut multipath_len = None;
+            let mut multipath_check = |pk: &Pk| {
+                if params.allow_inconsistent_multipath_keys {
+                    return Ok(());
+                }
+                match (multipath_len, pk.num_der_paths()) {
+                    (_, 0) | (_, 1) => {}
+                    (None, n) => multipath_len = Some(n),
+                    (Some(x), y) if x == y => { /* ok */ }
+                    (Some(x), y) => {
+                        return Err(ValidationError::MultipathKeyLenMismatch { len1: x, len2: y })
+                    }
+                }
+                Ok(())
+            };
+            for ms in self.iter() {
+                match ms.node {
+                    Terminal::DupIf(..) if !params.allow_dup_if => {
+                        return Err(ValidationError::IllegalDupIf)
+                    }
+                    Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
+                        if !params.allow_multi {
+                            return Err(ValidationError::IllegalMulti);
+                        }
+                        for key in thresh.iter() {
+                            params.validate_pk(key).map_err(ValidationError::Key)?;
+                            multipath_check(key)?;
+                        }
+                    }
+                    Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
+                        if !params.allow_multi_a {
+                            return Err(ValidationError::IllegalMultiA);
+                        }
+                        for key in thresh.iter() {
+                            params.validate_pk(key).map_err(ValidationError::Key)?;
+                            multipath_check(key)?;
+                        }
+                    }
+                    Terminal::OrI(..) if !params.allow_or_i => {
+                        return Err(ValidationError::IllegalOrI)
+                    }
+                    Terminal::RawPkH(..) if !params.allow_raw_pkh => {
+                        return Err(ValidationError::IllegalRawPkh)
+                    }
+                    Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => {
+                        params.validate_pk(pk).map_err(ValidationError::Key)?;
+                        multipath_check(pk)?;
+                    }
+                    _ => {}
+                }
+            }
+
+            // FIXME we have to gate this check on params.max_script_size being finite
+            // because otherwise we'll attempt to call self.script_size(), which calls
+            // Ctx::pk_len, when validating NoChecks scripts. But NoChecks::pk_len just
+            // panics because we've forgotten the length of keys once we're in the
+            // NoChecks context.
+            //
+            // This gate will be removed in a later PR which removes Ctx::pk_len and
+            // replaces it with a less-fragile solution.
+            if params.max_script_size < usize::MAX && self.script_size() > params.max_script_size {
+                return Err(ValidationError::MaxScriptSizeExceeded {
+                    actual: self.script_size(),
+                    limit: params.max_script_size,
+                });
+            }
+            // Satisfiability checks -- if there is no satisfaciton data set then we will
+            // early-return here, so all other checks should be done before this.
+            match self.max_satisfaction_witness_elements() {
+                // No possible satisfactions -- we are doing non-toplevel checks here
+                // so fail gracefully.
+                Err(..) => return Ok(()),
+                Ok(max_n) if max_n > params.max_witness_items => {
+                    return Err(ValidationError::MaxWitnessItemsExceeded {
+                        actual: max_n,
+                        limit: params.max_witness_items,
+                    })
+                }
+                Ok(..) => {}
+            }
+
+            let sat_op_count = self
+                .ext
+                .sat_op_count()
+                .expect("checked that satisfaction was possible above");
+            if sat_op_count > params.max_opcode_count {
+                return Err(ValidationError::MaxOpCountExceeded {
+                    actual: sat_op_count,
+                    limit: params.max_opcode_count,
+                });
+            }
+
+            let sat_data = self
+                .ext
+                .sat_data
+                .expect("checked that satisfaction was possible above");
+            if sat_data.max_witness_stack_count + sat_data.max_exec_stack_count
+                > params.max_exec_stack_size
+            {
+                return Err(ValidationError::MaxExecStackSizeExceeded {
+                    actual: sat_data.max_witness_stack_size + sat_data.max_exec_stack_count,
+                    limit: params.max_exec_stack_size,
+                });
+            }
+
+            Ok(())
         }
     }
 }
@@ -564,36 +732,33 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// embedded in the chain. While it is inadvisable to use insane Miniscripts,
     /// once it's on the chain you don't have much choice anymore.
     pub fn decode_consensus(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
-        Miniscript::decode_with_ext(script, &ExtParams::allow_all())
+        Miniscript::decode_with_validation_params(script, &Ctx::CONSENSUS)
     }
 
     /// Attempt to decode a Miniscript from Script, specifying which validation parameters to apply.
-    pub fn decode_with_ext(
+    pub fn decode_with_validation_params(
         script: &script::Script,
-        ext: &ExtParams,
+        params: &ValidationParams,
     ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::decode(&mut iter)?;
         Ctx::check_global_validity(&top)?;
-        let type_check = types::Type::type_check(&top.node)?;
-        if type_check.corr.base != types::Base::B {
-            return Err(Error::NonTopLevel(format!("{:?}", top)));
-        };
+        types::Type::type_check(&top.node)?;
         if let Some(leading) = iter.next() {
             Err(Error::Trailing(leading.to_string()))
         } else {
-            top.ext_check(ext)?;
+            top.validate(params).map_err(Error::Validation)?;
             Ok(top)
         }
     }
 
-    /// Attempt to parse a Script into Miniscript representation.
+    /// Attempt to decode a Script as a Miniscript.
     ///
-    /// This function will fail parsing for scripts that do not clear the
-    /// [`Miniscript::sanity_check`] checks. Use [`Miniscript::decode_consensus`] to
-    /// parse such scripts.
+    /// This will enforce sanity and standardness rules and fail to decode if they
+    /// are validated. You may want [`Self::decode_consensus`] if you want to decode
+    /// anyway.
     ///
     /// ## Decode/Parse a miniscript from script hex
     ///
@@ -622,7 +787,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```
     pub fn decode(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
-        let ms = Self::decode_with_ext(script, &ExtParams::sane())?;
+        let ms = Self::decode_with_validation_params(script, &Ctx::SANE)?;
         Ok(ms)
     }
 }
@@ -837,33 +1002,26 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Attempt to parse an insane(scripts don't clear sanity checks)
-    /// from string into a Miniscript representation.
-    /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
-    /// scripts without sig or scripts that can exceed resource limits.
-    /// Some of the analysis guarantees of miniscript are lost when dealing with
-    /// insane scripts. In general, in a multi-party setting users should only
-    /// accept sane scripts.
-    pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
-        Miniscript::from_str_ext(s, &ExtParams::insane())
+    /// Attempt to parse a Miniscript, checking only for consensus compatibility,
+    /// lack of raw pubkeyhashes, and no other checks.
+    ///
+    /// It is not recommended to use scripts which require this function in order
+    /// to parse, especially in a multiparty setting.
+    pub fn from_str_insane(s: &str) -> Result<Self, Error> {
+        let params = ValidationParams { allow_raw_pkh: false, ..Ctx::CONSENSUS };
+        Miniscript::from_str_with_validation_params(s, &params)
     }
 
-    /// Attempt to parse an Miniscripts that don't follow the spec.
-    /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
-    /// scripts, raw pubkey hashes without sig or scripts that can exceed resource limits.
-    ///
-    /// Use [`ExtParams`] builder to specify the types of non-sane rules to allow while parsing.
-    pub fn from_str_ext(s: &str, ext: &ExtParams) -> Result<Miniscript<Pk, Ctx>, Error> {
+    /// Attempt to parse a Miniscript, specifying which validation parameters to apply.
+    pub fn from_str_with_validation_params(
+        s: &str,
+        params: &ValidationParams,
+    ) -> Result<Self, Error> {
         // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
         let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(top.root())?;
-        ms.ext_check(ext)?;
-
-        if ms.ty.corr.base != types::Base::B {
-            Err(Error::NonTopLevel(format!("{:?}", ms)))
-        } else {
-            Ok(ms)
-        }
+        ms.validate(params).map_err(Error::Validation)?;
+        Ok(ms)
     }
 }
 
@@ -1077,11 +1235,8 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
     type Err = Error;
-    /// Parse a Miniscript from string and perform sanity checks
-    /// See [Miniscript::from_str_insane] to parse scripts from string that
-    /// do not clear the [Miniscript::sanity_check] checks.
     fn from_str(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
-        let ms = Self::from_str_ext(s, &ExtParams::sane())?;
+        let ms = Self::from_str_with_validation_params(s, &Ctx::SANE)?;
         Ok(ms)
     }
 }
@@ -1110,13 +1265,12 @@ mod tests {
     use bitcoin::taproot::TapLeafHash;
     use sync::Arc;
 
-    use super::{Miniscript, ScriptContext, Segwitv0, Tap};
+    use super::*;
     use crate::miniscript::{types, Terminal};
     use crate::policy::Liftable;
-    use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
     use crate::{
-        hex_script, BareCtx, Error, ExtParams, Legacy, RelLockTime, Satisfier, ToPublicKey,
+        hex_script, BareCtx, Error, Legacy, RelLockTime, Satisfier, ToPublicKey, ValidationError,
     };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
@@ -1746,12 +1900,13 @@ mod tests {
         // Test that parsing raw hash160 from string does not work without extra features
         SegwitMs::from_str(ms_str).unwrap_err();
         SegwitMs::from_str_insane(ms_str).unwrap_err();
-        let ms = SegwitMs::from_str_ext(ms_str, &ExtParams::allow_all()).unwrap();
+        let ms = SegwitMs::from_str_with_validation_params(ms_str, &ValidationParams::MAX).unwrap();
 
         let script = ms.encode();
-        // The same test, but parsing from script
+        // The same test, but parsing from script. Notice that unlike the previous "insane"
+        // extparams, the Ctx::CONSENSUS constant allows raw pubkeyhashes.
         SegwitMs::decode(&script).unwrap_err();
-        SegwitMs::decode_with_ext(&script, &ExtParams::insane()).unwrap_err();
+        SegwitMs::decode_with_validation_params(&script, &Segwitv0::CONSENSUS).unwrap();
         SegwitMs::decode_consensus(&script).unwrap();
 
         // Try replacing the raw_pkh with a pkh
@@ -1784,16 +1939,11 @@ mod tests {
     fn duplicate_keys() {
         // You cannot parse a Miniscript that has duplicate keys
         let err = Miniscript::<String, Segwitv0>::from_str("and_v(v:pk(A),pk(A))").unwrap_err();
-        assert!(matches!(err, Error::AnalysisError(crate::AnalysisError::RepeatedPubkeys)));
+        assert!(matches!(err, Error::Validation(ValidationError::DuplicateKeys)));
 
         // ...though you can parse one with from_str_insane
         let ok_insane =
             Miniscript::<String, Segwitv0>::from_str_insane("and_v(v:pk(A),pk(A))").unwrap();
-        // ...but this cannot be sanity checked.
-        assert!(matches!(
-            ok_insane.sanity_check().unwrap_err(),
-            crate::AnalysisError::RepeatedPubkeys
-        ));
         // ...it can be lifted, though it's unclear whether this is a deliberate
         // choice or just an accident. It seems weird given that duplicate public
         // keys are forbidden in several other places.
@@ -1807,17 +1957,13 @@ mod tests {
             "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
         )
         .unwrap_err();
-        assert!(matches!(
-            err,
-            Error::AnalysisError(crate::AnalysisError::HeightTimelockCombination)
-        ));
+        assert!(matches!(err, Error::Validation(ValidationError::MixedTimeLocks)));
 
         // Though you can in an or() rather than and()
         let ok_or = Miniscript::<String, Segwitv0>::from_str(
             "or_i(and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
         )
         .unwrap();
-        ok_or.sanity_check().unwrap();
         ok_or.lift().unwrap();
 
         // ...and you can parse one with from_str_insane
@@ -1825,15 +1971,20 @@ mod tests {
             "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
         )
         .unwrap();
-        // ...but this cannot be sanity checked or lifted
-        assert_eq!(
-            ok_insane.sanity_check().unwrap_err(),
-            crate::AnalysisError::HeightTimelockCombination
-        );
+        // ...but this cannot lifted
         assert!(matches!(
             ok_insane.lift().unwrap_err(),
             Error::LiftError(crate::policy::LiftError::HeightTimelockCombination)
         ));
+        // nor can it have sane rules applied to it
+        assert_eq!(
+            ok_insane.validate(&ValidationParams::SANE).unwrap_err(),
+            ValidationError::MixedTimeLocks,
+        );
+        assert_eq!(
+            ok_insane.validate(&ValidationParams::SANE).unwrap_err(),
+            ValidationError::MixedTimeLocks,
+        );
     }
 
     #[test]

@@ -198,9 +198,6 @@ impl ExtData {
 }
 
 impl ExtData {
-    /// Confirm invariants of the extra property checker.
-    pub fn sanity_checks(&self) {}
-
     /// Extra properties for the `pk_k` fragment.
     ///
     /// The key must be provided to determine its size.
@@ -1012,7 +1009,6 @@ impl ExtData {
                 Self::threshold(thresh.k(), thresh.n(), |n| thresh.data()[n].ext)
             }
         };
-        ret.sanity_checks();
         ret
     }
 

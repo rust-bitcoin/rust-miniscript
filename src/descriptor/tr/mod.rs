@@ -139,14 +139,6 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         }
     }
 
-    /// Checks whether the descriptor is safe.
-    pub fn sanity_check(&self) -> Result<(), Error> {
-        for leaf in self.leaves() {
-            leaf.miniscript().sanity_check()?;
-        }
-        Ok(())
-    }
-
     /// Computes an upper bound on the difference between a non-satisfied
     /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
     ///
@@ -383,9 +375,9 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
             } else {
                 let script = Miniscript::from_tree(node)?;
                 // FIXME hack for https://github.com/rust-bitcoin/rust-miniscript/issues/734
-                if script.ty.corr.base != crate::miniscript::types::Base::B {
-                    return Err(Error::NonTopLevel(format!("{:?}", script)));
-                };
+                script
+                    .validate(&Tap::CONSENSUS)
+                    .map_err(Error::Validation)?;
 
                 tree_builder.push_leaf(script);
                 tap_tree_iter.skip_descendants();

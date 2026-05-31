@@ -56,11 +56,6 @@
 //!     "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //! );
 //!
-//! // Check whether the descriptor is safe. This checks whether all spend paths are accessible in
-//! // the Bitcoin network. It may be possible that some of the spend paths require more than 100
-//! // elements in Wsh scripts or they contain a combination of timelock and heightlock.
-//! assert!(desc.sanity_check().is_ok());
-//!
 //! // Estimate the satisfaction cost.
 //! // scriptSig: OP_PUSH34 <OP_0 OP_32 <32-byte-hash>>
 //! // = (1 + 1 + 1 + 32) * 4 = 140 WU
@@ -124,6 +119,7 @@ pub mod plan;
 pub mod policy;
 mod primitives;
 pub mod psbt;
+mod validation;
 
 #[cfg(test)]
 mod test_utils;
@@ -138,7 +134,6 @@ pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicK
 pub use crate::error::ParseError;
 pub use crate::expression::{ParseNumError, ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
-pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
@@ -147,6 +142,7 @@ use crate::prelude::*;
 pub use crate::primitives::absolute_locktime::{AbsLockTime, AbsLockTimeError};
 pub use crate::primitives::relative_locktime::{RelLockTime, RelLockTimeError};
 pub use crate::primitives::threshold::{Threshold, ThresholdError};
+pub use crate::validation::{Error as ValidationError, ValidationParams};
 
 /// Trait representing a key which can be converted to a hash type.
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
@@ -441,8 +437,6 @@ pub enum Error {
     Unexpected(String),
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
-    /// Parsed a miniscript and the result was not of type T
-    NonTopLevel(String),
     /// Parsed a miniscript but there were more script opcodes after it
     Trailing(String),
     /// Could not satisfy a script (fragment) because of a missing signature
@@ -469,8 +463,6 @@ pub enum Error {
     /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
     /// up to n=3 is invalid by standardness (bare)
     NonStandardBareScript,
-    /// Analysis Error
-    AnalysisError(miniscript::analyzable::AnalysisError),
     /// Miniscript is equivalent to false. No possible satisfaction
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
@@ -492,6 +484,8 @@ pub enum Error {
     ParseThreshold(ParseThresholdError),
     /// Invalid expression tree.
     Parse(ParseError),
+    /// Validation of a script failed.
+    Validation(ValidationError),
 }
 
 #[doc(hidden)] // will be removed when we remove Error
@@ -511,7 +505,6 @@ impl fmt::Display for Error {
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
-            Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
@@ -534,7 +527,6 @@ impl fmt::Display for Error {
                 up to n=3 is invalid by standardness (bare).
                 "
             ),
-            Error::AnalysisError(ref e) => e.fmt(f),
             Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Error::PubKeyCtxError(ref pk, ref ctx) => {
@@ -547,6 +539,7 @@ impl fmt::Display for Error {
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
             Error::Parse(ref e) => e.fmt(f),
+            Error::Validation(ref e) => e.fmt(f),
         }
     }
 }
@@ -560,7 +553,6 @@ impl std::error::Error for Error {
             UnexpectedStart
             | Unexpected(_)
             | UnknownWrapper(_)
-            | NonTopLevel(_)
             | Trailing(_)
             | MissingSig(_)
             | CouldNotSatisfy
@@ -581,13 +573,13 @@ impl std::error::Error for Error {
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             TapTreeDepthError(e) => Some(e),
-            AnalysisError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
             RelativeLockTime(e) => Some(e),
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
             Parse(e) => Some(e),
+            Validation(e) => Some(e),
         }
     }
 }
@@ -615,11 +607,6 @@ impl From<crate::descriptor::TapTreeDepthError> for Error {
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
     fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
-}
-
-#[doc(hidden)]
-impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error { Error::AnalysisError(e) }
 }
 
 #[doc(hidden)]
