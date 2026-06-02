@@ -217,8 +217,8 @@ pub struct Plan {
     pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<relative::LockTime>,
-
-    pub(crate) descriptor: Descriptor<DefiniteDescriptorKey>,
+    /// The target descriptor for this plan
+    pub descriptor: Descriptor<DefiniteDescriptorKey>,
 }
 
 impl Plan {
