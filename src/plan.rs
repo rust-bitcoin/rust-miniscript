@@ -217,8 +217,8 @@ pub struct Plan<Pk: MiniscriptKey> {
     pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<relative::LockTime>,
-
-    pub(crate) descriptor: Descriptor<Pk>,
+    /// The target descriptor for this plan
+    pub descriptor: Descriptor<Pk>,
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Plan<Pk> {
