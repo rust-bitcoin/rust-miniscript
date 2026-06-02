@@ -35,7 +35,7 @@ fn do_test(data: &[u8]) {
                 (Ok(new), Ok(old)) => {
                     assert_eq!(
                         old.to_string(),
-                        new.to_string(),
+                        new.to_policy_syntax_string(),
                         "lifted input {} (left is old, right is new)",
                         data_str
                     )

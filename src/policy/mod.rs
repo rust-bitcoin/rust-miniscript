@@ -284,8 +284,8 @@ mod tests {
         concrete_policy_rtt("and(pk(X),or(99@pk(Y),1@older(12960)))");
 
         semantic_policy_rtt("pk()");
-        semantic_policy_rtt("or(pk(X),pk(Y))");
-        semantic_policy_rtt("and(pk(X),pk(Y))");
+        semantic_policy_rtt("(pk(X) ∨ pk(Y))");
+        semantic_policy_rtt("(pk(X) ∧ pk(Y))");
 
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
