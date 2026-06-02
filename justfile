@@ -31,7 +31,7 @@ docsrs:
 
 # Quick and dirty CI useful for pre-push checks.
 sane: fmt-check lint
-  cargo test --quiet --all-targets --no-default-features --features > /dev/null || exit 1
+  cargo test --quiet --all-targets --no-default-features > /dev/null || exit 1
   cargo test --quiet --all-targets > /dev/null || exit 1
   cargo test --quiet --all-targets --all-features > /dev/null || exit 1
 
