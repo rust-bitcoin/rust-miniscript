@@ -360,8 +360,6 @@ impl Plan {
                     data
                 });
 
-            // TODO: TapTree. we need to re-traverse the tree to build it, sigh
-
             let leaf_hash = match data.spend_type {
                 Some(SpendType::KeySpend { internal_key }) => {
                     input.tap_internal_key = Some(internal_key);
