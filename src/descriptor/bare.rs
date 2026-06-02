@@ -166,7 +166,7 @@ impl<Pk: FromStrKey> FromTree for Bare<Pk> {
     fn from_tree(root: expression::TreeIterItem) -> Result<Self, Error> {
         let sub = Miniscript::<Pk, BareCtx>::from_tree(root)?;
         BareCtx::top_level_checks(&sub)?;
-        Bare::new(sub)
+        Self::new(sub)
     }
 }
 
@@ -196,7 +196,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
         // do the top-level checks
         match BareCtx::check_pk(&pk) {
-            Ok(()) => Ok(Pkh { pk }),
+            Ok(()) => Ok(Self { pk }),
             Err(e) => Err(e),
         }
     }
@@ -353,7 +353,7 @@ impl<Pk: FromStrKey> FromTree for Pkh<Pk> {
         let pk = root
             .verify_terminal_parent("pkh", "public key")
             .map_err(Error::Parse)?;
-        Pkh::new(pk).map_err(Error::ContextError)
+        Self::new(pk).map_err(Error::ContextError)
     }
 }
 

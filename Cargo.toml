@@ -70,11 +70,17 @@ name = "taptree_of_horror"
 path = "examples/taptree_of_horror/taptree_of_horror.rs"
 required-features = ["compiler"]
 
-[workspace]
-members = ["fuzz"]
-exclude = ["embedded", "bitcoind-tests"]
-
 [package.metadata.rbmt.lint]
 allowed_duplicates = [
     "hex-conservative",
 ]
+
+[lints]
+workspace = true
+
+[workspace]
+members = ["fuzz"]
+exclude = ["embedded", "bitcoind-tests"]
+
+[workspace.lints.clippy]
+use_self = "warn"

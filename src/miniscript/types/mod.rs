@@ -197,10 +197,10 @@ impl fmt::Display for Type {
 
 impl Type {
     /// Type of the `0` combinator
-    pub const TRUE: Self = Type { corr: Correctness::TRUE, mall: Malleability::TRUE };
+    pub const TRUE: Self = Self { corr: Correctness::TRUE, mall: Malleability::TRUE };
 
     /// Type of the `0` combinator
-    pub const FALSE: Self = Type { corr: Correctness::FALSE, mall: Malleability::FALSE };
+    pub const FALSE: Self = Self { corr: Correctness::FALSE, mall: Malleability::FALSE };
 
     /// Check whether the `self` is a subtype of `other` argument .
     /// This checks whether the argument `other` has attributes which are present
@@ -220,41 +220,41 @@ impl Type {
     }
 
     /// Constructor for the type of the `pk_k` fragment.
-    pub const fn pk_k() -> Self { Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() } }
+    pub const fn pk_k() -> Self { Self { corr: Correctness::pk_k(), mall: Malleability::pk_k() } }
 
     /// Constructor for the type of the `pk_h` fragment.
-    pub const fn pk_h() -> Self { Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() } }
+    pub const fn pk_h() -> Self { Self { corr: Correctness::pk_h(), mall: Malleability::pk_h() } }
 
     /// Constructor for the type of the `multi` fragment.
     pub const fn multi() -> Self {
-        Type { corr: Correctness::multi(), mall: Malleability::multi() }
+        Self { corr: Correctness::multi(), mall: Malleability::multi() }
     }
 
     /// Constructor for the type of the `sortedmulti` fragment.
     pub const fn sortedmulti() -> Self {
-        Type { corr: Correctness::sortedmulti(), mall: Malleability::sortedmulti() }
+        Self { corr: Correctness::sortedmulti(), mall: Malleability::sortedmulti() }
     }
 
     /// Constructor for the type of the `multi_a` fragment.
     pub const fn multi_a() -> Self {
-        Type { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
+        Self { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
     }
 
     /// Constructor for the type of the `sortednmulti_a` fragment.
     pub const fn sortedmulti_a() -> Self {
-        Type { corr: Correctness::sortedmulti_a(), mall: Malleability::sortedmulti_a() }
+        Self { corr: Correctness::sortedmulti_a(), mall: Malleability::sortedmulti_a() }
     }
 
     /// Constructor for the type of all the hash fragments.
-    pub const fn hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+    pub const fn hash() -> Self { Self { corr: Correctness::hash(), mall: Malleability::hash() } }
 
     /// Constructor for the type of the `after` and `older` fragments.
-    pub const fn time() -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
+    pub const fn time() -> Self { Self { corr: Correctness::time(), mall: Malleability::time() } }
 
     /// Constructor for the type of the `a:` fragment.
     pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
         // FIXME need to do manual `?` because ? is not supported in constfns. (Also below.)
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_alt(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -265,7 +265,7 @@ impl Type {
 
     /// Constructor for the type of the `s:` fragment.
     pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_swap(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -276,7 +276,7 @@ impl Type {
 
     /// Constructor for the type of the `c:` fragment.
     pub const fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_check(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -287,7 +287,7 @@ impl Type {
 
     /// Constructor for the type of the `d:` fragment.
     pub const fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_dupif(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -298,7 +298,7 @@ impl Type {
 
     /// Constructor for the type of the `v:` fragment.
     pub const fn cast_verify(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_verify(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -309,7 +309,7 @@ impl Type {
 
     /// Constructor for the type of the `j:` fragment.
     pub const fn cast_nonzero(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_nonzero(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -320,7 +320,7 @@ impl Type {
 
     /// Constructor for the type of the `n:` fragment.
     pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_zeronotequal(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -331,7 +331,7 @@ impl Type {
 
     /// Constructor for the type of the `t:` fragment.
     pub const fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_true(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -342,7 +342,7 @@ impl Type {
 
     /// Constructor for the type of the `u:` fragment.
     pub const fn cast_unlikely(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_or_i_false(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -353,7 +353,7 @@ impl Type {
 
     /// Constructor for the type of the `l:` fragment.
     pub const fn cast_likely(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::cast_or_i_false(self.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -364,7 +364,7 @@ impl Type {
 
     /// Constructor for the type of the `and_b` fragment.
     pub const fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::and_b(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -375,7 +375,7 @@ impl Type {
 
     /// Constructor for the type of the `and_v` fragment.
     pub const fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::and_v(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -386,7 +386,7 @@ impl Type {
 
     /// Constructor for the type of the `or_b` fragment.
     pub const fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::or_b(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -397,7 +397,7 @@ impl Type {
 
     /// Constructor for the type of the `or_b` fragment.
     pub const fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::or_d(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -408,7 +408,7 @@ impl Type {
 
     /// Constructor for the type of the `or_c` fragment.
     pub const fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::or_c(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -419,7 +419,7 @@ impl Type {
 
     /// Constructor for the type of the `or_i` fragment.
     pub const fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::or_i(left.corr, right.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -430,7 +430,7 @@ impl Type {
 
     /// Constructor for the type of the `and_or` fragment.
     pub const fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
-        Ok(Type {
+        Ok(Self {
             corr: match Correctness::and_or(a.corr, b.corr, c.corr) {
                 Ok(x) => x,
                 Err(e) => return Err(e),
@@ -445,7 +445,7 @@ impl Type {
     where
         I: Clone + ExactSizeIterator<Item = &'a Self>,
     {
-        Ok(Type {
+        Ok(Self {
             corr: Correctness::threshold(k, subs.clone().map(|s| &s.corr))?,
             mall: Malleability::threshold(k, subs.map(|s| &s.mall)),
         })

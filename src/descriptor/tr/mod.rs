@@ -352,7 +352,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
             .map_err(Error::Parse)?;
 
         let tap_tree = match root_children.next() {
-            None => return Tr::new(internal_key, None),
+            None => return Self::new(internal_key, None),
             Some(tree) => tree,
         };
 
@@ -383,7 +383,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 tap_tree_iter.skip_descendants();
             }
         }
-        Tr::new(internal_key, Some(tree_builder.finalize()))
+        Self::new(internal_key, Some(tree_builder.finalize()))
     }
 }
 

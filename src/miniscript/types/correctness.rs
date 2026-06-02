@@ -50,11 +50,11 @@ impl Input {
     const fn constfn_eq(self, other: Self) -> bool {
         matches!(
             (self, other),
-            (Input::Zero, Input::Zero)
-                | (Input::One, Input::One)
-                | (Input::Any, Input::Any)
-                | (Input::OneNonZero, Input::OneNonZero)
-                | (Input::AnyNonZero, Input::AnyNonZero)
+            (Self::Zero, Self::Zero)
+                | (Self::One, Self::One)
+                | (Self::Any, Self::Any)
+                | (Self::OneNonZero, Self::OneNonZero)
+                | (Self::AnyNonZero, Self::AnyNonZero)
         )
     }
 
@@ -64,9 +64,9 @@ impl Input {
     const fn is_subtype(&self, other: Self) -> bool {
         match (*self, other) {
             (x, y) if x.constfn_eq(y) => true,
-            (Input::OneNonZero, Input::One)
-            | (Input::OneNonZero, Input::AnyNonZero)
-            | (_, Input::Any) => true,
+            (Self::OneNonZero, Self::One)
+            | (Self::OneNonZero, Self::AnyNonZero)
+            | (_, Self::Any) => true,
             _ => false,
         }
     }
@@ -97,11 +97,11 @@ pub struct Correctness {
 impl Correctness {
     /// Correctness data for the `1` combinator
     pub const TRUE: Self =
-        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: true };
+        Self { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: true };
 
     /// Correctness data for the `0` combinator
     pub const FALSE: Self =
-        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: true, unit: true };
+        Self { base: Base::B, input: Input::Zero, dissatisfiable: true, unit: true };
 
     /// Check whether the `self` is a subtype of `other` argument .
     /// This checks whether the argument `other` has attributes which are present
@@ -134,12 +134,12 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `pk_k` fragment.
     pub const fn pk_k() -> Self {
-        Correctness { base: Base::K, input: Input::OneNonZero, dissatisfiable: true, unit: true }
+        Self { base: Base::K, input: Input::OneNonZero, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of the `pk_h` fragment.
     pub const fn pk_h() -> Self {
-        Correctness {
+        Self {
             base: Base::K,
             input: Input::AnyNonZero,
             dissatisfiable: true, // FIXME check with sipa
@@ -149,37 +149,37 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `multi` fragment.
     pub const fn multi() -> Self {
-        Correctness { base: Base::B, input: Input::AnyNonZero, dissatisfiable: true, unit: true }
+        Self { base: Base::B, input: Input::AnyNonZero, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of the `sortedmulti` fragment.
     pub const fn sortedmulti() -> Self {
-        Correctness { base: Base::B, input: Input::AnyNonZero, dissatisfiable: true, unit: true }
+        Self { base: Base::B, input: Input::AnyNonZero, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of the `multi_a` fragment.
     pub const fn multi_a() -> Self {
-        Correctness { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
+        Self { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of the `sortedmulti_a` fragment.
     pub const fn sortedmulti_a() -> Self {
-        Correctness { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
+        Self { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of any of the hash fragments.
     pub const fn hash() -> Self {
-        Correctness { base: Base::B, input: Input::OneNonZero, dissatisfiable: true, unit: true }
+        Self { base: Base::B, input: Input::OneNonZero, dissatisfiable: true, unit: true }
     }
 
     /// Constructor for the correctness properties of either of the time fragments.
     pub const fn time() -> Self {
-        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: false }
+        Self { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: false }
     }
 
     /// Constructor for the correctness properties of the `a:` fragment.
     pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::W,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -192,7 +192,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `s:` fragment.
     pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::W,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -208,7 +208,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `c:` fragment.
     pub const fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::K => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -221,7 +221,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `d:` fragment.
     pub const fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::V => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -237,7 +237,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `v:` fragment.
     pub const fn cast_verify(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::V,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -253,7 +253,7 @@ impl Correctness {
         if !self.input.constfn_eq(Input::OneNonZero) && !self.input.constfn_eq(Input::AnyNonZero) {
             return Err(ErrorKind::NonZeroZero);
         }
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -266,7 +266,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `n:` fragment.
     pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -279,7 +279,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `t:` fragment.
     pub const fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::V => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -292,7 +292,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `l:` and `u:` fragments.
     pub const fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match self.base {
                 Base::B => Base::B,
                 x => return Err(ErrorKind::ChildBase1(x)),
@@ -310,7 +310,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `and_b` fragment
     pub const fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::B, Base::W) => Base::B,
                 (x, y) => return Err(ErrorKind::ChildBase2(x, y)),
@@ -333,7 +333,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `and_v` fragment
     pub const fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::V, Base::B) => Base::B,
                 (Base::V, Base::K) => Base::K,
@@ -364,7 +364,7 @@ impl Correctness {
         if !right.dissatisfiable {
             return Err(ErrorKind::RightNotDissatisfiable);
         }
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::B, Base::W) => Base::B,
                 (x, y) => return Err(ErrorKind::ChildBase2(x, y)),
@@ -390,7 +390,7 @@ impl Correctness {
         if !left.unit {
             return Err(ErrorKind::LeftNotUnit);
         }
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::B, Base::B) => Base::B,
                 (x, y) => return Err(ErrorKind::ChildBase2(x, y)),
@@ -413,7 +413,7 @@ impl Correctness {
         if !left.unit {
             return Err(ErrorKind::LeftNotUnit);
         }
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::B, Base::V) => Base::V,
                 (x, y) => return Err(ErrorKind::ChildBase2(x, y)),
@@ -430,7 +430,7 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `or_i` fragment
     pub const fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Correctness {
+        Ok(Self {
             base: match (left.base, right.base) {
                 (Base::B, Base::B) => Base::B,
                 (Base::V, Base::V) => Base::V,
@@ -454,7 +454,7 @@ impl Correctness {
         if !a.unit {
             return Err(ErrorKind::LeftNotUnit);
         }
-        Ok(Correctness {
+        Ok(Self {
             base: match (a.base, b.base, c.base) {
                 (Base::B, Base::B, Base::B) => Base::B,
                 (Base::B, Base::K, Base::K) => Base::K,
@@ -503,7 +503,7 @@ impl Correctness {
             }
         }
 
-        Ok(Correctness {
+        Ok(Self {
             base: Base::B,
             input: match num_args {
                 0 => Input::Zero,
