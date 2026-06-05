@@ -651,7 +651,7 @@ mod tests {
         //
         // Since the first branch's dissatisfaction is HASSIG but the second branch's is not,
         // the satisfier is required to dissatisfy the second branch to avoid malleability.
-        // However, because of #976, it does not.
+        // But if we use `into_plan_mall` we can see the bug.
         //
         // Itstead, it takes both the after(144) and after(50) branches, and the resulting
         // plan should show after(144) since it's the higher one. However, prior to #895,
@@ -664,9 +664,12 @@ mod tests {
         // Need DefiniteDescriptorKey https://github.com/rust-bitcoin/rust-miniscript/issues/927
         let descriptor =
             Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
-        // Compute plan and confirm the timelock is correct.
-        let plan = descriptor.into_plan(&satisfier).unwrap();
+        // Compute plan and confirm the timelock is correct -- 144 for a malleable transaction
+        let plan = descriptor.clone().into_plan_mall(&satisfier).unwrap();
         assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(144).unwrap()),);
+        // ...and 50 for a non-malleable one (since take the expensive_threshold alternate)
+        let plan = descriptor.into_plan(&satisfier).unwrap();
+        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(50).unwrap()),);
 
         // Same descriptor as above, except that now we use a time-based timelock rather than a
         // lower height-based one.
@@ -690,7 +693,7 @@ mod tests {
         let descriptor =
             Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
 
-        let plan = descriptor.into_plan(&satisfier).unwrap();
+        let plan = descriptor.into_plan_mall(&satisfier).unwrap();
         assert_eq!(
             plan.absolute_timelock,
             Some(absolute::LockTime::from_time(1000000000).unwrap()),
