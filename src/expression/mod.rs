@@ -681,7 +681,7 @@ impl<'a> Tree<'a> {
 }
 
 /// Parse a string as a u32, forbidding zero.
-pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
+fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
     if s == "0" {
         return Err(ParseNumError::IllegalZero { context });
     }

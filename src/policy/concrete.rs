@@ -66,7 +66,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     And(Vec<Arc<Self>>),
     /// A list of sub-policies, one of which must be satisfied, along with
     /// relative probabilities for each one.
-    Or(Vec<(usize, Arc<Self>)>),
+    Or(Vec<(PositiveF64, Arc<Self>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Self>, 0>),
 }
@@ -132,9 +132,10 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
 
             match top {
                 Policy::Or(ref subs) => {
-                    let total_sub_prob = subs.iter().map(|prob_sub| prob_sub.0).sum::<usize>();
+                    let total_sub_prob =
+                        subs.iter().map(|prob_sub| prob_sub.0.value()).sum::<f64>();
                     for (sub_prob, sub) in subs.iter().rev() {
-                        let ratio = *sub_prob as f64 / total_sub_prob as f64;
+                        let ratio = sub_prob.value() / total_sub_prob;
                         self.stack.push((top_prob * ratio, sub));
                     }
                 }
@@ -456,9 +457,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = subs.iter().fold(0.0, |acc, x| acc + x.0.value());
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * odds.value() / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -481,9 +482,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol_native(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = subs.iter().fold(0.0, |acc, x| acc + x.0.value());
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * odds.value() / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -972,7 +973,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
-        let mut stack = Vec::<(usize, _)>::with_capacity(128);
+        let mut stack = Vec::<(PositiveF64, _)>::with_capacity(128);
         for node in root.pre_order_iter().rev() {
             let allow_prob;
             // Before doing anything else, check if this is the inner value of a terminal.
@@ -1005,10 +1006,10 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             };
 
             let frag_prob = match frag_prob {
-                None => 1,
-                Some(s) => expression::parse_num_nonzero(s, "fragment probability")
+                None => PositiveF64::new(1.0),
+                Some(s) => expression::parse_probability(s, "fragment probability")
                     .map_err(From::from)
-                    .map_err(Error::Parse)? as usize,
+                    .map_err(Error::Parse)?,
             };
 
             let new =
@@ -1163,7 +1164,7 @@ pub enum TreeChildren<'a, Pk: MiniscriptKey> {
     /// A conjunction or threshold node's children.
     And(&'a [Arc<Policy<Pk>>]),
     /// A disjunction node's children.
-    Or(&'a [(usize, Arc<Policy<Pk>>)]),
+    Or(&'a [(PositiveF64, Arc<Policy<Pk>>)]),
 }
 
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
