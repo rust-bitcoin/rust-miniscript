@@ -9,7 +9,7 @@
 //! infinite), ensuring that the type can safely implement [`Ord`] and [`Eq`]
 //! without panicking.
 
-use core::{cmp, f64, hash};
+use core::{cmp, f64, fmt, hash, ops};
 
 /// A positive, possibly-infinite, floating-point number.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -31,6 +31,13 @@ impl PositiveF64 {
 
     /// Returns the `PositiveF64` value.
     pub fn value(&self) -> f64 { self.0 }
+
+    /// Normalizes two [`PositiveF64`] values into a valid probability distribution.
+    #[must_use]
+    pub fn normalized(a: Self, b: Self) -> (Self, Self) {
+        let sum = a.0 + b.0;
+        (Self(a.0 / sum), Self(b.0 / sum))
+    }
 }
 
 impl Eq for PositiveF64 {}
@@ -51,4 +58,20 @@ impl Ord for PositiveF64 {
 /// Hash required for using OrdF64 as key for hashmap
 impl hash::Hash for PositiveF64 {
     fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
+}
+
+impl fmt::Display for PositiveF64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
+}
+
+impl ops::Add for PositiveF64 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output { Self(self.0 + rhs.0) }
+}
+
+impl ops::Mul for PositiveF64 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output { Self(self.0 * rhs.0) }
 }

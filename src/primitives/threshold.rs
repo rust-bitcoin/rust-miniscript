@@ -10,6 +10,7 @@ use core::{cmp, fmt, iter};
 #[cfg(any(feature = "std", test))]
 use std::vec;
 
+use super::positive_f64::PositiveF64;
 use crate::ToPublicKey;
 
 /// Error parsing an absolute locktime.
@@ -202,6 +203,9 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
 
     /// Accessor for the threshold value.
     pub const fn k(&self) -> usize { self.k }
+
+    /// Returns the threshold ratio (k / n) as a positive real number.
+    pub fn k_over_n(&self) -> PositiveF64 { PositiveF64(self.k() as f64 / self.n() as f64) }
 
     /// Accessor for the underlying data.
     pub fn data(&self) -> &[T] { &self.inner }
