@@ -40,6 +40,18 @@ impl PositiveF64 {
     }
 }
 
+impl TryFrom<u32> for PositiveF64 {
+    type Error = NonZeroExpected;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        if value == 0 {
+            Err(NonZeroExpected)
+        } else {
+            Ok(Self(value as f64))
+        }
+    }
+}
+
 impl Eq for PositiveF64 {}
 
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
@@ -75,3 +87,13 @@ impl ops::Mul for PositiveF64 {
 
     fn mul(self, rhs: Self) -> Self::Output { Self(self.0 * rhs.0) }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct NonZeroExpected;
+
+impl fmt::Display for NonZeroExpected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "value must be non-zero") }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for NonZeroExpected {}
