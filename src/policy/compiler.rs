@@ -5,7 +5,7 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use core::{cmp, f64, fmt, hash, mem};
+use core::{f64, fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
@@ -16,29 +16,12 @@ use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::prelude::*;
-use crate::{policy, Miniscript, MiniscriptKey, Terminal};
+use crate::{policy, Miniscript, MiniscriptKey, PositiveF64, Terminal};
 
 type PolicyCache<Pk, Ctx> = BTreeMap<
     (Concrete<Pk>, PositiveF64, Option<PositiveF64>),
     BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
 >;
-
-/// Ordered f64 for comparison.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub(crate) struct PositiveF64(pub f64);
-
-impl Eq for PositiveF64 {}
-// We could derive PartialOrd, but we can't derive Ord, and clippy wants us
-// to derive both or neither. Better to be explicit.
-impl PartialOrd for PositiveF64 {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-impl Ord for PositiveF64 {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // will panic if given NaN
-        self.0.partial_cmp(&other.0).unwrap()
-    }
-}
 
 /// Detailed error type for compiler.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
@@ -130,11 +113,6 @@ impl From<policy::concrete::PolicyError> for CompilerError {
     fn from(e: policy::concrete::PolicyError) -> Self { Self::PolicyError(e) }
 }
 
-/// Hash required for using OrdF64 as key for hashmap
-impl hash::Hash for PositiveF64 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
-}
-
 /// Compilation key: This represents the state of the best possible compilation
 /// of a given policy(implicitly keyed).
 #[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
@@ -166,7 +144,7 @@ impl CompilationKey {
 
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> Self {
-        Self { ty, expensive_verify, dissat_prob: dissat_prob.map(PositiveF64) }
+        Self { ty, expensive_verify, dissat_prob: dissat_prob.map(PositiveF64::new) }
     }
 }
 
@@ -789,8 +767,8 @@ where
     Ctx: ScriptContext,
 {
     //Check the cache for hits
-    let ord_sat_prob = PositiveF64(sat_prob);
-    let ord_dissat_prob = dissat_prob.map(PositiveF64);
+    let ord_sat_prob = PositiveF64::new(sat_prob);
+    let ord_dissat_prob = dissat_prob.map(PositiveF64::new);
     if let Some(ret) = policy_cache.get(&(policy.clone(), ord_sat_prob, ord_dissat_prob)) {
         return Ok(ret.clone());
     }
@@ -1181,10 +1159,11 @@ where
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
         .filter(|&(key, _)| {
-            key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob.map(PositiveF64)
+            key.ty.corr.base == types::Base::B
+                && key.dissat_prob == dissat_prob.map(PositiveF64::new)
         })
         .map(|(_, val)| val)
-        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64::new(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
@@ -1206,10 +1185,10 @@ where
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
-                && key.dissat_prob == dissat_prob.map(PositiveF64)
+                && key.dissat_prob == dissat_prob.map(PositiveF64::new)
         })
         .map(|(_, val)| val)
-        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64::new(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
