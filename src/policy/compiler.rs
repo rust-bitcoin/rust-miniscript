@@ -18,20 +18,22 @@ use crate::policy::Concrete;
 use crate::prelude::*;
 use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 
-type PolicyCache<Pk, Ctx> =
-    BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
+type PolicyCache<Pk, Ctx> = BTreeMap<
+    (Concrete<Pk>, PositiveF64, Option<PositiveF64>),
+    BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+>;
 
 /// Ordered f64 for comparison.
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub(crate) struct OrdF64(pub f64);
+pub(crate) struct PositiveF64(pub f64);
 
-impl Eq for OrdF64 {}
+impl Eq for PositiveF64 {}
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
 // to derive both or neither. Better to be explicit.
-impl PartialOrd for OrdF64 {
+impl PartialOrd for PositiveF64 {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
-impl Ord for OrdF64 {
+impl Ord for PositiveF64 {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         // will panic if given NaN
         self.0.partial_cmp(&other.0).unwrap()
@@ -129,7 +131,7 @@ impl From<policy::concrete::PolicyError> for CompilerError {
 }
 
 /// Hash required for using OrdF64 as key for hashmap
-impl hash::Hash for OrdF64 {
+impl hash::Hash for PositiveF64 {
     fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
 }
 
@@ -150,7 +152,7 @@ struct CompilationKey {
     /// The probability of dissatisfaction of the compilation of the policy. Note
     /// that all possible compilations of a (sub)policy have the same sat-prob
     /// and only differ in dissat_prob.
-    dissat_prob: Option<OrdF64>,
+    dissat_prob: Option<PositiveF64>,
 }
 
 impl CompilationKey {
@@ -164,7 +166,7 @@ impl CompilationKey {
 
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> Self {
-        Self { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
+        Self { ty, expensive_verify, dissat_prob: dissat_prob.map(PositiveF64) }
     }
 }
 
@@ -787,8 +789,8 @@ where
     Ctx: ScriptContext,
 {
     //Check the cache for hits
-    let ord_sat_prob = OrdF64(sat_prob);
-    let ord_dissat_prob = dissat_prob.map(OrdF64);
+    let ord_sat_prob = PositiveF64(sat_prob);
+    let ord_dissat_prob = dissat_prob.map(PositiveF64);
     if let Some(ret) = policy_cache.get(&(policy.clone(), ord_sat_prob, ord_dissat_prob)) {
         return Ok(ret.clone());
     }
@@ -1179,10 +1181,10 @@ where
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
         .filter(|&(key, _)| {
-            key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob.map(OrdF64)
+            key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob.map(PositiveF64)
         })
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
@@ -1204,10 +1206,10 @@ where
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
-                && key.dissat_prob == dissat_prob.map(OrdF64)
+                && key.dissat_prob == dissat_prob.map(PositiveF64)
         })
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
