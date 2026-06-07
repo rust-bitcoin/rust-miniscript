@@ -234,7 +234,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -290,7 +290,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -356,7 +356,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -410,7 +410,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => match desc_ctx {
                 DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
@@ -436,7 +436,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => compiler::best_compilation(self),
         }
