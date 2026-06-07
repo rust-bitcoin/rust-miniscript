@@ -185,7 +185,7 @@ impl fmt::Display for Type {
             Dissat::Unique => "e",
             Dissat::Unknown => "",
         })?;
-        if self.mall.safe {
+        if self.mall.signed {
             f.write_str("s")?;
         }
         if self.mall.non_malleable {
@@ -214,7 +214,7 @@ impl Type {
     fn sanity_checks(&self) {
         debug_assert!(!self.corr.dissatisfiable || self.mall.dissat != Dissat::None);
         debug_assert!(self.mall.dissat == Dissat::None || self.corr.base != Base::V);
-        debug_assert!(self.mall.safe || self.corr.base != Base::K);
+        debug_assert!(self.mall.signed || self.corr.base != Base::K);
         debug_assert!(self.mall.non_malleable || self.corr.input != Input::Zero);
         self.corr.sanity_checks();
     }

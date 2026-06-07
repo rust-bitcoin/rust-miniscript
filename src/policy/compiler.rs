@@ -1154,7 +1154,7 @@ pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
 ) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
     let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
     let x = &*best_t(&mut policy_cache, policy, 1.0, None)?.ms;
-    if !x.ty.mall.safe {
+    if !x.ty.mall.signed {
         Err(CompilerError::TopLevelNonSafe)
     } else if !x.ty.mall.non_malleable {
         Err(CompilerError::ImpossibleNonMalleableCompilation)

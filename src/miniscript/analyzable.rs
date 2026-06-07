@@ -10,7 +10,7 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature
-    pub fn requires_sig(&self) -> bool { self.ty.mall.safe }
+    pub fn requires_sig(&self) -> bool { self.ty.mall.signed }
 
     /// Whether the miniscript is malleable
     pub fn is_non_malleable(&self) -> bool { self.ty.mall.non_malleable }
