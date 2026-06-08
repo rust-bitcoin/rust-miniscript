@@ -11,7 +11,7 @@ check:
 
 # Lint everything.
 lint:
-  RUSTUP_TOOLCHAIN=$(cat ./nightly-version) cargo rbmt lint
+  cargo rbmt lint
 
 # Run the formatter.
 fmt:
