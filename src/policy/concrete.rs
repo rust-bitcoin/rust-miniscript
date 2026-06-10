@@ -234,7 +234,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -290,7 +290,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -356,7 +356,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
@@ -410,7 +410,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => match desc_ctx {
                 DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
@@ -436,7 +436,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (false, _) => Err(CompilerError::TopLevelSigless),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => compiler::best_compilation(self),
         }
@@ -825,12 +825,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Checks if any possible compilation of the policy could be compiled
-    /// as non-malleable and safe.
+    /// as non-malleable and requiring signatures.
     ///
     /// # Returns
     ///
-    /// Returns a tuple `(safe, non-malleable)` to avoid the fact that
-    /// non-malleability depends on safety and we would like to cache results.
+    /// Returns a tuple `(signed, non-malleable)` to avoid the fact that
+    /// non-malleability depends on signatures and we would like to cache results.
     pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
         use Policy::*;
 
@@ -842,28 +842,28 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     (false, true)
                 }
                 And(ref subs) => {
-                    let (atleast_one_safe, all_non_mall) = (0..subs.len())
+                    let (atleast_one_signed, all_non_mall) = (0..subs.len())
                         .map(|_| acc.pop().unwrap())
                         .fold((false, true), |acc, x: (bool, bool)| (acc.0 || x.0, acc.1 && x.1));
-                    (atleast_one_safe, all_non_mall)
+                    (atleast_one_signed, all_non_mall)
                 }
                 Or(ref subs) => {
-                    let (all_safe, atleast_one_safe, all_non_mall) = (0..subs.len())
+                    let (all_signed, atleast_one_signed, all_non_mall) = (0..subs.len())
                         .map(|_| acc.pop().unwrap())
                         .fold((true, false, true), |acc, x| {
                             (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
                         });
-                    (all_safe, atleast_one_safe && all_non_mall)
+                    (all_signed, atleast_one_signed && all_non_mall)
                 }
                 Thresh(ref thresh) => {
-                    let (safe_count, non_mall_count) = (0..thresh.n())
+                    let (signed_count, non_mall_count) = (0..thresh.n())
                         .map(|_| acc.pop().unwrap())
-                        .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
-                            (safe_count + safe as usize, non_mall_count + non_mall as usize)
+                        .fold((0, 0), |(signed_count, non_mall_count), (signed, non_mall)| {
+                            (signed_count + signed as usize, non_mall_count + non_mall as usize)
                         });
                     (
-                        safe_count >= (thresh.n() - thresh.k() + 1),
-                        non_mall_count == thresh.n() && safe_count >= (thresh.n() - thresh.k()),
+                        signed_count >= (thresh.n() - thresh.k() + 1),
+                        non_mall_count == thresh.n() && signed_count >= (thresh.n() - thresh.k()),
                     )
                 }
             };

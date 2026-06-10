@@ -45,8 +45,8 @@ pub enum CompilerError {
     NonBinaryArgAnd,
     /// `Or` fragments only support two args.
     NonBinaryArgOr,
-    /// Compiler has non-safe input policy.
-    TopLevelNonSafe,
+    /// Compiler has a top-level spend path that does not require a signature.
+    TopLevelSigless,
     /// Non-Malleable compilation  does exists for the given sub-policy.
     ImpossibleNonMalleableCompilation,
     /// At least one satisfaction path in the optimal Miniscript has exceeded
@@ -78,7 +78,9 @@ impl fmt::Display for CompilerError {
         match *self {
             Self::NonBinaryArgAnd => f.write_str("And policy fragment must take 2 arguments"),
             Self::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
-            Self::TopLevelNonSafe => f.write_str("Top Level script is not safe on some spendpath"),
+            Self::TopLevelSigless => {
+                f.write_str("top-level script has a spend path without signatures")
+            }
             Self::ImpossibleNonMalleableCompilation => {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
@@ -110,7 +112,7 @@ impl error::Error for CompilerError {
         match self {
             NonBinaryArgAnd
             | NonBinaryArgOr
-            | TopLevelNonSafe
+            | TopLevelSigless
             | ImpossibleNonMalleableCompilation
             | LimitsExceeded
             | NoInternalKey
@@ -1154,8 +1156,8 @@ pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
 ) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
     let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
     let x = &*best_t(&mut policy_cache, policy, 1.0, None)?.ms;
-    if !x.ty.mall.safe {
-        Err(CompilerError::TopLevelNonSafe)
+    if !x.ty.mall.signed {
+        Err(CompilerError::TopLevelSigless)
     } else if !x.ty.mall.non_malleable {
         Err(CompilerError::ImpossibleNonMalleableCompilation)
     } else {
@@ -1280,13 +1282,13 @@ mod tests {
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk(A)").is_ok());
-        assert_eq!(policy_compile_lift_check("after(9)"), Err(CompilerError::TopLevelNonSafe));
-        assert_eq!(policy_compile_lift_check("older(1)"), Err(CompilerError::TopLevelNonSafe));
+        assert_eq!(policy_compile_lift_check("after(9)"), Err(CompilerError::TopLevelSigless));
+        assert_eq!(policy_compile_lift_check("older(1)"), Err(CompilerError::TopLevelSigless));
         assert_eq!(
             policy_compile_lift_check(
                 "sha256(1111111111111111111111111111111111111111111111111111111111111111)"
             ),
-            Err(CompilerError::TopLevelNonSafe)
+            Err(CompilerError::TopLevelSigless)
         );
         assert!(policy_compile_lift_check("and(pk(A),pk(B))").is_ok());
         assert!(policy_compile_lift_check("or(pk(A),pk(B))").is_ok());
@@ -1295,7 +1297,7 @@ mod tests {
 
         assert_eq!(
             policy_compile_lift_check("thresh(2,after(9),after(9),pk(A))"),
-            Err(CompilerError::TopLevelNonSafe)
+            Err(CompilerError::TopLevelSigless)
         );
 
         assert_eq!(

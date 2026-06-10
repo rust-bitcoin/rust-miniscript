@@ -40,7 +40,7 @@ mod tests {
                 types::Dissat::Unique => "e",
                 types::Dissat::Unknown => "",
             })?;
-            if self.0.mall.safe {
+            if self.0.mall.signed {
                 fmt::Write::write_char(f, 's')?;
             }
             if self.0.mall.non_malleable {
