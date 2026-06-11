@@ -19,11 +19,9 @@ jobs:
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: stable
+      - uses: ./.github/actions/setup-rbmt
       - name: "Run tests"
-        run: cargo rbmt test stable --lock-file ${{ matrix.dep }}
+        run: cargo rbmt test --toolchain stable --lock-file ${{ matrix.dep }}
 
   Nightly:                      # 2 jobs, one per lock file.
     name: Test - nightly toolchain
@@ -34,11 +32,9 @@ jobs:
         dep: [minimal, recent]
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
+      - uses: ./.github/actions/setup-rbmt
       - name: "Run tests"
-        run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
+        run: cargo rbmt test --toolchain nightly --lock-file ${{ matrix.dep }}
 
   MSRV:                         # 2 jobs, one per lock file.
     name: Test - 1.63.0 toolchain
@@ -55,11 +51,9 @@ jobs:
           remove_android: true
           remove_dotnet: true
           remove_haskell: true
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: "1.63.0"
+      - uses: ./.github/actions/setup-rbmt
       - name: "Run tests"
-        run: cargo rbmt test msrv --lock-file ${{ matrix.dep }}
+        run: cargo rbmt test --toolchain msrv --lock-file ${{ matrix.dep }}
 
   Lint:
     name: Lint - nightly toolchain
@@ -70,10 +64,7 @@ jobs:
         dep: [recent]
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
-          components: clippy
+      - uses: ./.github/actions/setup-rbmt
       - name: "Run lint"
         run: cargo rbmt lint
 
@@ -84,9 +75,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: stable
+      - uses: ./.github/actions/setup-rbmt
       - name: "Build docs"
         run: cargo rbmt docs
 
@@ -97,9 +86,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
+      - uses: ./.github/actions/setup-rbmt
       - name: "Build docs.rs docs"
         run: cargo rbmt docsrs
 
@@ -110,9 +97,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
+      - uses: ./.github/actions/setup-rbmt
       - name: "Run bench"
         run: cargo rbmt bench
 
@@ -123,41 +108,18 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: nightly
-          components: rustfmt
+      - uses: ./.github/actions/setup-rbmt
       - name: "Check formatting"
-        run: cargo fmt --all -- --check
+        run: cargo rbmt fmt --check
 
-  Integration:                  # 1 job for each bitcoind version we support.
+  Integration:
     name: Integration tests - stable toolchain
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        feature:
-          [
-            "30_2",
-            "29_0",
-            "28_2",
-            "27_2",
-            "26_2",
-            "25_2",
-            "24_2",
-            "23_2",
-            "22_1",
-            "0_21_2",
-            "0_20_2",
-            "0_19_1",
-            "0_18_1",
-            "0_17_2",
-          ]
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/prepare
-        with:
-          toolchain: stable
+      - uses: ./.github/actions/setup-rbmt
+      - name: "Generate integration lock file"
+        run: RUSTUP_TOOLCHAIN="$(cargo rbmt toolchains --stable)" cargo generate-lockfile --manifest-path bitcoind-tests/Cargo.toml
       - name: "Run integration tests"
         run: cargo rbmt integration
 

@@ -75,12 +75,76 @@ allowed_duplicates = [
     "hex-conservative",
 ]
 
+[package.metadata.rbmt.test]
+examples = [
+    "htlc:std compiler",
+    "parse:std",
+    "sign_multisig:std",
+    "verify_tx:std",
+    "xpub_descriptors:std",
+    "taproot:std compiler",
+    "psbt_sign_finalize:std base64",
+    "taptree_of_horror:std compiler",
+]
+exact_features = [
+    ["compiler", "trace"],
+    ["compiler", "serde"],
+    ["compiler", "rand"],
+    ["compiler", "base64"],
+    ["trace", "serde"],
+    ["trace", "rand"],
+    ["trace", "base64"],
+    ["serde", "rand"],
+    ["serde", "base64"],
+    ["rand", "base64"],
+    ["compiler", "trace", "serde", "rand", "base64"],
+    ["std", "compiler"],
+    ["std", "trace"],
+    ["std", "serde"],
+    ["std", "rand"],
+    ["std", "base64"],
+    ["std", "compiler", "trace"],
+    ["std", "compiler", "serde"],
+    ["std", "compiler", "rand"],
+    ["std", "compiler", "base64"],
+    ["std", "trace", "serde"],
+    ["std", "trace", "rand"],
+    ["std", "trace", "base64"],
+    ["std", "serde", "rand"],
+    ["std", "serde", "base64"],
+    ["std", "rand", "base64"],
+    ["std", "compiler", "trace", "serde", "rand", "base64"],
+]
+
+[package.metadata.rbmt.integration]
+package = "bitcoind-tests"
+versions = [
+    "30_2",
+    "29_0",
+    "28_2",
+    "27_2",
+    "26_2",
+    "25_2",
+    "24_2",
+    "23_2",
+    "22_1",
+    "0_21_2",
+    "0_20_2",
+    "0_19_1",
+    "0_18_1",
+    "0_17_2",
+]
+
 [lints]
 workspace = true
 
 [workspace]
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
+
+[workspace.metadata.rbmt.toolchains]
+nightly = "nightly-2026-05-22"
+stable = "1.95.0"
 
 [workspace.lints.clippy]
 use_self = "warn"
