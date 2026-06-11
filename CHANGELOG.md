@@ -1,3 +1,8 @@
+# 13.1.0 - June 9, 2026
+
+- plan: make `Plan`'s `descriptor` field public.
+  [#978](https://github.com/rust-bitcoin/rust-miniscript/pull/978)
+
 # 13.0.0 - October 22, 2025
 
 This release is a pretty big one and includes several significant refactors:
