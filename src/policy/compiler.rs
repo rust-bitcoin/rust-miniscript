@@ -497,14 +497,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
     /// and a probability of dissatisfaction; if `dissat_prob` is `None`
     /// then it is assumed that dissatisfaction never occurs
     fn cost_1d(&self, sat_prob: PositiveF64, dissat_prob: Option<PositiveF64>) -> PositiveF64 {
-        PositiveF64::new(self.ms.ext.pk_cost as f64)
-            + PositiveF64::new(self.comp_ext_data.sat_cost) * sat_prob
-            + match (dissat_prob, self.comp_ext_data.dissat_cost) {
-                (Some(prob), Some(cost)) => prob * PositiveF64::new(cost),
-                (Some(_), None) => PositiveF64::new(f64::INFINITY),
-                (None, Some(_)) => PositiveF64::new(0.0),
-                (None, None) => PositiveF64::new(0.0),
-            }
+        let sat_cost = (self.comp_ext_data.sat_cost > 0.0)
+            .then(|| PositiveF64::new(self.comp_ext_data.sat_cost) * sat_prob);
+        let base = PositiveF64::new(self.ms.ext.pk_cost as f64).conditional_add(sat_cost);
+        let dissat_cost = match (dissat_prob, self.comp_ext_data.dissat_cost) {
+            (Some(_), Some(0.0)) => None,
+            (Some(prob), Some(cost)) => Some(prob * PositiveF64::new(cost)),
+            (Some(_), None) => Some(PositiveF64::INFINITY),
+            (None, _) => None,
+        };
+        base.conditional_add(dissat_cost)
     }
 }
 
@@ -785,8 +787,19 @@ where
         };
     }
     macro_rules! compile_tern {
-        ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(policy_cache, policy, &mut ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
+        ($a:expr, $b:expr, $c: expr, [$ab_prob: expr, $c_prob: expr]) => {
+            compile_tern(
+                policy_cache,
+                policy,
+                &mut ret,
+                $a,
+                $b,
+                $c,
+                $ab_prob,
+                $c_prob,
+                sat_prob,
+                dissat_prob,
+            )?
         };
     }
 
@@ -828,7 +841,6 @@ where
                 best_compilations(policy_cache, subs[0].as_ref(), sat_prob, None)?;
 
             let one = PositiveF64::new(1.0);
-            let zero = PositiveF64::new(0.0);
             compile_binary!(&mut left, &mut right, [one, one], Terminal::AndB);
             compile_binary!(&mut right, &mut left, [one, one], Terminal::AndB);
             compile_binary!(&mut left, &mut right, [one, one], Terminal::AndV);
@@ -838,12 +850,11 @@ where
                 CompilationKey::from_type(Type::FALSE, ExtData::FALSE.has_free_verify, dissat_prob),
                 AstElemExt::terminal(Miniscript::FALSE),
             );
-            compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [one, zero]);
-            compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [one, zero]);
+            compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [one, None]);
+            compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [one, None]);
         }
         Concrete::Or(ref subs) => {
             let (lw, rw) = PositiveF64::normalized(subs[0].0, subs[1].0);
-            let zero = PositiveF64::new(0.0);
 
             //and-or
             if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
@@ -851,7 +862,7 @@ where
                     policy_cache,
                     x[0].as_ref(),
                     lw * sat_prob,
-                    Some(dissat_prob.unwrap_or(zero) + rw * sat_prob),
+                    Some((rw * sat_prob).conditional_add(dissat_prob)),
                 )?;
                 let mut a2 = best_compilations(policy_cache, x[0].as_ref(), lw * sat_prob, None)?;
 
@@ -859,7 +870,7 @@ where
                     policy_cache,
                     x[1].as_ref(),
                     lw * sat_prob,
-                    Some(dissat_prob.unwrap_or(zero) + rw * sat_prob),
+                    Some((rw * sat_prob).conditional_add(dissat_prob)),
                 )?;
                 let mut b2 = best_compilations(policy_cache, x[1].as_ref(), lw * sat_prob, None)?;
 
@@ -870,15 +881,15 @@ where
                     dissat_prob,
                 )?;
 
-                compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
-                compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
+                compile_tern!(&mut a1, &mut b2, &mut c, [lw, Some(rw)]);
+                compile_tern!(&mut b1, &mut a2, &mut c, [lw, Some(rw)]);
             };
             if let (_, Concrete::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     x[0].as_ref(),
                     rw * sat_prob,
-                    Some(dissat_prob.unwrap_or(zero) + lw * sat_prob),
+                    Some((lw * sat_prob).conditional_add(dissat_prob)),
                 )?;
                 let mut a2 = best_compilations(policy_cache, x[0].as_ref(), rw * sat_prob, None)?;
 
@@ -886,7 +897,7 @@ where
                     policy_cache,
                     x[1].as_ref(),
                     rw * sat_prob,
-                    Some(dissat_prob.unwrap_or(zero) + lw * sat_prob),
+                    Some((lw * sat_prob).conditional_add(dissat_prob)),
                 )?;
                 let mut b2 = best_compilations(policy_cache, x[1].as_ref(), rw * sat_prob, None)?;
 
@@ -897,13 +908,13 @@ where
                     dissat_prob,
                 )?;
 
-                compile_tern!(&mut a1, &mut b2, &mut c, [rw, lw]);
-                compile_tern!(&mut b1, &mut a2, &mut c, [rw, lw]);
+                compile_tern!(&mut a1, &mut b2, &mut c, [rw, Some(lw)]);
+                compile_tern!(&mut b1, &mut a2, &mut c, [rw, Some(lw)]);
             };
 
             let dissat_probs = |w: PositiveF64| -> Vec<Option<PositiveF64>> {
                 vec![
-                    Some(dissat_prob.unwrap_or(zero) + w * sat_prob),
+                    Some((w * sat_prob).conditional_add(dissat_prob)),
                     Some(w * sat_prob),
                     dissat_prob,
                     None,
@@ -953,11 +964,15 @@ where
             let k = thresh.k();
             let n = thresh.n();
 
-            let (sat_ratio, dissat_ratio) = PositiveF64::normalized(
-                PositiveF64::new(k as f64),
-                PositiveF64::new((n - k) as f64),
-            );
-            let zero = PositiveF64::new(0.0);
+            let (sat_ratio, dissat_ratio) = if n > k {
+                let (s, d) = PositiveF64::normalized(
+                    PositiveF64::new(k as f64),
+                    PositiveF64::new((n - k) as f64),
+                );
+                (s, Some(d))
+            } else {
+                (PositiveF64::new(1.0), None)
+            };
 
             let mut sub_ext_data = Vec::with_capacity(n);
 
@@ -968,7 +983,9 @@ where
             for (i, ast) in thresh.iter().enumerate() {
                 let sp = sat_prob * sat_ratio;
                 //Expressions must be dissatisfiable
-                let dp = Some(dissat_prob.unwrap_or(zero) + dissat_ratio * sat_prob);
+                let dp = dissat_ratio
+                    .map(|ratio| (ratio * sat_prob).conditional_add(dissat_prob))
+                    .or(dissat_prob);
                 let be = best(types::Base::B, policy_cache, ast.as_ref(), sp, dp)?;
                 let bw = best(types::Base::W, policy_cache, ast.as_ref(), sp, dp)?;
 
@@ -1111,10 +1128,13 @@ fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
     a_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     b_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     c_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    weights: [PositiveF64; 2],
+    ab_branch_prob: PositiveF64,
+    c_branch_prob: Option<PositiveF64>,
     sat_prob: PositiveF64,
     dissat_prob: Option<PositiveF64>,
 ) -> Result<(), CompilerError> {
+    let ab_prob = ab_branch_prob.value();
+    let c_prob = c_branch_prob.map_or(0.0, |p| p.value());
     for a in a_comp.values_mut() {
         let aref = Arc::clone(&a.ms);
         for b in b_comp.values_mut() {
@@ -1122,9 +1142,9 @@ fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
             for c in c_comp.values_mut() {
                 let cref = Arc::clone(&c.ms);
                 let ast = Terminal::AndOr(Arc::clone(&aref), Arc::clone(&bref), Arc::clone(&cref));
-                a.comp_ext_data.branch_prob = Some(weights[0].value());
-                b.comp_ext_data.branch_prob = Some(weights[0].value());
-                c.comp_ext_data.branch_prob = Some(weights[1].value());
+                a.comp_ext_data.branch_prob = Some(ab_prob);
+                b.comp_ext_data.branch_prob = Some(ab_prob);
+                c.comp_ext_data.branch_prob = Some(c_prob);
                 if let Ok(new_ext) = AstElemExt::ternary(ast, a, b, c) {
                     insert_best_wrapped(policy_cache, policy, ret, new_ext, sat_prob, dissat_prob)?;
                 }

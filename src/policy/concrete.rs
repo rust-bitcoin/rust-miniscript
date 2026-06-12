@@ -568,7 +568,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         // Stopping condition: When NONE of the inputs can be further enumerated.
         'outer: loop {
             //--- FIND a plausible node ---
-            let mut prob: Reverse<PositiveF64> = Reverse(PositiveF64::new(0.0));
+            let mut prob: Option<Reverse<PositiveF64>> = None;
             let mut curr_policy: Arc<Self> = Arc::new(Self::Unsatisfiable);
             let mut curr_pol_replace_vec: Vec<(f64, Arc<Self>)> = vec![];
             let mut no_more_enum = false;
@@ -583,7 +583,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
                 if prev_len < enum_len {
                     // Plausible node found
-                    prob = *p;
+                    prob = Some(*p);
                     curr_policy = Arc::clone(pol);
                     break 'inner;
                 } else if i == tapleaf_prob_vec.len() - 1 {
@@ -610,7 +610,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             // with children nodes
 
             // Remove current node
-            assert!(tapleaf_prob_vec.remove(&(prob, curr_policy.clone())));
+            assert!(tapleaf_prob_vec
+                .remove(&(prob.expect("a plausible node was found"), curr_policy.clone())));
             pol_prob_map.remove(&curr_policy);
 
             // OPTIMIZATION - Move marked nodes into final vector

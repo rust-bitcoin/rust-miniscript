@@ -38,6 +38,11 @@ impl PositiveF64 {
         let sum = a.0 + b.0;
         (Self(a.0 / sum), Self(b.0 / sum))
     }
+
+    /// Adds an optional value to `self`, returning `self` unchanged if the value is
+    /// `None`.
+    #[must_use]
+    pub fn conditional_add(self, other: Option<Self>) -> Self { other.map_or(self, |i| self + i) }
 }
 
 impl TryFrom<u32> for PositiveF64 {
