@@ -12,7 +12,7 @@ use bitcoin::absolute;
 use {
     crate::descriptor::TapTree,
     crate::miniscript::ScriptContext,
-    crate::policy::compiler::{self, CompilerError, PositiveF64},
+    crate::policy::compiler::{self, CompilerError},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
@@ -27,6 +27,8 @@ use crate::prelude::*;
 use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
+#[cfg(feature = "compiler")]
+use crate::PositiveF64;
 use crate::{
     AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
 };

@@ -5,7 +5,7 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use core::{cmp, f64, fmt, hash, mem};
+use core::{f64, fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
@@ -16,30 +16,12 @@ use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::prelude::*;
-use crate::{policy, Miniscript, MiniscriptKey, Terminal};
+use crate::{policy, Miniscript, MiniscriptKey, PositiveF64, Terminal};
 
 type PolicyCache<Pk, Ctx> = BTreeMap<
     (Concrete<Pk>, PositiveF64, Option<PositiveF64>),
     BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
 >;
-
-/// Ordered f64 for comparison.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub(crate) struct PositiveF64(pub f64);
-
-impl Eq for PositiveF64 {}
-// We could derive PartialOrd, but we can't derive Ord, and clippy wants us
-// to derive both or neither. Better to be explicit.
-impl PartialOrd for PositiveF64 {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-impl Ord for PositiveF64 {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // will panic if given NaN
-        self.0.partial_cmp(&other.0).unwrap()
-    }
-}
-
 /// Detailed error type for compiler.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CompilerError {
@@ -128,11 +110,6 @@ impl error::Error for CompilerError {
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
     fn from(e: policy::concrete::PolicyError) -> Self { Self::PolicyError(e) }
-}
-
-/// Hash required for using OrdF64 as key for hashmap
-impl hash::Hash for PositiveF64 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
 }
 
 /// Compilation key: This represents the state of the best possible compilation
