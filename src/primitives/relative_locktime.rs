@@ -65,6 +65,11 @@ impl RelLockTime {
 
     /// Whether this timelock is time-based.
     pub fn is_time_locked(&self) -> bool { self.0.is_time_locked() }
+
+    /// Compares two locktimes by their consensus `u32` encoding.
+    pub(crate) fn cmp_by_consensus(self, other: Self) -> cmp::Ordering {
+        self.to_consensus_u32().cmp(&other.to_consensus_u32())
+    }
 }
 
 impl convert::TryFrom<Sequence> for RelLockTime {

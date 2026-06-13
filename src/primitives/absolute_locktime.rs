@@ -68,6 +68,11 @@ impl AbsLockTime {
 
     /// Whether this is a time-based locktime.
     pub fn is_block_time(&self) -> bool { self.0.is_block_time() }
+
+    /// Compares two locktimes by their consensus `u32` encoding.
+    pub(crate) fn cmp_by_consensus(self, other: Self) -> cmp::Ordering {
+        self.to_consensus_u32().cmp(&other.to_consensus_u32())
+    }
 }
 
 impl From<AbsLockTime> for absolute::LockTime {

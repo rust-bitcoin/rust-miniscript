@@ -3,7 +3,7 @@
 //! Concrete Policies
 //!
 
-use core::{fmt, str};
+use core::{cmp, fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
@@ -41,7 +41,7 @@ const MAX_COMPILATION_LEAVES: usize = 1024;
 // Currently the vectors in And/Or are limited to two elements, this is a general miniscript thing
 // not specific to rust-miniscript. Eventually we would like to extend these to be n-ary, but first
 // we need to decide on a game plan for how to efficiently compile n-ary disjunctions
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable.
     Unsatisfiable,
@@ -68,6 +68,53 @@ pub enum Policy<Pk: MiniscriptKey> {
     Or(Vec<(usize, Arc<Self>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Self>, 0>),
+}
+
+impl<Pk: MiniscriptKey> Policy<Pk> {
+    fn variant_name(&self) -> &'static str {
+        match *self {
+            Self::Unsatisfiable => "unsatisfiable",
+            Self::Trivial => "trivial",
+            Self::Key(_) => "key",
+            Self::After(_) => "after",
+            Self::Older(_) => "older",
+            Self::Sha256(_) => "sha256",
+            Self::Hash256(_) => "hash256",
+            Self::Ripemd160(_) => "ripemd160",
+            Self::Hash160(_) => "hash160",
+            Self::And(_) => "and",
+            Self::Or(_) => "or",
+            Self::Thresh(_) => "thresh",
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> PartialOrd for Policy<Pk> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+}
+
+impl<Pk: MiniscriptKey> Ord for Policy<Pk> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        match self.variant_name().cmp(other.variant_name()) {
+            cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match (self, other) {
+            (Self::Unsatisfiable, Self::Unsatisfiable) => cmp::Ordering::Equal,
+            (Self::Trivial, Self::Trivial) => cmp::Ordering::Equal,
+            (Self::Key(a), Self::Key(b)) => a.cmp(b),
+            (Self::After(a), Self::After(b)) => a.cmp_by_consensus(*b),
+            (Self::Older(a), Self::Older(b)) => a.cmp_by_consensus(*b),
+            (Self::Sha256(a), Self::Sha256(b)) => a.cmp(b),
+            (Self::Hash256(a), Self::Hash256(b)) => a.cmp(b),
+            (Self::Ripemd160(a), Self::Ripemd160(b)) => a.cmp(b),
+            (Self::Hash160(a), Self::Hash160(b)) => a.cmp(b),
+            (Self::And(a), Self::And(b)) => a.cmp(b),
+            (Self::Or(a), Self::Or(b)) => a.cmp(b),
+            (Self::Thresh(a), Self::Thresh(b)) => a.cmp(b),
+            _ => unreachable!("variant_name ensures same variant"),
+        }
+    }
 }
 
 /// Detailed error type for concrete policies.
@@ -1388,5 +1435,27 @@ mod tests {
         "or(0@pk(09),0@TRIVIAL)"
             .parse::<Policy<String>>()
             .unwrap_err();
+    }
+
+    #[test]
+    fn policy_ord_is_consistent() {
+        // Same direction as numeric — passes under both old and new scheme.
+        let a = Policy::<String>::from_str("after(100)").unwrap();
+        let b = Policy::<String>::from_str("after(200)").unwrap();
+        assert!(a < b, "after(100) should be less than after(200)");
+
+        // Cross-variant: must not be equal.
+        let c = Policy::<String>::from_str("older(100)").unwrap();
+        assert!(a != c, "after and older variants must not compare equal");
+
+        // Numeric consensus ordering: 9 < 10.
+        let d = Policy::<String>::from_str("after(9)").unwrap();
+        let e = Policy::<String>::from_str("after(10)").unwrap();
+        assert!(d < e, "after(9) < after(10) under consensus u32 ordering");
+
+        // "trivial" < "unsatisfiable" alphabetically.
+        let trivial = Policy::<String>::from_str("TRIVIAL").unwrap();
+        let unsat = Policy::<String>::from_str("UNSATISFIABLE").unwrap();
+        assert!(trivial < unsat, "trivial < unsatisfiable under variant_name ordering");
     }
 }
