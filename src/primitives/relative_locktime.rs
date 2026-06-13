@@ -30,7 +30,7 @@ impl std::error::Error for RelLockTimeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
-/// A relative locktime which implements `Ord`.
+/// A relative locktime that cannot be zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RelLockTime(Sequence);
 
@@ -65,6 +65,21 @@ impl RelLockTime {
 
     /// Whether this timelock is time-based.
     pub fn is_time_locked(&self) -> bool { self.0.is_time_locked() }
+
+    /// Compares two locktimes by their consensus `u32` encoding.
+    pub(crate) fn cmp_by_consensus(self, other: Self) -> cmp::Ordering {
+        self.to_consensus_u32().cmp(&other.to_consensus_u32())
+    }
+
+    /// Returns the later of two locktimes of the same unit, or `None` if units differ.
+    pub(crate) fn max(a: Self, b: Self) -> Option<Self> {
+        use core::cmp::Ordering::*;
+        match relative::LockTime::from(a).partial_cmp(&relative::LockTime::from(b)) {
+            Some(Greater) | Some(Equal) => Some(a),
+            Some(Less) => Some(b),
+            None => None,
+        }
+    }
 }
 
 impl convert::TryFrom<Sequence> for RelLockTime {
@@ -84,18 +99,6 @@ impl From<RelLockTime> for Sequence {
 
 impl From<RelLockTime> for relative::LockTime {
     fn from(lock_time: RelLockTime) -> Self { lock_time.0.to_relative_lock_time().unwrap() }
-}
-
-impl cmp::PartialOrd for RelLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-
-impl cmp::Ord for RelLockTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let this = self.0.to_consensus_u32();
-        let that = other.0.to_consensus_u32();
-        this.cmp(&that)
-    }
 }
 
 impl fmt::Display for RelLockTime {

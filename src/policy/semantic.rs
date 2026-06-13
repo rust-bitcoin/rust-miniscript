@@ -5,7 +5,7 @@
 //! We use the terms "semantic" and "abstract" interchangeably because
 //! "abstract" is a reserved keyword in Rust.
 
-use core::{fmt, str};
+use core::{cmp, fmt, str};
 
 use bitcoin::{absolute, relative};
 
@@ -24,7 +24,7 @@ use crate::{
 /// Semantic policies store only hashes of keys to ensure that objects
 /// representing the same policy are lifted to the same abstract `Policy`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable.
     Unsatisfiable,
@@ -46,6 +46,49 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(Pk::Hash160),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Self>, 0>),
+}
+
+impl<Pk: MiniscriptKey> Policy<Pk> {
+    fn variant_name(&self) -> &'static str {
+        match *self {
+            Self::Unsatisfiable => "unsatisfiable",
+            Self::Trivial => "trivial",
+            Self::Key(_) => "key",
+            Self::After(_) => "after",
+            Self::Older(_) => "older",
+            Self::Sha256(_) => "sha256",
+            Self::Hash256(_) => "hash256",
+            Self::Ripemd160(_) => "ripemd160",
+            Self::Hash160(_) => "hash160",
+            Self::Thresh(_) => "thresh",
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> PartialOrd for Policy<Pk> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+}
+
+impl<Pk: MiniscriptKey> Ord for Policy<Pk> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        match self.variant_name().cmp(other.variant_name()) {
+            cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match (self, other) {
+            (Self::Unsatisfiable, Self::Unsatisfiable) => cmp::Ordering::Equal,
+            (Self::Trivial, Self::Trivial) => cmp::Ordering::Equal,
+            (Self::Key(a), Self::Key(b)) => a.cmp(b),
+            (Self::After(a), Self::After(b)) => a.cmp_by_consensus(*b),
+            (Self::Older(a), Self::Older(b)) => a.cmp_by_consensus(*b),
+            (Self::Sha256(a), Self::Sha256(b)) => a.cmp(b),
+            (Self::Hash256(a), Self::Hash256(b)) => a.cmp(b),
+            (Self::Ripemd160(a), Self::Ripemd160(b)) => a.cmp(b),
+            (Self::Hash160(a), Self::Hash160(b)) => a.cmp(b),
+            (Self::Thresh(a), Self::Thresh(b)) => a.cmp(b),
+            _ => unreachable!("variant_name ensures same variant"),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -686,6 +729,28 @@ mod tests {
     use super::*;
 
     type StringPolicy = Policy<String>;
+
+    #[test]
+    fn policy_ord_is_consistent() {
+        // Same direction as numeric — passes under both old and new scheme.
+        let a = StringPolicy::from_str("after(100)").unwrap();
+        let b = StringPolicy::from_str("after(200)").unwrap();
+        assert!(a < b, "after(100) should be less than after(200)");
+
+        // Cross-variant: must not be equal.
+        let c = StringPolicy::from_str("older(100)").unwrap();
+        assert!(a != c, "after and older variants must not compare equal");
+
+        // Numeric consensus ordering: 9 < 10.
+        let d = StringPolicy::from_str("after(9)").unwrap();
+        let e = StringPolicy::from_str("after(10)").unwrap();
+        assert!(d < e, "after(9) < after(10) under consensus u32 ordering");
+
+        // "trivial" < "unsatisfiable" alphabetically.
+        let trivial = StringPolicy::from_str("TRIVIAL").unwrap();
+        let unsat = StringPolicy::from_str("UNSATISFIABLE").unwrap();
+        assert!(trivial < unsat, "trivial < unsatisfiable under variant_name ordering");
+    }
 
     #[test]
     fn parse_policy_err() {

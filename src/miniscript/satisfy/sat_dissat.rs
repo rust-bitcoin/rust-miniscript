@@ -21,13 +21,6 @@ pub(super) struct SatDissat<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
-    const IMPOSSIBLE: Self = Self {
-        stack: Witness::Impossible,
-        has_sig: false,
-        relative_timelock: None,
-        absolute_timelock: None,
-    };
-
     const TRIVIAL: Self = Self {
         stack: Witness::empty(),
         has_sig: false,
@@ -442,18 +435,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 Terminal::OrI(_, _) => {
                     let SatDissat { dissat: r_dis, sat: r_sat } = stack.pop().unwrap();
                     let SatDissat { dissat: l_dis, sat: l_sat } = stack.pop().unwrap();
-                    // Regarding use of `minimum_mall` for dissatisfactions: this is correct, because
-                    // dissatisfactions for individual fragments are not required to be unique. (We
-                    // track this property using the `ty.malleability.dissat` field.)
-                    //
-                    // This is because usually dissatisfactions are eventually dropped, e.g. by the
-                    // `j:` wrapper or because at the top-level a dissatisfaction is simply invalid.
-                    // In cases where non-unique dissatisfactions would cause malleability, e.g. in
-                    // the `or_c` or `or_b` fragments which use dissatisfactions as part of their
-                    // satisfactions, we set `ty.malleability.non_malleable` appropriately (and
-                    // potentially reject the whole script at creation time).
                     SatDissat {
-                        dissat: Self::minimum_mall(
+                        dissat: min_fn(
                             Self {
                                 stack: Witness::combine(l_dis.stack, Witness::push_1()),
                                 ..l_dis
