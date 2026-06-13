@@ -15,6 +15,10 @@ impl PositiveF64 {
     /// The constant one.
     pub const ONE: Self = Self(1.0);
 
+    /// Constant used in unit tsets
+    #[cfg(test)]
+    pub const ONE_QUARTER: Self = Self(0.25);
+
     /// Takes an iterator over [`PositiveF64`] and produces a new iterator where
     /// each item is divided so that they all total to 1.
     ///

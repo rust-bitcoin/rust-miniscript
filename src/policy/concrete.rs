@@ -348,8 +348,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 let tap_tree = match policy {
                     Self::Trivial => None,
                     policy => {
-                        let leaves =
-                            policy.enumerate_leaves(1.0, max_leaves, Self::enumerate_pol_native);
+                        let leaves = policy.enumerate_leaves(
+                            PositiveF64::ONE,
+                            max_leaves,
+                            Self::enumerate_pol_native,
+                        );
                         let n = leaves.len();
                         if n > max_leaves {
                             return Err(CompilerError::TooManyTapleaves { n, max: max_leaves });
@@ -365,7 +368,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     leaf_index: leaf_idx,
                                 });
                             }
-                            leaf_compilations.push((PositiveF64(*prob), compilation));
+                            leaf_compilations.push((*prob, compilation));
                         }
                         if !leaf_compilations.is_empty() {
                             Some(with_huffman_tree::<Pk>(leaf_compilations))
@@ -417,14 +420,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         Self::Trivial => None,
                         policy => {
                             let leaf_compilations: Vec<_> = policy
-                                .enumerate_policy_tree(1.0)
+                                .enumerate_policy_tree(PositiveF64::ONE)
                                 .into_iter()
                                 .filter(|x| x.1 != Arc::new(Self::Unsatisfiable))
                                 .map(|(prob, pol)| {
-                                    (
-                                        PositiveF64(prob),
-                                        compiler::best_compilation(pol.as_ref()).unwrap(),
-                                    )
+                                    (prob, compiler::best_compilation(pol.as_ref()).unwrap())
                                 })
                                 .collect();
 
@@ -502,20 +502,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// disjunction over sub-policies output by it. The probability calculations are similar
     /// to [`Policy::tapleaf_probability_iter`].
     #[cfg(feature = "compiler")]
-    fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
+    fn enumerate_pol(&self, prob: PositiveF64) -> Vec<(PositiveF64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
                 let normalized_iter = PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
                 normalized_iter
                     .zip(subs.iter())
-                    .map(|(odds, (_, pol))| (prob * f64::from(odds), pol.clone()))
+                    .map(|(odds, (_, pol))| (prob * odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
-                let total_odds = thresh.n();
+                let total_odds = PositiveF64::n(thresh);
                 thresh
                     .iter()
-                    .map(|pol| (prob / total_odds as f64, pol.clone()))
+                    .map(|pol| (prob / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if !thresh.is_and() => generate_combination(thresh, prob),
@@ -528,26 +528,26 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// This ensures nested `Or` branches inside `And` nodes are decomposed into
     /// separate sub-policies, producing IF-free leaves for Taptree-native compilation.
     #[cfg(feature = "compiler")]
-    fn enumerate_pol_native(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
+    fn enumerate_pol_native(&self, prob: PositiveF64) -> Vec<(PositiveF64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
                 let normalized_iter = PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
                 normalized_iter
                     .zip(subs.iter())
-                    .map(|(odds, (_, pol))| (prob * f64::from(odds), pol.clone()))
+                    .map(|(odds, (_, pol))| (prob * odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
-                let total_odds = thresh.n();
+                let total_odds = PositiveF64::n(thresh);
                 thresh
                     .iter()
-                    .map(|pol| (prob / total_odds as f64, pol.clone()))
+                    .map(|pol| (prob / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if !thresh.is_and() => generate_combination(thresh, prob),
             Self::And(subs) => {
                 for (i, sub) in subs.iter().enumerate() {
-                    let child_expanded = sub.enumerate_pol_native(1.0);
+                    let child_expanded = sub.enumerate_pol_native(PositiveF64::ONE);
                     if child_expanded.len() > 1 {
                         let other: Vec<_> = subs
                             .iter()
@@ -578,7 +578,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
     /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
     #[cfg(feature = "compiler")]
-    fn enumerate_policy_tree(self, prob: f64) -> Vec<(f64, Arc<Self>)> {
+    fn enumerate_policy_tree(self, prob: PositiveF64) -> Vec<(PositiveF64, Arc<Self>)> {
         self.enumerate_leaves(prob, MAX_COMPILATION_LEAVES, Self::enumerate_pol)
     }
 
@@ -590,10 +590,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     #[allow(clippy::type_complexity)]
     fn enumerate_leaves(
         self,
-        prob: f64,
+        prob: PositiveF64,
         max_leaves: usize,
-        expand_fn: fn(&Self, f64) -> Vec<(f64, Arc<Self>)>,
-    ) -> Vec<(f64, Arc<Self>)> {
+        expand_fn: fn(&Self, PositiveF64) -> Vec<(PositiveF64, Arc<Self>)>,
+    ) -> Vec<(PositiveF64, Arc<Self>)> {
         let mut tapleaf_prob_vec = BTreeSet::<(Reverse<PositiveF64>, Arc<Self>)>::new();
         // Store probability corresponding to policy in the enumerated tree. This is required since
         // owing to the current [policy element enumeration algorithm][`Policy::enumerate_pol`],
@@ -602,8 +602,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         let mut pol_prob_map = BTreeMap::<Arc<Self>, PositiveF64>::new();
 
         let arc_self = Arc::new(self);
-        tapleaf_prob_vec.insert((Reverse(PositiveF64(prob)), Arc::clone(&arc_self)));
-        pol_prob_map.insert(Arc::clone(&arc_self), PositiveF64(prob));
+        tapleaf_prob_vec.insert((Reverse(prob), Arc::clone(&arc_self)));
+        pol_prob_map.insert(Arc::clone(&arc_self), prob);
 
         // Since we know that policy enumeration *must* result in increase in total number of nodes,
         // we can maintain the length of the ordered set to check if the
@@ -613,21 +613,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         // store the variables
         let mut enum_len = tapleaf_prob_vec.len();
 
-        let mut ret: Vec<(f64, Arc<Self>)> = vec![];
+        let mut ret: Vec<(PositiveF64, Arc<Self>)> = vec![];
 
         // Stopping condition: When NONE of the inputs can be further enumerated.
         'outer: loop {
             //--- FIND a plausible node ---
             let mut prob: Reverse<PositiveF64> = Reverse(PositiveF64(0.0));
             let mut curr_policy: Arc<Self> = Arc::new(Self::Unsatisfiable);
-            let mut curr_pol_replace_vec: Vec<(f64, Arc<Self>)> = vec![];
+            let mut curr_pol_replace_vec: Vec<(PositiveF64, Arc<Self>)> = vec![];
             let mut no_more_enum = false;
 
             // The nodes which can't be enumerated further are directly appended to ret and removed
             // from the ordered set.
-            let mut to_del: Vec<(f64, Arc<Self>)> = vec![];
+            let mut to_del: Vec<(PositiveF64, Arc<Self>)> = vec![];
             'inner: for (i, (p, pol)) in tapleaf_prob_vec.iter().enumerate() {
-                curr_pol_replace_vec = expand_fn(pol, p.0 .0);
+                curr_pol_replace_vec = expand_fn(pol, p.0);
                 enum_len += curr_pol_replace_vec.len() - 1; // A disjunctive node should have separated this into more nodes
                 assert!(prev_len <= enum_len);
 
@@ -644,14 +644,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     // Either node is enumerable, or we have
                     // Mark all non-enumerable nodes to remove,
                     // if not returning value in the current iteration.
-                    to_del.push((p.0 .0, Arc::clone(pol)));
+                    to_del.push((p.0, Arc::clone(pol)));
                 }
             }
 
             // --- Sanity Checks ---
             if enum_len > max_leaves || no_more_enum {
                 for (p, pol) in tapleaf_prob_vec.into_iter() {
-                    ret.push((p.0 .0, pol));
+                    ret.push((p.0, pol));
                 }
                 break 'outer;
             }
@@ -665,7 +665,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
             // OPTIMIZATION - Move marked nodes into final vector
             for (p, pol) in to_del {
-                assert!(tapleaf_prob_vec.remove(&(Reverse(PositiveF64(p)), pol.clone())));
+                assert!(tapleaf_prob_vec.remove(&(Reverse(p), pol.clone())));
                 pol_prob_map.remove(&pol);
                 ret.push((p, pol.clone()));
             }
@@ -675,13 +675,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 match pol_prob_map.get(&policy) {
                     Some(prev_prob) => {
                         assert!(tapleaf_prob_vec.remove(&(Reverse(*prev_prob), policy.clone())));
-                        tapleaf_prob_vec
-                            .insert((Reverse(PositiveF64(prev_prob.0 + p)), policy.clone()));
-                        pol_prob_map.insert(policy.clone(), PositiveF64(prev_prob.0 + p));
+                        tapleaf_prob_vec.insert((Reverse(prev_prob + p), policy.clone()));
+                        pol_prob_map.insert(policy.clone(), prev_prob + p);
                     }
                     None => {
-                        tapleaf_prob_vec.insert((Reverse(PositiveF64(p)), policy.clone()));
-                        pol_prob_map.insert(policy.clone(), PositiveF64(p));
+                        tapleaf_prob_vec.insert((Reverse(p), policy.clone()));
+                        pol_prob_map.insert(policy.clone(), p);
                     }
                 }
             }
@@ -1181,12 +1180,12 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
     thresh: &Threshold<Arc<Policy<Pk>>, 0>,
-    prob: f64,
-) -> Vec<(f64, Arc<Policy<Pk>>)> {
+    prob: PositiveF64,
+) -> Vec<(PositiveF64, Arc<Policy<Pk>>)> {
     debug_assert!(thresh.k() < thresh.n());
 
-    let prob_over_n = prob / thresh.n() as f64;
-    let mut ret: Vec<(f64, Arc<Policy<Pk>>)> = vec![];
+    let prob_over_n = prob / PositiveF64::n(thresh);
+    let mut ret: Vec<(PositiveF64, Arc<Policy<Pk>>)> = vec![];
     for i in 0..thresh.n() {
         let thresh_less_1 = Threshold::from_iter(
             thresh.k(),
@@ -1288,7 +1287,7 @@ mod compiler_tests {
             .collect();
         let thresh = Threshold::new(2, policies).unwrap();
 
-        let combinations = generate_combination(&thresh, 1.0);
+        let combinations = generate_combination(&thresh, PositiveF64::ONE);
 
         let comb_a: Vec<Policy<String>> = vec![
             policy_str!("pk(B)"),
@@ -1315,7 +1314,7 @@ mod compiler_tests {
             .map(|sub_pol| {
                 let expected_thresh =
                     Threshold::from_iter(2, sub_pol.into_iter().map(Arc::new)).unwrap();
-                (0.25, Arc::new(Policy::Thresh(expected_thresh)))
+                (PositiveF64::ONE_QUARTER, Arc::new(Policy::Thresh(expected_thresh)))
             })
             .collect::<Vec<_>>();
         assert_eq!(combinations, expected_comb);
