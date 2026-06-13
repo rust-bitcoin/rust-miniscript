@@ -166,12 +166,6 @@ impl error::Error for PolicyError {
     }
 }
 
-/// Sums a series of `NonZeroU32`s by first converting them to floats.
-#[cfg(feature = "compiler")]
-pub(super) fn sum_nonzero_usizes(iter: impl Iterator<Item = NonZeroU32>) -> f64 {
-    iter.map(|n| u32::from(n) as f64).sum::<f64>()
-}
-
 #[cfg(feature = "compiler")]
 struct TapleafProbabilityIter<'p, Pk: MiniscriptKey> {
     stack: Vec<(f64, &'p Policy<Pk>)>,
@@ -187,10 +181,10 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
 
             match top {
                 Policy::Or(ref subs) => {
-                    let total_sub_prob = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
-                    for (sub_prob, sub) in subs.iter().rev() {
-                        let ratio = u32::from(*sub_prob) as f64 / total_sub_prob;
-                        self.stack.push((top_prob * ratio, sub));
+                    let normalized_iter =
+                        PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
+                    for (ratio, (_, sub)) in normalized_iter.zip(subs.iter()).rev() {
+                        self.stack.push((top_prob * f64::from(ratio), sub));
                     }
                 }
                 Policy::Thresh(ref thresh) if thresh.is_or() => {
@@ -511,9 +505,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
-                subs.iter()
-                    .map(|(odds, pol)| (prob * u32::from(*odds) as f64 / total_odds, pol.clone()))
+                let normalized_iter = PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
+                normalized_iter
+                    .zip(subs.iter())
+                    .map(|(odds, (_, pol))| (prob * f64::from(odds), pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -536,9 +531,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol_native(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
-                subs.iter()
-                    .map(|(odds, pol)| (prob * u32::from(*odds) as f64 / total_odds, pol.clone()))
+                let normalized_iter = PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
+                normalized_iter
+                    .zip(subs.iter())
+                    .map(|(odds, (_, pol))| (prob * f64::from(odds), pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
