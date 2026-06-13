@@ -12,5 +12,6 @@
 //! should be re-exported at the crate root.
 
 pub mod absolute_locktime;
+pub mod positive_f64;
 pub mod relative_locktime;
 pub mod threshold;

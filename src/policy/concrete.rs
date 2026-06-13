@@ -12,7 +12,7 @@ use bitcoin::absolute;
 use {
     crate::descriptor::TapTree,
     crate::miniscript::ScriptContext,
-    crate::policy::compiler::{self, CompilerError, OrdF64},
+    crate::policy::compiler::{self, CompilerError},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
@@ -28,7 +28,8 @@ use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
 use crate::{
-    AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
+    AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, PositiveF64, RelLockTime, Threshold,
+    Translator,
 };
 
 /// Maximum `TapLeaf`s allowed in a compiled TapTree
@@ -65,7 +66,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     And(Vec<Arc<Self>>),
     /// A list of sub-policies, one of which must be satisfied, along with
     /// relative probabilities for each one.
-    Or(Vec<(usize, Arc<Self>)>),
+    Or(Vec<(PositiveF64, Arc<Self>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Self>, 0>),
 }
@@ -131,9 +132,10 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
 
             match top {
                 Policy::Or(ref subs) => {
-                    let total_sub_prob = subs.iter().map(|prob_sub| prob_sub.0).sum::<usize>();
+                    let total_sub_prob =
+                        subs.iter().map(|prob_sub| prob_sub.0.value()).sum::<f64>();
                     for (sub_prob, sub) in subs.iter().rev() {
-                        let ratio = *sub_prob as f64 / total_sub_prob as f64;
+                        let ratio = sub_prob.value() / total_sub_prob;
                         self.stack.push((top_prob * ratio, sub));
                     }
                 }
@@ -199,7 +201,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         let internal_key = self
             .tapleaf_probability_iter()
             .filter_map(|(prob, ref pol)| match pol {
-                Self::Key(pk) => Some((OrdF64(prob), pk)),
+                Self::Key(pk) => Some((PositiveF64::new(prob), pk)),
                 _ => None,
             })
             .max_by_key(|(prob, _)| *prob)
@@ -244,14 +246,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match policy {
                         Self::Trivial => None,
                         policy => {
-                            let mut leaf_compilations: Vec<(OrdF64, Miniscript<Pk, Tap>)> = vec![];
+                            let mut leaf_compilations: Vec<(PositiveF64, Miniscript<Pk, Tap>)> =
+                                vec![];
                             for (prob, pol) in policy.tapleaf_probability_iter() {
                                 // policy corresponding to the key (replaced by unsatisfiable) is skipped
                                 if *pol == Self::Unsatisfiable {
                                     continue;
                                 }
                                 let compilation = compiler::best_compilation::<Pk, Tap>(pol)?;
-                                leaf_compilations.push((OrdF64(prob), compilation));
+                                leaf_compilations.push((PositiveF64::new(prob), compilation));
                             }
                             if !leaf_compilations.is_empty() {
                                 let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);
@@ -303,7 +306,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         if n > max_leaves {
                             return Err(CompilerError::TooManyTapleaves { n, max: max_leaves });
                         }
-                        let mut leaf_compilations: Vec<(OrdF64, Miniscript<Pk, Tap>)> = vec![];
+                        let mut leaf_compilations: Vec<(PositiveF64, Miniscript<Pk, Tap>)> = vec![];
                         for (leaf_idx, (prob, pol)) in leaves.iter().enumerate() {
                             if **pol == Self::Unsatisfiable {
                                 continue;
@@ -314,7 +317,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     leaf_index: leaf_idx,
                                 });
                             }
-                            leaf_compilations.push((OrdF64(*prob), compilation));
+                            leaf_compilations.push((PositiveF64::new(*prob), compilation));
                         }
                         if !leaf_compilations.is_empty() {
                             Some(with_huffman_tree::<Pk>(leaf_compilations))
@@ -371,7 +374,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 .filter(|x| x.1 != Arc::new(Self::Unsatisfiable))
                                 .map(|(prob, pol)| {
                                     (
-                                        OrdF64(prob),
+                                        PositiveF64::new(prob),
                                         compiler::best_compilation(pol.as_ref()).unwrap(),
                                     )
                                 })
@@ -454,9 +457,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = subs.iter().fold(0.0, |acc, x| acc + x.0.value());
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * odds.value() / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -479,9 +482,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol_native(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = subs.iter().fold(0.0, |acc, x| acc + x.0.value());
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * odds.value() / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -541,16 +544,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         max_leaves: usize,
         expand_fn: fn(&Self, f64) -> Vec<(f64, Arc<Self>)>,
     ) -> Vec<(f64, Arc<Self>)> {
-        let mut tapleaf_prob_vec = BTreeSet::<(Reverse<OrdF64>, Arc<Self>)>::new();
+        let mut tapleaf_prob_vec = BTreeSet::<(Reverse<PositiveF64>, Arc<Self>)>::new();
         // Store probability corresponding to policy in the enumerated tree. This is required since
         // owing to the current [policy element enumeration algorithm][`Policy::enumerate_pol`],
         // two passes of the algorithm might result in same sub-policy showing up. Currently, we
         // merge the nodes by adding up the corresponding probabilities for the same policy.
-        let mut pol_prob_map = BTreeMap::<Arc<Self>, OrdF64>::new();
+        let mut pol_prob_map = BTreeMap::<Arc<Self>, PositiveF64>::new();
 
         let arc_self = Arc::new(self);
-        tapleaf_prob_vec.insert((Reverse(OrdF64(prob)), Arc::clone(&arc_self)));
-        pol_prob_map.insert(Arc::clone(&arc_self), OrdF64(prob));
+        tapleaf_prob_vec.insert((Reverse(PositiveF64::new(prob)), Arc::clone(&arc_self)));
+        pol_prob_map.insert(Arc::clone(&arc_self), PositiveF64::new(prob));
 
         // Since we know that policy enumeration *must* result in increase in total number of nodes,
         // we can maintain the length of the ordered set to check if the
@@ -565,7 +568,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         // Stopping condition: When NONE of the inputs can be further enumerated.
         'outer: loop {
             //--- FIND a plausible node ---
-            let mut prob: Reverse<OrdF64> = Reverse(OrdF64(0.0));
+            let mut prob: Option<Reverse<PositiveF64>> = None;
             let mut curr_policy: Arc<Self> = Arc::new(Self::Unsatisfiable);
             let mut curr_pol_replace_vec: Vec<(f64, Arc<Self>)> = vec![];
             let mut no_more_enum = false;
@@ -574,13 +577,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             // from the ordered set.
             let mut to_del: Vec<(f64, Arc<Self>)> = vec![];
             'inner: for (i, (p, pol)) in tapleaf_prob_vec.iter().enumerate() {
-                curr_pol_replace_vec = expand_fn(pol, p.0 .0);
+                curr_pol_replace_vec = expand_fn(pol, p.0.value());
                 enum_len += curr_pol_replace_vec.len() - 1; // A disjunctive node should have separated this into more nodes
                 assert!(prev_len <= enum_len);
 
                 if prev_len < enum_len {
                     // Plausible node found
-                    prob = *p;
+                    prob = Some(*p);
                     curr_policy = Arc::clone(pol);
                     break 'inner;
                 } else if i == tapleaf_prob_vec.len() - 1 {
@@ -591,14 +594,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     // Either node is enumerable, or we have
                     // Mark all non-enumerable nodes to remove,
                     // if not returning value in the current iteration.
-                    to_del.push((p.0 .0, Arc::clone(pol)));
+                    to_del.push((p.0.value(), Arc::clone(pol)));
                 }
             }
 
             // --- Sanity Checks ---
             if enum_len > max_leaves || no_more_enum {
                 for (p, pol) in tapleaf_prob_vec.into_iter() {
-                    ret.push((p.0 .0, pol));
+                    ret.push((p.0.value(), pol));
                 }
                 break 'outer;
             }
@@ -607,12 +610,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             // with children nodes
 
             // Remove current node
-            assert!(tapleaf_prob_vec.remove(&(prob, curr_policy.clone())));
+            assert!(tapleaf_prob_vec
+                .remove(&(prob.expect("a plausible node was found"), curr_policy.clone())));
             pol_prob_map.remove(&curr_policy);
 
             // OPTIMIZATION - Move marked nodes into final vector
             for (p, pol) in to_del {
-                assert!(tapleaf_prob_vec.remove(&(Reverse(OrdF64(p)), pol.clone())));
+                assert!(tapleaf_prob_vec.remove(&(Reverse(PositiveF64::new(p)), pol.clone())));
                 pol_prob_map.remove(&pol);
                 ret.push((p, pol.clone()));
             }
@@ -622,12 +626,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 match pol_prob_map.get(&policy) {
                     Some(prev_prob) => {
                         assert!(tapleaf_prob_vec.remove(&(Reverse(*prev_prob), policy.clone())));
-                        tapleaf_prob_vec.insert((Reverse(OrdF64(prev_prob.0 + p)), policy.clone()));
-                        pol_prob_map.insert(policy.clone(), OrdF64(prev_prob.0 + p));
+                        tapleaf_prob_vec.insert((
+                            Reverse(PositiveF64::new(prev_prob.value() + p)),
+                            policy.clone(),
+                        ));
+                        pol_prob_map
+                            .insert(policy.clone(), PositiveF64::new(prev_prob.value() + p));
                     }
                     None => {
-                        tapleaf_prob_vec.insert((Reverse(OrdF64(p)), policy.clone()));
-                        pol_prob_map.insert(policy.clone(), OrdF64(p));
+                        tapleaf_prob_vec.insert((Reverse(PositiveF64::new(p)), policy.clone()));
+                        pol_prob_map.insert(policy.clone(), PositiveF64::new(p));
                     }
                 }
             }
@@ -966,7 +974,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
-        let mut stack = Vec::<(usize, _)>::with_capacity(128);
+        let mut stack = Vec::<(PositiveF64, _)>::with_capacity(128);
         for node in root.pre_order_iter().rev() {
             let allow_prob;
             // Before doing anything else, check if this is the inner value of a terminal.
@@ -999,10 +1007,10 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             };
 
             let frag_prob = match frag_prob {
-                None => 1,
-                Some(s) => expression::parse_num_nonzero(s, "fragment probability")
+                None => PositiveF64::new(1.0),
+                Some(s) => expression::parse_probability(s, "fragment probability")
                     .map_err(From::from)
-                    .map_err(Error::Parse)? as usize,
+                    .map_err(Error::Parse)?,
             };
 
             let new =
@@ -1090,8 +1098,10 @@ fn has_if_fragment<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Tap>) -> bool {
 
 /// Creates a Huffman Tree from compiled [`Miniscript`] nodes.
 #[cfg(feature = "compiler")]
-fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) -> TapTree<Pk> {
-    let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
+fn with_huffman_tree<Pk: MiniscriptKey>(
+    ms: Vec<(PositiveF64, Miniscript<Pk, Tap>)>,
+) -> TapTree<Pk> {
+    let mut node_weights = BinaryHeap::<(Reverse<PositiveF64>, TapTree<Pk>)>::new();
     for (prob, script) in ms {
         node_weights.push((Reverse(prob), TapTree::leaf(script)));
     }
@@ -1100,9 +1110,9 @@ fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) 
         let (p1, s1) = node_weights.pop().expect("len must at least be two");
         let (p2, s2) = node_weights.pop().expect("len must at least be two");
 
-        let p = (p1.0).0 + (p2.0).0;
+        let p = (p1.0).value() + (p2.0).value();
         node_weights.push((
-            Reverse(OrdF64(p)),
+            Reverse(PositiveF64::new(p)),
             TapTree::combine(s1, s2)
                 .expect("huffman tree cannot produce depth > 128 given sane weights"),
         ));
@@ -1155,7 +1165,7 @@ pub enum TreeChildren<'a, Pk: MiniscriptKey> {
     /// A conjunction or threshold node's children.
     And(&'a [Arc<Policy<Pk>>]),
     /// A disjunction node's children.
-    Or(&'a [(usize, Arc<Policy<Pk>>)]),
+    Or(&'a [(PositiveF64, Arc<Policy<Pk>>)]),
 }
 
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {

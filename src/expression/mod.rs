@@ -34,7 +34,9 @@ pub use self::error::{ParseNumError, ParseThresholdError, ParseTreeError};
 use crate::blanket_traits::StaticDebugAndDisplay;
 use crate::descriptor::checksum::verify_checksum;
 use crate::prelude::*;
-use crate::{AbsLockTime, Error, ParseError, RelLockTime, Threshold, MAX_RECURSION_DEPTH};
+use crate::{
+    AbsLockTime, Error, ParseError, PositiveF64, RelLockTime, Threshold, MAX_RECURSION_DEPTH,
+};
 
 /// Allowed characters are descriptor strings.
 pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -679,7 +681,7 @@ impl<'a> Tree<'a> {
 }
 
 /// Parse a string as a u32, forbidding zero.
-pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
+fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
     if s == "0" {
         return Err(ParseNumError::IllegalZero { context });
     }
@@ -689,6 +691,12 @@ pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNum
         }
     }
     u32::from_str(s).map_err(ParseNumError::StdParse)
+}
+
+/// Parse a string as a PositiveF64, forbidding zero.
+pub fn parse_probability(s: &str, context: &'static str) -> Result<PositiveF64, ParseNumError> {
+    let parsed = parse_num_nonzero(s, context)?;
+    PositiveF64::try_from(parsed).map_err(|_| ParseNumError::IllegalZero { context })
 }
 
 /// Parse a string as a u32, for timelocks or thresholds
