@@ -30,7 +30,7 @@ impl std::error::Error for RelLockTimeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
-/// A relative locktime which implements `Ord`.
+/// A relative locktime that cannot be zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RelLockTime(Sequence);
 
@@ -99,18 +99,6 @@ impl From<RelLockTime> for Sequence {
 
 impl From<RelLockTime> for relative::LockTime {
     fn from(lock_time: RelLockTime) -> Self { lock_time.0.to_relative_lock_time().unwrap() }
-}
-
-impl cmp::PartialOrd for RelLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-
-impl cmp::Ord for RelLockTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let this = self.0.to_consensus_u32();
-        let that = other.0.to_consensus_u32();
-        this.cmp(&that)
-    }
 }
 
 impl fmt::Display for RelLockTime {
