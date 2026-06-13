@@ -21,13 +21,6 @@ pub(super) struct SatDissat<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
-    const IMPOSSIBLE: Self = Self {
-        stack: Witness::Impossible,
-        has_sig: false,
-        relative_timelock: None,
-        absolute_timelock: None,
-    };
-
     const TRIVIAL: Self = Self {
         stack: Witness::empty(),
         has_sig: false,

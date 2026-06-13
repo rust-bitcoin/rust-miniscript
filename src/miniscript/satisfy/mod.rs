@@ -93,18 +93,20 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a HASH160 hash, look up its preimage
     fn lookup_hash160(&self, _: &Pk::Hash160) -> Option<Preimage32> { None }
 
-    /// Assert whether an relative locktime is satisfied
+    /// Returns whether the given relative locktime is satisfied.
     ///
-    /// NOTE: If a descriptor mixes time-based and height-based timelocks, the implementation of
-    /// this method MUST only allow timelocks of either unit, but not both. Allowing both could cause
-    /// miniscript to construct an invalid witness.
+    /// Composite satisfiers may expose both height- and time-based locktimes.
+    /// If a single witness path would require incompatible timelock kinds
+    /// simultaneously, satisfaction for that path becomes [`Witness::Impossible`]
+    /// and plan building fails or selects another path.
     fn check_older(&self, _: relative::LockTime) -> bool { false }
 
-    /// Assert whether a absolute locktime is satisfied
+    /// Returns whether the given absolute locktime is satisfied.
     ///
-    /// NOTE: If a descriptor mixes time-based and height-based timelocks, the implementation of
-    /// this method MUST only allow timelocks of either unit, but not both. Allowing both could cause
-    /// miniscript to construct an invalid witness.
+    /// Composite satisfiers may expose both height- and time-based locktimes.
+    /// If a single witness path would require incompatible timelock kinds
+    /// simultaneously, satisfaction for that path becomes [`Witness::Impossible`]
+    /// and plan building fails or selects another path.
     fn check_after(&self, _: absolute::LockTime) -> bool { false }
 }
 
@@ -674,18 +676,10 @@ mod tests {
         // Same descriptor as above, except that now we use a time-based timelock rather than a
         // lower height-based one.
         //
-        // Again, we wind up taking both timelock branches. Prior to #895, we would do this because
-        // we did not track the after(144) at all. After #895, we do it because our timelock logic
-        // handles mixed timelocks by silently clobbering one of them. (See the implementation of
-        // `concatenate_rev`, which calls `cmp::max` on the timelocks. This clobbers a locktime.
-        // See #979 for an explanation of this.)
-        //
-        // This time the "ideal" behavior would be that we track best satisfactions for both time-
-        // and height-based locktimes, and whenever we are forced into a conflict we throw one away.
-        // (The type system guarantees that we will always have at least one satisfaction left;
-        // otherwise the whole script would be flagged as mixing timelocks.)
-        //
-        // For now we just use this unit test to document the behavior.
+        // Again, both timelock branches are considered. When `concatenate_rev` must merge a
+        // height-based and a time-based absolute locktime on the same path, that satisfaction
+        // becomes `Witness::Impossible`. Plan building then fails or selects an alternate path.
+        // Parallel per-kind tracking remains future work (see #979 discussion).
         let descriptor_str = format!(
             "wsh(or_b(n:or_i(and_v(v:after(144),and_v(v:pk({}),pk({}))),{expensive_threshold}),ajt:and_v(v:after(1000000000),v:pk({}))))",
             available_keys[0], unavailable_keys[0], available_keys[1],
@@ -693,10 +687,16 @@ mod tests {
         let descriptor =
             Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
 
-        let plan = descriptor.into_plan_mall(&satisfier).unwrap();
+        // Both `or_b` arms hit a height/time conflict in `concatenate_rev`, so no malleable
+        // plan exists.
+        assert!(descriptor.clone().into_plan_mall(&satisfier).is_err());
+        // Non-malleable plan still succeeds: `into_plan` dissatisfies the expensive threshold
+        // branch and satisfies the time-based `after(1000000000)` branch without merging
+        // incompatible locktimes on one path.
+        let plan = descriptor.into_plan(&satisfier).unwrap();
         assert_eq!(
             plan.absolute_timelock,
-            Some(absolute::LockTime::from_time(1000000000).unwrap()),
+            Some(absolute::LockTime::from_time(1_000_000_000).unwrap()),
         );
     }
 }
@@ -1029,6 +1029,13 @@ pub struct Satisfaction<T> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
+    const IMPOSSIBLE: Self = Self {
+        stack: Witness::Impossible,
+        has_sig: false,
+        relative_timelock: None,
+        absolute_timelock: None,
+    };
+
     /// The empty satisfaction.
     ///
     /// This has the property that, when concatenated on either side with another satisfaction
@@ -1048,11 +1055,36 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     /// This order allows callers to write `left.concatenate_rev(right)` which feels more
     /// natural than the opposite order, and more importantly, allows this method to be
     /// used when folding over an iterator of multiple satisfactions.
+    ///
+    /// Same-unit locktimes merge to the later value via [`AbsLockTime::max`] and
+    /// [`RelLockTime::max`]. Mixed height/time on the same path yields
+    /// [`Witness::Impossible`]. Downstream [`Self::minimum`], [`Self::minimum_mall`], and
+    /// [`Self::thresh`] treat Impossible like other dead branches; [`Descriptor::into_plan`] and
+    /// [`Descriptor::into_plan_mall`] fail if the winning path is Impossible.
     fn concatenate_rev(self, other: Self) -> Self {
+        if self.stack == Witness::Impossible || other.stack == Witness::Impossible {
+            return Self::IMPOSSIBLE;
+        }
+
+        let relative_timelock = match (self.relative_timelock, other.relative_timelock) {
+            (None, x) | (x, None) => x,
+            (Some(a), Some(b)) => match RelLockTime::max(a, b) {
+                Some(t) => Some(t),
+                None => return Self::IMPOSSIBLE,
+            },
+        };
+        let absolute_timelock = match (self.absolute_timelock, other.absolute_timelock) {
+            (None, x) | (x, None) => x,
+            (Some(a), Some(b)) => match AbsLockTime::max(a, b) {
+                Some(t) => Some(t),
+                None => return Self::IMPOSSIBLE,
+            },
+        };
+
         Self {
             has_sig: self.has_sig || other.has_sig,
-            relative_timelock: cmp::max(self.relative_timelock, other.relative_timelock),
-            absolute_timelock: cmp::max(self.absolute_timelock, other.absolute_timelock),
+            relative_timelock,
+            absolute_timelock,
             stack: Witness::combine(other.stack, self.stack),
         }
     }
@@ -1120,14 +1152,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // For example, the fragment thresh(2, hash, 0, 0, 0)
         // is has an impossible witness
         if sats[sat_indices[k - 1]].stack == Witness::Impossible {
-            Self {
-                stack: Witness::Impossible,
-                // If the witness is impossible, we don't care about the
-                // has_sig flag, nor about the timelocks
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            }
+            Self::IMPOSSIBLE
         }
         // We are now guaranteed that all elements in `k` satisfactions
         // are not impossible(we sort by is_impossible bool).

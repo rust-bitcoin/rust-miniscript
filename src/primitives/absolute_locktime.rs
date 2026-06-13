@@ -73,6 +73,16 @@ impl AbsLockTime {
     pub(crate) fn cmp_by_consensus(self, other: Self) -> cmp::Ordering {
         self.to_consensus_u32().cmp(&other.to_consensus_u32())
     }
+
+    /// Returns the later of two locktimes of the same unit, or `None` if units differ.
+    pub(crate) fn max(a: Self, b: Self) -> Option<Self> {
+        use core::cmp::Ordering::*;
+        match absolute::LockTime::from(a).partial_cmp(&absolute::LockTime::from(b)) {
+            Some(Greater) | Some(Equal) => Some(a),
+            Some(Less) => Some(b),
+            None => None,
+        }
+    }
 }
 
 impl From<AbsLockTime> for absolute::LockTime {
