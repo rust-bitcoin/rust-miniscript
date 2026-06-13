@@ -168,12 +168,12 @@ impl error::Error for PolicyError {
 
 #[cfg(feature = "compiler")]
 struct TapleafProbabilityIter<'p, Pk: MiniscriptKey> {
-    stack: Vec<(f64, &'p Policy<Pk>)>,
+    stack: Vec<(PositiveF64, &'p Policy<Pk>)>,
 }
 
 #[cfg(feature = "compiler")]
 impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
-    type Item = (f64, &'p Policy<Pk>);
+    type Item = (PositiveF64, &'p Policy<Pk>);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -184,11 +184,11 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
                     let normalized_iter =
                         PositiveF64::normalized_iter(subs.iter().map(|x| x.0.into()));
                     for (ratio, (_, sub)) in normalized_iter.zip(subs.iter()).rev() {
-                        self.stack.push((top_prob * f64::from(ratio), sub));
+                        self.stack.push((top_prob * ratio, sub));
                     }
                 }
                 Policy::Thresh(ref thresh) if thresh.is_or() => {
-                    let n64 = thresh.n() as f64;
+                    let n64 = PositiveF64::n(thresh);
                     for sub in thresh.iter().rev() {
                         self.stack.push((top_prob / n64, sub));
                     }
@@ -240,7 +240,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
     fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<'_, Pk> {
-        TapleafProbabilityIter { stack: vec![(1.0, self)] }
+        TapleafProbabilityIter { stack: vec![(PositiveF64::ONE, self)] }
     }
 
     /// Extracts the internal_key from this policy tree.
@@ -249,7 +249,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         let internal_key = self
             .tapleaf_probability_iter()
             .filter_map(|(prob, ref pol)| match pol {
-                Self::Key(pk) => Some((PositiveF64(prob), pk)),
+                Self::Key(pk) => Some((prob, pk)),
                 _ => None,
             })
             .max_by_key(|(prob, _)| *prob)
@@ -302,7 +302,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     continue;
                                 }
                                 let compilation = compiler::best_compilation::<Pk, Tap>(pol)?;
-                                leaf_compilations.push((PositiveF64(prob), compilation));
+                                leaf_compilations.push((prob, compilation));
                             }
                             if !leaf_compilations.is_empty() {
                                 let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);

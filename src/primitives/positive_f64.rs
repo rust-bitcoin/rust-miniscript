@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: CC0-1.0
 
 //! Positive floats ("branch probabilities" for policies)
-
 use core::iter::FusedIterator;
 use core::num::NonZeroU32;
-use core::{cmp, hash};
+use core::{cmp, hash, ops};
+
+use crate::Threshold;
 
 /// Ordered f64 for comparison.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct PositiveF64(pub f64);
 
 impl PositiveF64 {
+    /// The constant one.
+    pub const ONE: Self = Self(1.0);
+
     /// Takes an iterator over [`PositiveF64`] and produces a new iterator where
     /// each item is divided so that they all total to 1.
     ///
@@ -27,6 +31,11 @@ impl PositiveF64 {
         // the iterator are positive, this will be 0 iff the iterator is empty.
         let sum = iter.clone().map(|x| x.0).sum::<f64>();
         NormalizedIterator { iter, sum }
+    }
+
+    /// The 'n' value of a threshold, as a [`PositiveF64`]
+    pub fn n<const MAX: usize, T>(t: &Threshold<T, MAX>) -> Self {
+        Self(t.n() as f64) // cast okay, worst case wil lose precision
     }
 }
 
@@ -57,6 +66,34 @@ impl From<PositiveF64> for f64 {
 impl From<NonZeroU32> for PositiveF64 {
     fn from(value: NonZeroU32) -> Self { Self(f64::from(u32::from(value))) }
 }
+
+macro_rules! impl_op {
+    ($trait:ident, $op:ident, $expr:expr) => {
+        impl ops::$trait for PositiveF64 {
+            type Output = Self;
+            fn $op(self, rhs: Self) -> Self::Output { Self($expr(self.0, rhs.0)) }
+        }
+
+        impl ops::$trait for &PositiveF64 {
+            type Output = PositiveF64;
+            fn $op(self, rhs: Self) -> Self::Output { PositiveF64($expr(self.0, rhs.0)) }
+        }
+
+        impl ops::$trait<&PositiveF64> for PositiveF64 {
+            type Output = Self;
+            fn $op(self, rhs: &PositiveF64) -> Self::Output { Self($expr(self.0, rhs.0)) }
+        }
+
+        impl ops::$trait<PositiveF64> for &PositiveF64 {
+            type Output = PositiveF64;
+            fn $op(self, rhs: PositiveF64) -> Self::Output { PositiveF64($expr(self.0, rhs.0)) }
+        }
+    };
+}
+
+impl_op!(Add, add, f64::add);
+impl_op!(Mul, mul, f64::mul);
+impl_op!(Div, div, f64::div);
 
 pub struct NormalizedIterator<I> {
     iter: I,
