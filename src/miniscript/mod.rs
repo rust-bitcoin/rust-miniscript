@@ -1262,7 +1262,8 @@ mod tests {
     use crate::policy::Liftable;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
     use crate::{
-        hex_script, BareCtx, Error, Legacy, RelLockTime, Satisfier, ToPublicKey, ValidationError,
+        hex_script, AbsLockTime, BareCtx, Error, Legacy, RelLockTime, Satisfier, ToPublicKey,
+        ValidationError,
     };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
@@ -1977,6 +1978,14 @@ mod tests {
             ok_insane.validate(&ValidationParams::SANE).unwrap_err(),
             ValidationError::MixedTimeLocks,
         );
+    }
+
+    #[test]
+    fn terminal_ord_locktimes_are_consistent() {
+        let a = Miniscript::<String, Segwitv0>::after(AbsLockTime::from_consensus(9).unwrap());
+        let b = Miniscript::<String, Segwitv0>::after(AbsLockTime::from_consensus(10).unwrap());
+        // Matches policy ordering: 9 < 10 under cmp_by_consensus
+        assert!(a < b, "after(9) < after(10) under consensus u32 ordering");
     }
 
     #[test]

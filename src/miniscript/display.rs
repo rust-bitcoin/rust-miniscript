@@ -343,8 +343,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Terminal<Pk, Ctx> {
                         (DisplayNode::ThresholdK(me), DisplayNode::ThresholdK(you)) => me.cmp(&you),
                         (DisplayNode::Key(me), DisplayNode::Key(you)) => me.cmp(you),
                         (DisplayNode::RawKeyHash(me), DisplayNode::RawKeyHash(you)) => me.cmp(you),
-                        (DisplayNode::After(me), DisplayNode::After(you)) => me.cmp(you),
-                        (DisplayNode::Older(me), DisplayNode::Older(you)) => me.cmp(you),
+                        (DisplayNode::After(me), DisplayNode::After(you)) => {
+                            me.cmp_by_consensus(*you)
+                        }
+                        (DisplayNode::Older(me), DisplayNode::Older(you)) => {
+                            me.cmp_by_consensus(*you)
+                        }
                         (DisplayNode::Sha256(me), DisplayNode::Sha256(you)) => me.cmp(you),
                         (DisplayNode::Hash256(me), DisplayNode::Hash256(you)) => me.cmp(you),
                         (DisplayNode::Ripemd160(me), DisplayNode::Ripemd160(you)) => me.cmp(you),
