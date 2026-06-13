@@ -1671,7 +1671,7 @@ mod tests {
     #[test]
     fn tr_roundtrip_key() {
         let script = Tr::<String>::from_str("tr()").unwrap().to_string();
-        assert_eq!(script, format!("tr()#x4ml3kxd"))
+        assert_eq!(script, "tr()#x4ml3kxd".to_string())
     }
 
     #[test]
