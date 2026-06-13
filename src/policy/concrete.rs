@@ -3,6 +3,7 @@
 //! Concrete Policies
 //!
 
+use core::num::NonZeroU32;
 use core::{cmp, fmt, str};
 #[cfg(feature = "std")]
 use std::error;
@@ -67,7 +68,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     And(Vec<Arc<Self>>),
     /// A list of sub-policies, one of which must be satisfied, along with
     /// relative probabilities for each one.
-    Or(Vec<(usize, Arc<Self>)>),
+    Or(Vec<(NonZeroU32, Arc<Self>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Self>, 0>),
 }
@@ -165,6 +166,12 @@ impl error::Error for PolicyError {
     }
 }
 
+/// Sums a series of `NonZeroU32`s by first converting them to floats.
+#[cfg(feature = "compiler")]
+pub(super) fn sum_nonzero_usizes(iter: impl Iterator<Item = NonZeroU32>) -> f64 {
+    iter.map(|n| u32::from(n) as f64).sum::<f64>()
+}
+
 #[cfg(feature = "compiler")]
 struct TapleafProbabilityIter<'p, Pk: MiniscriptKey> {
     stack: Vec<(f64, &'p Policy<Pk>)>,
@@ -180,9 +187,9 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
 
             match top {
                 Policy::Or(ref subs) => {
-                    let total_sub_prob = subs.iter().map(|prob_sub| prob_sub.0).sum::<usize>();
+                    let total_sub_prob = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
                     for (sub_prob, sub) in subs.iter().rev() {
-                        let ratio = *sub_prob as f64 / total_sub_prob as f64;
+                        let ratio = u32::from(*sub_prob) as f64 / total_sub_prob;
                         self.stack.push((top_prob * ratio, sub));
                     }
                 }
@@ -504,9 +511,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * u32::from(*odds) as f64 / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -529,9 +536,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn enumerate_pol_native(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
             Self::Or(subs) => {
-                let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
+                let total_odds = sum_nonzero_usizes(subs.iter().map(|prob_sub| prob_sub.0));
                 subs.iter()
-                    .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
+                    .map(|(odds, pol)| (prob * u32::from(*odds) as f64 / total_odds, pol.clone()))
                     .collect::<Vec<_>>()
             }
             Self::Thresh(ref thresh) if thresh.is_or() => {
@@ -1017,7 +1024,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
-        let mut stack = Vec::<(usize, _)>::with_capacity(128);
+        let mut stack = Vec::<(NonZeroU32, _)>::with_capacity(128);
         for node in root.pre_order_iter().rev() {
             let allow_prob;
             // Before doing anything else, check if this is the inner value of a terminal.
@@ -1050,10 +1057,10 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             };
 
             let frag_prob = match frag_prob {
-                None => 1,
+                None => NonZeroU32::new(1).unwrap(), // NonZeroU32::MIN available in Rust 1.70
                 Some(s) => expression::parse_num_nonzero(s, "fragment probability")
                     .map_err(From::from)
-                    .map_err(Error::Parse)? as usize,
+                    .map_err(Error::Parse)?,
             };
 
             let new =
@@ -1208,7 +1215,7 @@ pub enum TreeChildren<'a, Pk: MiniscriptKey> {
     /// A conjunction or threshold node's children.
     And(&'a [Arc<Policy<Pk>>]),
     /// A disjunction node's children.
-    Or(&'a [(usize, Arc<Policy<Pk>>)]),
+    Or(&'a [(NonZeroU32, Arc<Policy<Pk>>)]),
 }
 
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {

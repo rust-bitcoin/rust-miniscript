@@ -841,9 +841,9 @@ where
             compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
         }
         Concrete::Or(ref subs) => {
-            let total = (subs[0].0 + subs[1].0) as f64;
-            let lw = subs[0].0 as f64 / total;
-            let rw = subs[1].0 as f64 / total;
+            let total = u32::from(subs[0].0) as f64 + u32::from(subs[1].0) as f64;
+            let lw = u32::from(subs[0].0) as f64 / total;
+            let rw = u32::from(subs[1].0) as f64 / total;
 
             //and-or
             if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
@@ -1192,6 +1192,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use core::num::NonZeroU32;
     use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
@@ -1206,6 +1207,9 @@ mod tests {
     type BPolicy = Concrete<bitcoin::PublicKey>;
     type TapAstElemExt = policy::compiler::AstElemExt<String, Tap>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
+
+    #[allow(unsafe_code)]
+    const ONE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) }; // can be NonZeroU32::MIN in 1.70
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::ecdsa::Signature) {
         let mut ret = Vec::with_capacity(n);
@@ -1344,14 +1348,14 @@ mod tests {
         // Liquid policy
         let policy: BPolicy = Concrete::Or(vec![
             (
-                127,
+                NonZeroU32::new(127).unwrap(),
                 Arc::new(Concrete::Thresh(
                     Threshold::from_iter(3, key_pol[0..5].iter().map(|p| (p.clone()).into()))
                         .unwrap(),
                 )),
             ),
             (
-                1,
+                NonZeroU32::new(1).unwrap(),
                 Arc::new(Concrete::And(vec![
                     Arc::new(Concrete::Older(RelLockTime::from_height(10000).unwrap())),
                     Arc::new(Concrete::Thresh(
@@ -1520,8 +1524,8 @@ mod tests {
             .collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_a)))),
-            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_b)))),
+            (ONE, Arc::new(Concrete::Thresh(Threshold::and_n(keys_a)))),
+            (ONE, Arc::new(Concrete::Thresh(Threshold::and_n(keys_b)))),
         ])
         .compile();
         let script_size = thresh_res.clone().map(|m| m.script_size());
@@ -1591,14 +1595,14 @@ mod tests {
         // Test that we refuse to compile policies with duplicated keys
         let (keys, _) = pubkeys_and_a_sig(1);
         let key = Arc::new(Concrete::Key(keys[0]));
-        let res =
-            Concrete::Or(vec![(1, Arc::clone(&key)), (1, Arc::clone(&key))]).compile::<Segwitv0>();
+        let res = Concrete::Or(vec![(ONE, Arc::clone(&key)), (ONE, Arc::clone(&key))])
+            .compile::<Segwitv0>();
         assert_eq!(
             res,
             Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
         // Same for legacy
-        let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
+        let res = Concrete::Or(vec![(ONE, key.clone()), (ONE, key)]).compile::<Legacy>();
         assert_eq!(
             res,
             Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
