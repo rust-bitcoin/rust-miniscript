@@ -13,7 +13,7 @@ use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
-use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
+use crate::miniscript::types::{self, ErrorKind, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::prelude::*;
@@ -280,6 +280,10 @@ impl CompilerExtData {
         Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
     }
 
+    fn and_n(left: Self, right: Self) -> Self {
+        Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
+    }
+
     fn or_b(l: Self, r: Self) -> Self {
         let lprob = l
             .branch_prob
@@ -353,7 +357,7 @@ impl CompilerExtData {
     fn and_or(a: Self, b: Self, c: Self) -> Self {
         let aprob = a.branch_prob.expect("andor, a prob must be set");
         let bprob = b.branch_prob.expect("andor, b prob must be set");
-        let cprob = c.branch_prob.expect("andor, c prob must be set");
+        let cprob = c.branch_prob.unwrap_or(0.0);
 
         let adis = a
             .dissat_cost
@@ -560,6 +564,48 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
             ms: Arc::new(Miniscript::multi_a(thresh)),
             comp_ext_data: CompilerExtData::multi_a(k, n),
         }
+    }
+
+    /// Helper functions to compose two Miniscript fragments, where we assume
+    /// by construction that all validation parameters are upheld.
+    fn compose_typeck_only(
+        term: Terminal<Pk, Ctx>,
+    ) -> Result<Arc<Miniscript<Pk, Ctx>>, types::Error> {
+        let ty = types::Type::type_check(&term)?;
+        let ext = types::ExtData::type_check(&term);
+        Ok(Arc::new(Miniscript::from_components_unchecked(term, ty, ext)))
+    }
+
+    fn and_b(left: &Self, right: &Self) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::AndB(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::and_b(left.comp_ext_data, right.comp_ext_data),
+        })
+    }
+
+    fn and_v(left: &Self, right: &Self) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::AndV(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::and_v(left.comp_ext_data, right.comp_ext_data),
+        })
+    }
+
+    /// and_n(a,b) == andor(a,b,0) is a conjunction of a and b
+    fn and_n(left: &Self, right: &Self) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::AndOr(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+                Arc::new(Miniscript::FALSE),
+            ))?,
+            comp_ext_data: CompilerExtData::and_n(left.comp_ext_data, right.comp_ext_data),
+        })
     }
 
     fn binary(ast: Terminal<Pk, Ctx>, l: &Self, r: &Self) -> Result<Self, types::Error> {
@@ -861,26 +907,41 @@ where
         Concrete::Hash160(ref hash) => insert_wrap!(AstElemExt::hash160(hash.clone())),
         Concrete::And(ref subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
-            let mut left =
-                best_compilations(policy_cache, subs[0].as_ref(), sat_prob, dissat_prob)?;
-            let mut right =
-                best_compilations(policy_cache, subs[1].as_ref(), sat_prob, dissat_prob)?;
-            let mut q_zero_right =
-                best_compilations(policy_cache, subs[1].as_ref(), sat_prob, None)?;
-            let mut q_zero_left =
-                best_compilations(policy_cache, subs[0].as_ref(), sat_prob, None)?;
+            let left = best_compilations(policy_cache, subs[0].as_ref(), sat_prob, dissat_prob)?;
+            let right = best_compilations(policy_cache, subs[1].as_ref(), sat_prob, dissat_prob)?;
+            let q_zero_right = best_compilations(policy_cache, subs[1].as_ref(), sat_prob, None)?;
+            let q_zero_left = best_compilations(policy_cache, subs[0].as_ref(), sat_prob, None)?;
 
-            compile_binary!(&mut left, &mut right, [1.0, 1.0], Terminal::AndB);
-            compile_binary!(&mut right, &mut left, [1.0, 1.0], Terminal::AndB);
-            compile_binary!(&mut left, &mut right, [1.0, 1.0], Terminal::AndV);
-            compile_binary!(&mut right, &mut left, [1.0, 1.0], Terminal::AndV);
-            let mut zero_comp = BTreeMap::new();
-            zero_comp.insert(
-                CompilationKey::from_type(Type::FALSE, ExtData::FALSE.has_free_verify, dissat_prob),
-                AstElemExt::unsatisfiable(),
-            );
-            compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);
-            compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
+            let mut insert_binary = |left: &BTreeMap<_, _>,
+                                     right: &BTreeMap<_, _>,
+                                     combinator: fn(&_, &_) -> Result<_, _>|
+             -> Result<(), CompilerError> {
+                for l in left.values() {
+                    for r in right.values() {
+                        if let Ok(new_ext) = combinator(l, r) {
+                            insert_best_wrapped(
+                                policy_cache,
+                                policy,
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            )?;
+                        }
+                    }
+                }
+                Ok(())
+            };
+            insert_binary(&left, &right, AstElemExt::and_b)?;
+            // Do a separate loop with 'l' and 'r' swapped; we could combine the loops,
+            // but this would sometimes result in compiling e.g. and(pk(A),pk(B)) into
+            // an and with A and B swapped, which is surprising to the user since the
+            // cost is the same with or without the swap.
+            insert_binary(&right, &left, AstElemExt::and_b)?;
+            insert_binary(&left, &right, AstElemExt::and_v)?;
+            insert_binary(&right, &left, AstElemExt::and_v)?;
+            insert_binary(&left, &q_zero_right, AstElemExt::and_n)?;
+            insert_binary(&right, &q_zero_left, AstElemExt::and_n)?;
         }
         Concrete::Or(ref subs) => {
             let total = u32::from(subs[0].0) as f64 + u32::from(subs[1].0) as f64;
