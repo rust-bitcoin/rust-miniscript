@@ -5,9 +5,6 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-#![allow(dead_code)] // will be removed in next commit
-#![allow(unused_variables)] // will be removed in next commit
-
 use core::num::NonZeroU32;
 use core::{f64, fmt, mem};
 #[cfg(feature = "std")]
@@ -290,10 +287,6 @@ impl CompilationKey {
 
 #[derive(Copy, Clone, Debug)]
 struct CompilerExtData {
-    /// If this node is the direct child of a disjunction, this field must
-    /// have the probability of its branch being taken. Otherwise it is ignored.
-    /// All functions initialize it to `None`.
-    branch_prob: Option<f64>,
     /// The number of bytes needed to satisfy the fragment in segwit format
     /// (total length of all witness pushes, plus their own length prefixes)
     sat_cost: f64,
@@ -304,13 +297,12 @@ struct CompilerExtData {
 }
 
 impl CompilerExtData {
-    const TRUE: Self = Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None };
+    const TRUE: Self = Self { sat_cost: 0.0, dissat_cost: None };
 
-    const FALSE: Self = Self { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
+    const FALSE: Self = Self { sat_cost: f64::MAX, dissat_cost: Some(0.0) };
 
     fn pk_k<Ctx: ScriptContext>() -> Self {
         Self {
-            branch_prob: None,
             sat_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 73.0,
                 SigType::Schnorr => 1.0 /* <var_int> */ + 64.0 /* sig */ + 1.0, /* <sighash_type> */
@@ -321,7 +313,6 @@ impl CompilerExtData {
 
     fn pk_h<Ctx: ScriptContext>() -> Self {
         Self {
-            branch_prob: None,
             sat_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 73.0 + 34.0,
                 SigType::Schnorr => 66.0 + 33.0,
@@ -336,68 +327,46 @@ impl CompilerExtData {
     }
 
     fn multi(k: usize) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: 1.0 + 73.0 * k as f64,
-            dissat_cost: Some(1.0 * (k + 1) as f64),
-        }
+        Self { sat_cost: 1.0 + 73.0 * k as f64, dissat_cost: Some(1.0 * (k + 1) as f64) }
     }
 
     fn multi_a(k: usize, n: usize) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: 66.0 * k as f64 + (n - k) as f64,
             dissat_cost: Some(n as f64), /* <w_n> ... <w_1> := 0x00 ... 0x00 (n times) */
         }
     }
 
-    fn hash() -> Self { Self { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) } }
+    fn hash() -> Self { Self { sat_cost: 33.0, dissat_cost: Some(33.0) } }
 
-    fn time() -> Self { Self { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
+    fn time() -> Self { Self { sat_cost: 0.0, dissat_cost: None } }
 
-    fn cast_alt(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
-    }
+    fn cast_alt(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: self.dissat_cost } }
 
-    fn cast_swap(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
-    }
+    fn cast_swap(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: self.dissat_cost } }
 
-    fn cast_check(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
-    }
+    fn cast_check(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: self.dissat_cost } }
 
-    fn cast_dupif(self) -> Self {
-        Self { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
-    }
+    fn cast_dupif(self) -> Self { Self { sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) } }
 
-    fn cast_verify(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
-    }
+    fn cast_verify(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: None } }
 
-    fn cast_nonzero(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) }
-    }
+    fn cast_nonzero(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: Some(1.0) } }
 
     fn cast_zeronotequal(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
+        Self { sat_cost: self.sat_cost, dissat_cost: self.dissat_cost }
     }
 
-    fn cast_true(self) -> Self {
-        Self { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
-    }
+    fn cast_true(self) -> Self { Self { sat_cost: self.sat_cost, dissat_cost: None } }
 
     fn cast_unlikely(self) -> Self {
-        Self { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
+        Self { sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
     }
 
-    fn cast_likely(self) -> Self {
-        Self { branch_prob: None, sat_cost: 1.0 + self.sat_cost, dissat_cost: Some(2.0) }
-    }
+    fn cast_likely(self) -> Self { Self { sat_cost: 1.0 + self.sat_cost, dissat_cost: Some(2.0) } }
 
     fn and_b(left: Self, right: Self) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: match (left.dissat_cost, right.dissat_cost) {
                 (Some(l), Some(r)) => Some(l + r),
@@ -407,16 +376,15 @@ impl CompilerExtData {
     }
 
     fn and_v(left: Self, right: Self) -> Self {
-        Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
+        Self { sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
     }
 
     fn and_n(left: Self, right: Self) -> Self {
-        Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
+        Self { sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
     }
 
     fn or_b(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
@@ -425,7 +393,6 @@ impl CompilerExtData {
 
     fn or_d(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
         }
@@ -433,7 +400,6 @@ impl CompilerExtData {
 
     fn or_c(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: None,
         }
@@ -442,7 +408,6 @@ impl CompilerExtData {
     #[allow(clippy::manual_map)] // Complex if/let is better as is.
     fn or_i(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
-            branch_prob: None,
             sat_cost: lprob * (2.0 + l.sat_cost) + rprob * (1.0 + r.sat_cost),
             dissat_cost: if let (Some(ldis), Some(rdis)) = (l.dissat_cost, r.dissat_cost) {
                 if (2.0 + ldis) > (1.0 + rdis) {
@@ -465,7 +430,6 @@ impl CompilerExtData {
             .dissat_cost
             .expect("BUG: and_or first arg(a) must be dissatisfiable");
         Self {
-            branch_prob: None,
             sat_cost: lprob * (a.sat_cost + b.sat_cost) + rprob * (adis + c.sat_cost),
             dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
         }
@@ -484,36 +448,9 @@ impl CompilerExtData {
             dissat_cost += sub.dissat_cost.unwrap();
         }
         Self {
-            branch_prob: None,
             sat_cost: sat_cost * k_over_n + dissat_cost * (1.0 - k_over_n),
             dissat_cost: Some(dissat_cost),
         }
-    }
-}
-
-impl CompilerExtData {
-    /// Compute the type of a fragment, given a function to look up
-    /// the types of its children.
-    fn type_check_with_child<Pk, Ctx, C>(fragment: &Terminal<Pk, Ctx>, child: C) -> Self
-    where
-        C: Fn(usize) -> Self,
-        Pk: MiniscriptKey,
-        Ctx: ScriptContext,
-    {
-        let get_child = |_sub, n| child(n);
-        Self::type_check_common(fragment, get_child)
-    }
-
-    /// Compute the type of a fragment, given a function to look up
-    /// the types of its children, if available and relevant for the
-    /// given fragment
-    fn type_check_common<'a, Pk, Ctx, C>(fragment: &'a Terminal<Pk, Ctx>, get_child: C) -> Self
-    where
-        C: Fn(&'a Terminal<Pk, Ctx>, usize) -> Self,
-        Pk: MiniscriptKey,
-        Ctx: ScriptContext,
-    {
-        unreachable!()
     }
 }
 
@@ -728,24 +665,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
                 l_weight,
                 r_weight,
             ),
-        })
-    }
-
-    fn ternary(ast: Terminal<Pk, Ctx>, a: &Self, b: &Self, c: &Self) -> Result<Self, types::Error> {
-        let lookup_ext = |n| match n {
-            0 => a.comp_ext_data,
-            1 => b.comp_ext_data,
-            2 => c.comp_ext_data,
-            _ => unreachable!(),
-        };
-        //Types and ExtData are already cached and stored in children. So, we can
-        //type_check without cache. For Compiler extra data, we supply a cache.
-        let ty = types::Type::type_check(&ast)?;
-        let ext = types::ExtData::type_check(&ast);
-        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
-        Ok(Self {
-            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
-            comp_ext_data,
         })
     }
 }
@@ -1151,40 +1070,6 @@ where
         policy_cache.insert((policy.clone(), ord_sat_prob, ord_dissat_prob), ret.clone());
         Ok(ret)
     }
-}
-
-/// Helper function to compile different order of and_or fragments.
-/// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
-/// root and_or node. `weights` represent the odds for taking each sub branch
-#[allow(clippy::too_many_arguments)]
-fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
-    policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
-    ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    a_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    b_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    c_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    weights: [f64; 2],
-    sat_prob: f64,
-    dissat_prob: Option<f64>,
-) -> Result<(), CompilerError> {
-    for a in a_comp.values_mut() {
-        let aref = Arc::clone(&a.ms);
-        for b in b_comp.values_mut() {
-            let bref = Arc::clone(&b.ms);
-            for c in c_comp.values_mut() {
-                let cref = Arc::clone(&c.ms);
-                let ast = Terminal::AndOr(Arc::clone(&aref), Arc::clone(&bref), Arc::clone(&cref));
-                a.comp_ext_data.branch_prob = Some(weights[0]);
-                b.comp_ext_data.branch_prob = Some(weights[0]);
-                c.comp_ext_data.branch_prob = Some(weights[1]);
-                if let Ok(new_ext) = AstElemExt::ternary(ast, a, b, c) {
-                    insert_best_wrapped(policy_cache, policy, ret, new_ext, sat_prob, dissat_prob)?;
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Obtain the best compilation of for p=1.0 and q=0
