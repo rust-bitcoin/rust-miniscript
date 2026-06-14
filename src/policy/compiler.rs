@@ -5,6 +5,7 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
+use core::num::NonZeroU32;
 use core::{f64, fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
@@ -87,6 +88,124 @@ impl fmt::Display for CompilerError {
             Self::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
     }
+}
+
+fn best_compilations_or<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
+    policy: &Concrete<Pk>,
+    subs: &[(NonZeroU32, Arc<Concrete<Pk>>)],
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) -> Result<(), CompilerError> {
+    macro_rules! compile_tern {
+        ($a:expr, $b:expr, $c: expr, $w: expr) => {
+            compile_tern(policy_cache, policy, ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
+        };
+    }
+
+    let total = u32::from(subs[0].0) as f64 + u32::from(subs[1].0) as f64;
+    let lw = u32::from(subs[0].0) as f64 / total;
+    let rw = u32::from(subs[1].0) as f64 / total;
+
+    //and-or
+    if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
+        let mut a1 = best_compilations(
+            policy_cache,
+            x[0].as_ref(),
+            lw * sat_prob,
+            Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
+        )?;
+        let mut a2 = best_compilations(policy_cache, x[0].as_ref(), lw * sat_prob, None)?;
+
+        let mut b1 = best_compilations(
+            policy_cache,
+            x[1].as_ref(),
+            lw * sat_prob,
+            Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
+        )?;
+        let mut b2 = best_compilations(policy_cache, x[1].as_ref(), lw * sat_prob, None)?;
+
+        let mut c =
+            best_compilations(policy_cache, subs[1].1.as_ref(), rw * sat_prob, dissat_prob)?;
+
+        compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
+        compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
+    };
+    if let (_, Concrete::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
+        let mut a1 = best_compilations(
+            policy_cache,
+            x[0].as_ref(),
+            rw * sat_prob,
+            Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
+        )?;
+        let mut a2 = best_compilations(policy_cache, x[0].as_ref(), rw * sat_prob, None)?;
+
+        let mut b1 = best_compilations(
+            policy_cache,
+            x[1].as_ref(),
+            rw * sat_prob,
+            Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
+        )?;
+        let mut b2 = best_compilations(policy_cache, x[1].as_ref(), rw * sat_prob, None)?;
+
+        let mut c =
+            best_compilations(policy_cache, subs[0].1.as_ref(), lw * sat_prob, dissat_prob)?;
+
+        compile_tern!(&mut a1, &mut b2, &mut c, [rw, lw]);
+        compile_tern!(&mut b1, &mut a2, &mut c, [rw, lw]);
+    };
+
+    let dissat_probs = |w: f64| -> Vec<Option<f64>> {
+        vec![
+            Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob),
+            Some(w * sat_prob),
+            dissat_prob,
+            None,
+        ]
+    };
+
+    let mut l_comp = vec![];
+    let mut r_comp = vec![];
+
+    for dissat_prob in dissat_probs(rw).iter() {
+        let l = best_compilations(policy_cache, subs[0].1.as_ref(), lw * sat_prob, *dissat_prob)?;
+        l_comp.push(l);
+    }
+
+    for dissat_prob in dissat_probs(lw).iter() {
+        let r = best_compilations(policy_cache, subs[1].1.as_ref(), rw * sat_prob, *dissat_prob)?;
+        r_comp.push(r);
+    }
+
+    let mut insert_binary = |left: &BTreeMap<_, _>,
+                             right: &BTreeMap<_, _>,
+                             lw: f64,
+                             rw: f64,
+                             combinator: fn(&_, &_, _, _) -> Result<_, _>|
+     -> Result<(), CompilerError> {
+        for l in left.values() {
+            for r in right.values() {
+                if let Ok(new_ext) = combinator(l, r, lw, rw) {
+                    insert_best_wrapped(policy_cache, policy, ret, new_ext, sat_prob, dissat_prob)?;
+                }
+            }
+        }
+        Ok(())
+    };
+
+    insert_binary(&l_comp[0], &r_comp[0], lw, rw, AstElemExt::or_b)?;
+    insert_binary(&r_comp[0], &l_comp[0], rw, lw, AstElemExt::or_b)?;
+    insert_binary(&l_comp[0], &r_comp[2], lw, rw, AstElemExt::or_d)?;
+    insert_binary(&r_comp[0], &l_comp[2], rw, lw, AstElemExt::or_d)?;
+    insert_binary(&l_comp[1], &r_comp[3], lw, rw, AstElemExt::or_c)?;
+    insert_binary(&r_comp[1], &l_comp[3], rw, lw, AstElemExt::or_c)?;
+    insert_binary(&l_comp[2], &r_comp[3], lw, rw, AstElemExt::or_i)?;
+    insert_binary(&r_comp[3], &l_comp[2], rw, lw, AstElemExt::or_i)?;
+    insert_binary(&l_comp[3], &r_comp[2], lw, rw, AstElemExt::or_i)?;
+    insert_binary(&r_comp[2], &l_comp[3], rw, lw, AstElemExt::or_i)?;
+
+    Ok(())
 }
 
 #[cfg(feature = "std")]
@@ -203,14 +322,6 @@ impl CompilerExtData {
         }
     }
 
-    fn sortedmulti(k: usize, _n: usize) -> Self {
-        Self {
-            branch_prob: None,
-            sat_cost: 1.0 + 73.0 * k as f64,
-            dissat_cost: Some(1.0 * (k + 1) as f64),
-        }
-    }
-
     fn multi_a(k: usize, n: usize) -> Self {
         Self {
             branch_prob: None,
@@ -218,8 +329,6 @@ impl CompilerExtData {
             dissat_cost: Some(n as f64), /* <w_n> ... <w_1> := 0x00 ... 0x00 (n times) */
         }
     }
-
-    fn sortedmulti_a(k: usize, n: usize) -> Self { Self::multi_a(k, n) }
 
     fn hash() -> Self { Self { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) } }
 
@@ -284,13 +393,7 @@ impl CompilerExtData {
         Self { branch_prob: None, sat_cost: left.sat_cost + right.sat_cost, dissat_cost: None }
     }
 
-    fn or_b(l: Self, r: Self) -> Self {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+    fn or_b(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
             branch_prob: None,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
@@ -299,13 +402,7 @@ impl CompilerExtData {
         }
     }
 
-    fn or_d(l: Self, r: Self) -> Self {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+    fn or_d(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
@@ -313,13 +410,7 @@ impl CompilerExtData {
         }
     }
 
-    fn or_c(l: Self, r: Self) -> Self {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+    fn or_c(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
@@ -328,13 +419,7 @@ impl CompilerExtData {
     }
 
     #[allow(clippy::manual_map)] // Complex if/let is better as is.
-    fn or_i(l: Self, r: Self) -> Self {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+    fn or_i(l: Self, r: Self, lprob: f64, rprob: f64) -> Self {
         Self {
             branch_prob: None,
             sat_cost: lprob * (2.0 + l.sat_cost) + rprob * (1.0 + r.sat_cost),
@@ -413,57 +498,6 @@ impl CompilerExtData {
         Ctx: ScriptContext,
     {
         match *fragment {
-            Terminal::True => Self::TRUE,
-            Terminal::False => Self::FALSE,
-            Terminal::PkK(..) => Self::pk_k::<Ctx>(),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
-            Terminal::Multi(ref thresh) => Self::multi(thresh.k()),
-            Terminal::SortedMulti(ref thresh) => Self::sortedmulti(thresh.k(), thresh.n()),
-            Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
-            Terminal::SortedMultiA(ref thresh) => Self::sortedmulti_a(thresh.k(), thresh.n()),
-            Terminal::After(_) => Self::time(),
-            Terminal::Older(_) => Self::time(),
-            Terminal::Sha256(..) => Self::hash(),
-            Terminal::Hash256(..) => Self::hash(),
-            Terminal::Ripemd160(..) => Self::hash(),
-            Terminal::Hash160(..) => Self::hash(),
-            Terminal::Alt(ref sub) => Self::cast_alt(get_child(&sub.node, 0)),
-            Terminal::Swap(ref sub) => Self::cast_swap(get_child(&sub.node, 0)),
-            Terminal::Check(ref sub) => Self::cast_check(get_child(&sub.node, 0)),
-            Terminal::DupIf(ref sub) => Self::cast_dupif(get_child(&sub.node, 0)),
-            Terminal::Verify(ref sub) => Self::cast_verify(get_child(&sub.node, 0)),
-            Terminal::NonZero(ref sub) => Self::cast_nonzero(get_child(&sub.node, 0)),
-            Terminal::ZeroNotEqual(ref sub) => Self::cast_zeronotequal(get_child(&sub.node, 0)),
-            Terminal::AndB(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::and_b(ltype, rtype)
-            }
-            Terminal::AndV(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::and_v(ltype, rtype)
-            }
-            Terminal::OrB(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::or_b(ltype, rtype)
-            }
-            Terminal::OrD(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::or_d(ltype, rtype)
-            }
-            Terminal::OrC(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::or_c(ltype, rtype)
-            }
-            Terminal::OrI(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0);
-                let rtype = get_child(&r.node, 1);
-                Self::or_i(ltype, rtype)
-            }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = get_child(&a.node, 0);
                 let btype = get_child(&b.node, 1);
@@ -473,6 +507,7 @@ impl CompilerExtData {
             Terminal::Thresh(ref thresh) => {
                 Self::threshold(thresh.k(), thresh.n(), |n| get_child(&thresh.data()[n].node, n))
             }
+            _ => unreachable!(),
         }
     }
 }
@@ -608,20 +643,63 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         })
     }
 
-    fn binary(ast: Terminal<Pk, Ctx>, l: &Self, r: &Self) -> Result<Self, types::Error> {
-        let lookup_ext = |n| match n {
-            0 => l.comp_ext_data,
-            1 => r.comp_ext_data,
-            _ => unreachable!(),
-        };
-        //Types and ExtData are already cached and stored in children. So, we can
-        //type_check without cache. For Compiler extra data, we supply a cache.
-        let ty = types::Type::type_check(&ast)?;
-        let ext = types::ExtData::type_check(&ast);
-        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
+    fn or_b(left: &Self, right: &Self, l_weight: f64, r_weight: f64) -> Result<Self, types::Error> {
         Ok(Self {
-            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
-            comp_ext_data,
+            ms: Self::compose_typeck_only(Terminal::OrB(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::or_b(
+                left.comp_ext_data,
+                right.comp_ext_data,
+                l_weight,
+                r_weight,
+            ),
+        })
+    }
+
+    fn or_d(left: &Self, right: &Self, l_weight: f64, r_weight: f64) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::OrD(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::or_d(
+                left.comp_ext_data,
+                right.comp_ext_data,
+                l_weight,
+                r_weight,
+            ),
+        })
+    }
+
+    fn or_c(left: &Self, right: &Self, l_weight: f64, r_weight: f64) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::OrC(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::or_c(
+                left.comp_ext_data,
+                right.comp_ext_data,
+                l_weight,
+                r_weight,
+            ),
+        })
+    }
+
+    fn or_i(left: &Self, right: &Self, l_weight: f64, r_weight: f64) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::OrI(
+                Arc::clone(&left.ms),
+                Arc::clone(&right.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::or_i(
+                left.comp_ext_data,
+                right.comp_ext_data,
+                l_weight,
+                r_weight,
+            ),
         })
     }
 
@@ -876,16 +954,6 @@ where
             insert_best_wrapped(policy_cache, policy, &mut ret, $x, sat_prob, dissat_prob)?
         };
     }
-    macro_rules! compile_binary {
-        ($l:expr, $r:expr, $w: expr, $f: expr) => {
-            compile_binary(policy_cache, policy, &mut ret, $l, $r, $w, sat_prob, dissat_prob, $f)?
-        };
-    }
-    macro_rules! compile_tern {
-        ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(policy_cache, policy, &mut ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
-        };
-    }
 
     match *policy {
         Concrete::Unsatisfiable => {
@@ -944,113 +1012,7 @@ where
             insert_binary(&right, &q_zero_left, AstElemExt::and_n)?;
         }
         Concrete::Or(ref subs) => {
-            let total = u32::from(subs[0].0) as f64 + u32::from(subs[1].0) as f64;
-            let lw = u32::from(subs[0].0) as f64 / total;
-            let rw = u32::from(subs[1].0) as f64 / total;
-
-            //and-or
-            if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
-                let mut a1 = best_compilations(
-                    policy_cache,
-                    x[0].as_ref(),
-                    lw * sat_prob,
-                    Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
-                )?;
-                let mut a2 = best_compilations(policy_cache, x[0].as_ref(), lw * sat_prob, None)?;
-
-                let mut b1 = best_compilations(
-                    policy_cache,
-                    x[1].as_ref(),
-                    lw * sat_prob,
-                    Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
-                )?;
-                let mut b2 = best_compilations(policy_cache, x[1].as_ref(), lw * sat_prob, None)?;
-
-                let mut c = best_compilations(
-                    policy_cache,
-                    subs[1].1.as_ref(),
-                    rw * sat_prob,
-                    dissat_prob,
-                )?;
-
-                compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
-                compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
-            };
-            if let (_, Concrete::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
-                let mut a1 = best_compilations(
-                    policy_cache,
-                    x[0].as_ref(),
-                    rw * sat_prob,
-                    Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
-                )?;
-                let mut a2 = best_compilations(policy_cache, x[0].as_ref(), rw * sat_prob, None)?;
-
-                let mut b1 = best_compilations(
-                    policy_cache,
-                    x[1].as_ref(),
-                    rw * sat_prob,
-                    Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
-                )?;
-                let mut b2 = best_compilations(policy_cache, x[1].as_ref(), rw * sat_prob, None)?;
-
-                let mut c = best_compilations(
-                    policy_cache,
-                    subs[0].1.as_ref(),
-                    lw * sat_prob,
-                    dissat_prob,
-                )?;
-
-                compile_tern!(&mut a1, &mut b2, &mut c, [rw, lw]);
-                compile_tern!(&mut b1, &mut a2, &mut c, [rw, lw]);
-            };
-
-            let dissat_probs = |w: f64| -> Vec<Option<f64>> {
-                vec![
-                    Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob),
-                    Some(w * sat_prob),
-                    dissat_prob,
-                    None,
-                ]
-            };
-
-            let mut l_comp = vec![];
-            let mut r_comp = vec![];
-
-            for dissat_prob in dissat_probs(rw).iter() {
-                let l = best_compilations(
-                    policy_cache,
-                    subs[0].1.as_ref(),
-                    lw * sat_prob,
-                    *dissat_prob,
-                )?;
-                l_comp.push(l);
-            }
-
-            for dissat_prob in dissat_probs(lw).iter() {
-                let r = best_compilations(
-                    policy_cache,
-                    subs[1].1.as_ref(),
-                    rw * sat_prob,
-                    *dissat_prob,
-                )?;
-                r_comp.push(r);
-            }
-
-            // or(sha256, pk)
-            compile_binary!(&mut l_comp[0], &mut r_comp[0], [lw, rw], Terminal::OrB);
-            compile_binary!(&mut r_comp[0], &mut l_comp[0], [rw, lw], Terminal::OrB);
-
-            compile_binary!(&mut l_comp[0], &mut r_comp[2], [lw, rw], Terminal::OrD);
-            compile_binary!(&mut r_comp[0], &mut l_comp[2], [rw, lw], Terminal::OrD);
-
-            compile_binary!(&mut l_comp[1], &mut r_comp[3], [lw, rw], Terminal::OrC);
-            compile_binary!(&mut r_comp[1], &mut l_comp[3], [rw, lw], Terminal::OrC);
-
-            compile_binary!(&mut l_comp[2], &mut r_comp[3], [lw, rw], Terminal::OrI);
-            compile_binary!(&mut r_comp[2], &mut l_comp[3], [rw, lw], Terminal::OrI);
-
-            compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
-            compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
+            best_compilations_or(&mut ret, policy_cache, policy, subs, sat_prob, dissat_prob)?;
         }
         Concrete::Thresh(ref thresh) => {
             let k = thresh.k();
@@ -1161,41 +1123,6 @@ where
         policy_cache.insert((policy.clone(), ord_sat_prob, ord_dissat_prob), ret.clone());
         Ok(ret)
     }
-}
-
-/// Helper function to compile different types of binary fragments.
-/// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
-/// root or. `weights` represent the odds for taking each sub branch
-#[allow(clippy::too_many_arguments)]
-fn compile_binary<Pk, Ctx, F>(
-    policy_cache: &mut PolicyCache<Pk, Ctx>,
-    policy: &Concrete<Pk>,
-    ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    left_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    right_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    weights: [f64; 2],
-    sat_prob: f64,
-    dissat_prob: Option<f64>,
-    bin_func: F,
-) -> Result<(), CompilerError>
-where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
-    F: Fn(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
-{
-    for l in left_comp.values_mut() {
-        let lref = Arc::clone(&l.ms);
-        for r in right_comp.values_mut() {
-            let rref = Arc::clone(&r.ms);
-            let ast = bin_func(Arc::clone(&lref), Arc::clone(&rref));
-            l.comp_ext_data.branch_prob = Some(weights[0]);
-            r.comp_ext_data.branch_prob = Some(weights[1]);
-            if let Ok(new_ext) = AstElemExt::binary(ast, l, r) {
-                insert_best_wrapped(policy_cache, policy, ret, new_ext, sat_prob, dissat_prob)?;
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Helper function to compile different order of and_or fragments.
