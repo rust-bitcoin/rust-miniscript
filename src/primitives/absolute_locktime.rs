@@ -42,7 +42,7 @@ impl std::error::Error for AbsLockTimeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
-/// An absolute locktime that implements `Ord`.
+/// An absolute locktime that cannot be zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AbsLockTime(absolute::LockTime);
 
@@ -68,22 +68,25 @@ impl AbsLockTime {
 
     /// Whether this is a time-based locktime.
     pub fn is_block_time(&self) -> bool { self.0.is_block_time() }
+
+    /// Compares two locktimes by their consensus `u32` encoding.
+    pub(crate) fn cmp_by_consensus(self, other: Self) -> cmp::Ordering {
+        self.to_consensus_u32().cmp(&other.to_consensus_u32())
+    }
+
+    /// Returns the later of two locktimes of the same unit, or `None` if units differ.
+    pub(crate) fn max(a: Self, b: Self) -> Option<Self> {
+        use core::cmp::Ordering::*;
+        match absolute::LockTime::from(a).partial_cmp(&absolute::LockTime::from(b)) {
+            Some(Greater) | Some(Equal) => Some(a),
+            Some(Less) => Some(b),
+            None => None,
+        }
+    }
 }
 
 impl From<AbsLockTime> for absolute::LockTime {
     fn from(lock_time: AbsLockTime) -> Self { lock_time.0 }
-}
-
-impl cmp::PartialOrd for AbsLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-
-impl cmp::Ord for AbsLockTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let this = self.0.to_consensus_u32();
-        let that = other.0.to_consensus_u32();
-        this.cmp(&that)
-    }
 }
 
 impl fmt::Display for AbsLockTime {
