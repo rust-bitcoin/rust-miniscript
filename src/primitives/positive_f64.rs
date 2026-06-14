@@ -19,6 +19,13 @@ impl PositiveF64 {
     #[cfg(test)]
     pub const ONE_QUARTER: Self = Self(0.25);
 
+    /// Given an [`Option<PositiveF64>`], if it is `Some` then add it to the value.
+    /// Otherwise return the unmodified value.
+    ///
+    /// Returns the sum (or original value). Does not modify in-place.
+    #[must_use]
+    pub fn conditional_add(self, other: Option<Self>) -> Self { other.map_or(self, |i| i + self) }
+
     /// Takes an iterator over [`PositiveF64`] and produces a new iterator where
     /// each item is divided so that they all total to 1.
     ///
@@ -40,6 +47,25 @@ impl PositiveF64 {
     /// The 'n' value of a threshold, as a [`PositiveF64`]
     pub fn n<const MAX: usize, T>(t: &Threshold<T, MAX>) -> Self {
         Self(t.n() as f64) // cast okay, worst case wil lose precision
+    }
+
+    /// The ratio `k`/`n` of a threshold, as a [`PositiveF64`]. Guaranteed to be
+    /// in the half-open range `(0, 1]`.
+    pub fn k_over_n<const MAX: usize, T>(t: &Threshold<T, MAX>) -> Self {
+        Self(t.k() as f64 / t.n() as f64) // casts okay, worst case wil lose precision
+    }
+
+    /// One minus the ratio `k` / `n` of a threshold, as a [`PositiveF64`]. Guaranteed
+    /// to be in the half-open range `[0, 1)`.
+    ///
+    /// Returns `None` if the return value would be 0, which is impermissible for the
+    /// [`PositiveF64`] type.
+    pub fn one_minus_k_over_n<const MAX: usize, T>(t: &Threshold<T, MAX>) -> Option<Self> {
+        if t.is_and() {
+            None
+        } else {
+            Some(Self(1.0 - t.k() as f64 / t.n() as f64)) // casts okay, worst case wil lose precision
+        }
     }
 }
 
