@@ -5,6 +5,9 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
+#![allow(dead_code)] // will be removed in next commit
+#![allow(unused_variables)] // will be removed in next commit
+
 use core::num::NonZeroU32;
 use core::{f64, fmt, mem};
 #[cfg(feature = "std")]
@@ -98,62 +101,80 @@ fn best_compilations_or<Pk: MiniscriptKey, Ctx: ScriptContext>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> Result<(), CompilerError> {
-    macro_rules! compile_tern {
-        ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(policy_cache, policy, ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
-        };
-    }
-
     let total = u32::from(subs[0].0) as f64 + u32::from(subs[1].0) as f64;
     let lw = u32::from(subs[0].0) as f64 / total;
     let rw = u32::from(subs[1].0) as f64 / total;
 
     //and-or
+    let mut insert_ternary = |policy_cache: &mut _,
+                              a: &BTreeMap<_, _>,
+                              b: &BTreeMap<_, _>,
+                              c: &BTreeMap<_, _>,
+                              lw: f64,
+                              rw: f64|
+     -> Result<(), CompilerError> {
+        for a in a.values() {
+            for b in b.values() {
+                for c in c.values() {
+                    if let Ok(new_ext) = AstElemExt::and_or(a, b, c, lw, rw) {
+                        insert_best_wrapped(
+                            policy_cache,
+                            policy,
+                            ret,
+                            new_ext,
+                            sat_prob,
+                            dissat_prob,
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    };
+
     if let (Concrete::And(x), _) = (subs[0].1.as_ref(), subs[1].1.as_ref()) {
-        let mut a1 = best_compilations(
+        let a1 = best_compilations(
             policy_cache,
             x[0].as_ref(),
             lw * sat_prob,
             Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
         )?;
-        let mut a2 = best_compilations(policy_cache, x[0].as_ref(), lw * sat_prob, None)?;
+        let a2 = best_compilations(policy_cache, x[0].as_ref(), lw * sat_prob, None)?;
 
-        let mut b1 = best_compilations(
+        let b1 = best_compilations(
             policy_cache,
             x[1].as_ref(),
             lw * sat_prob,
             Some(dissat_prob.unwrap_or(0 as f64) + rw * sat_prob),
         )?;
-        let mut b2 = best_compilations(policy_cache, x[1].as_ref(), lw * sat_prob, None)?;
+        let b2 = best_compilations(policy_cache, x[1].as_ref(), lw * sat_prob, None)?;
 
-        let mut c =
-            best_compilations(policy_cache, subs[1].1.as_ref(), rw * sat_prob, dissat_prob)?;
+        let c = best_compilations(policy_cache, subs[1].1.as_ref(), rw * sat_prob, dissat_prob)?;
 
-        compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
-        compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
+        insert_ternary(policy_cache, &a1, &b2, &c, lw, rw)?;
+        insert_ternary(policy_cache, &b1, &a2, &c, lw, rw)?;
     };
     if let (_, Concrete::And(x)) = (&subs[0].1.as_ref(), subs[1].1.as_ref()) {
-        let mut a1 = best_compilations(
+        let a1 = best_compilations(
             policy_cache,
             x[0].as_ref(),
             rw * sat_prob,
             Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
         )?;
-        let mut a2 = best_compilations(policy_cache, x[0].as_ref(), rw * sat_prob, None)?;
+        let a2 = best_compilations(policy_cache, x[0].as_ref(), rw * sat_prob, None)?;
 
-        let mut b1 = best_compilations(
+        let b1 = best_compilations(
             policy_cache,
             x[1].as_ref(),
             rw * sat_prob,
             Some(dissat_prob.unwrap_or(0 as f64) + lw * sat_prob),
         )?;
-        let mut b2 = best_compilations(policy_cache, x[1].as_ref(), rw * sat_prob, None)?;
+        let b2 = best_compilations(policy_cache, x[1].as_ref(), rw * sat_prob, None)?;
 
-        let mut c =
-            best_compilations(policy_cache, subs[0].1.as_ref(), lw * sat_prob, dissat_prob)?;
+        let c = best_compilations(policy_cache, subs[0].1.as_ref(), lw * sat_prob, dissat_prob)?;
 
-        compile_tern!(&mut a1, &mut b2, &mut c, [rw, lw]);
-        compile_tern!(&mut b1, &mut a2, &mut c, [rw, lw]);
+        insert_ternary(policy_cache, &a1, &b2, &c, rw, lw)?;
+        insert_ternary(policy_cache, &b1, &a2, &c, rw, lw)?;
     };
 
     let dissat_probs = |w: f64| -> Vec<Option<f64>> {
@@ -439,18 +460,13 @@ impl CompilerExtData {
         }
     }
 
-    fn and_or(a: Self, b: Self, c: Self) -> Self {
-        let aprob = a.branch_prob.expect("andor, a prob must be set");
-        let bprob = b.branch_prob.expect("andor, b prob must be set");
-        let cprob = c.branch_prob.unwrap_or(0.0);
-
+    fn and_or(a: Self, b: Self, c: Self, lprob: f64, rprob: f64) -> Self {
         let adis = a
             .dissat_cost
             .expect("BUG: and_or first arg(a) must be dissatisfiable");
-        debug_assert_eq!(aprob, bprob); //A and B must have same branch prob.
         Self {
             branch_prob: None,
-            sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
+            sat_cost: lprob * (a.sat_cost + b.sat_cost) + rprob * (adis + c.sat_cost),
             dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
         }
     }
@@ -497,18 +513,7 @@ impl CompilerExtData {
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
-        match *fragment {
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                let atype = get_child(&a.node, 0);
-                let btype = get_child(&b.node, 1);
-                let ctype = get_child(&c.node, 2);
-                Self::and_or(atype, btype, ctype)
-            }
-            Terminal::Thresh(ref thresh) => {
-                Self::threshold(thresh.k(), thresh.n(), |n| get_child(&thresh.data()[n].node, n))
-            }
-            _ => unreachable!(),
-        }
+        unreachable!()
     }
 }
 
@@ -640,6 +645,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
                 Arc::new(Miniscript::FALSE),
             ))?,
             comp_ext_data: CompilerExtData::and_n(left.comp_ext_data, right.comp_ext_data),
+        })
+    }
+
+    fn and_or(
+        a: &Self,
+        b: &Self,
+        c: &Self,
+        l_weight: f64,
+        r_weight: f64,
+    ) -> Result<Self, types::Error> {
+        Ok(Self {
+            ms: Self::compose_typeck_only(Terminal::AndOr(
+                Arc::clone(&a.ms),
+                Arc::clone(&b.ms),
+                Arc::clone(&c.ms),
+            ))?,
+            comp_ext_data: CompilerExtData::and_or(
+                a.comp_ext_data,
+                b.comp_ext_data,
+                c.comp_ext_data,
+                l_weight,
+                r_weight,
+            ),
         })
     }
 
