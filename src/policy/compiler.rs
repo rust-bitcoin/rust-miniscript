@@ -12,6 +12,7 @@ use std::error;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
+use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -194,7 +195,7 @@ impl CompilerExtData {
         }
     }
 
-    fn multi(k: usize, _n: usize) -> Self {
+    fn multi(k: usize) -> Self {
         Self {
             branch_prob: None,
             sat_cost: 1.0 + 73.0 * k as f64,
@@ -398,16 +399,6 @@ impl CompilerExtData {
         Self::type_check_common(fragment, get_child)
     }
 
-    /// Compute the type of a fragment.
-    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Self
-    where
-        Pk: MiniscriptKey,
-        Ctx: ScriptContext,
-    {
-        let check_child = |sub, _n| Self::type_check(sub);
-        Self::type_check_common(fragment, check_child)
-    }
-
     /// Compute the type of a fragment, given a function to look up
     /// the types of its children, if available and relevant for the
     /// given fragment
@@ -422,7 +413,7 @@ impl CompilerExtData {
             Terminal::False => Self::FALSE,
             Terminal::PkK(..) => Self::pk_k::<Ctx>(),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
-            Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
+            Terminal::Multi(ref thresh) => Self::multi(thresh.k()),
             Terminal::SortedMulti(ref thresh) => Self::sortedmulti(thresh.k(), thresh.n()),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::SortedMultiA(ref thresh) => Self::sortedmulti_a(thresh.k(), thresh.n()),
@@ -508,8 +499,67 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
-    fn terminal(ms: Miniscript<Pk, Ctx>) -> Self {
-        Self { comp_ext_data: CompilerExtData::type_check(ms.as_inner()), ms: Arc::new(ms) }
+    fn unsatisfiable() -> Self {
+        Self { ms: Arc::new(Miniscript::FALSE), comp_ext_data: CompilerExtData::FALSE }
+    }
+
+    fn trivial() -> Self {
+        Self { ms: Arc::new(Miniscript::TRUE), comp_ext_data: CompilerExtData::TRUE }
+    }
+
+    fn pk_h(key: Pk) -> Self {
+        Self {
+            ms: Arc::new(Miniscript::pk_h(key)),
+            comp_ext_data: CompilerExtData::pk_h::<Ctx>(),
+        }
+    }
+
+    fn pk_k(key: Pk) -> Self {
+        Self {
+            ms: Arc::new(Miniscript::pk_k(key)),
+            comp_ext_data: CompilerExtData::pk_k::<Ctx>(),
+        }
+    }
+
+    fn after(t: crate::AbsLockTime) -> Self {
+        Self { ms: Arc::new(Miniscript::after(t)), comp_ext_data: CompilerExtData::time() }
+    }
+
+    fn older(t: crate::RelLockTime) -> Self {
+        Self { ms: Arc::new(Miniscript::older(t)), comp_ext_data: CompilerExtData::time() }
+    }
+
+    fn sha256(h: Pk::Sha256) -> Self {
+        Self { ms: Arc::new(Miniscript::sha256(h)), comp_ext_data: CompilerExtData::hash() }
+    }
+
+    fn hash256(h: Pk::Hash256) -> Self {
+        Self { ms: Arc::new(Miniscript::hash256(h)), comp_ext_data: CompilerExtData::hash() }
+    }
+
+    fn ripemd160(h: Pk::Ripemd160) -> Self {
+        Self { ms: Arc::new(Miniscript::ripemd160(h)), comp_ext_data: CompilerExtData::hash() }
+    }
+
+    fn hash160(h: Pk::Hash160) -> Self {
+        Self { ms: Arc::new(Miniscript::hash160(h)), comp_ext_data: CompilerExtData::hash() }
+    }
+
+    fn multi(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
+        let k = thresh.k();
+        Self {
+            ms: Arc::new(Miniscript::multi(thresh)),
+            comp_ext_data: CompilerExtData::multi(k),
+        }
+    }
+
+    fn multi_a(thresh: crate::Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>) -> Self {
+        let k = thresh.k();
+        let n = thresh.n();
+        Self {
+            ms: Arc::new(Miniscript::multi_a(thresh)),
+            comp_ext_data: CompilerExtData::multi_a(k, n),
+        }
     }
 
     fn binary(ast: Terminal<Pk, Ctx>, l: &Self, r: &Self) -> Result<Self, types::Error> {
@@ -793,30 +843,22 @@ where
 
     match *policy {
         Concrete::Unsatisfiable => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::FALSE));
+            insert_wrap!(AstElemExt::unsatisfiable());
         }
         Concrete::Trivial => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::TRUE));
+            insert_wrap!(AstElemExt::trivial());
         }
         Concrete::Key(ref pk) => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::pk_h(pk.clone())));
-            insert_wrap!(AstElemExt::terminal(Miniscript::pk_k(pk.clone())));
+            insert_wrap!(AstElemExt::pk_h(pk.clone()));
+            insert_wrap!(AstElemExt::pk_k(pk.clone()));
         }
-        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Miniscript::after(n))),
-        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Miniscript::older(n))),
-        Concrete::Sha256(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::sha256(hash.clone())))
-        }
+        Concrete::After(n) => insert_wrap!(AstElemExt::after(n)),
+        Concrete::Older(n) => insert_wrap!(AstElemExt::older(n)),
+        Concrete::Sha256(ref hash) => insert_wrap!(AstElemExt::sha256(hash.clone())),
         // Satisfaction-cost + script-cost
-        Concrete::Hash256(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::hash256(hash.clone())))
-        }
-        Concrete::Ripemd160(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::ripemd160(hash.clone())))
-        }
-        Concrete::Hash160(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Miniscript::hash160(hash.clone())))
-        }
+        Concrete::Hash256(ref hash) => insert_wrap!(AstElemExt::hash256(hash.clone())),
+        Concrete::Ripemd160(ref hash) => insert_wrap!(AstElemExt::ripemd160(hash.clone())),
+        Concrete::Hash160(ref hash) => insert_wrap!(AstElemExt::hash160(hash.clone())),
         Concrete::And(ref subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
             let mut left =
@@ -835,7 +877,7 @@ where
             let mut zero_comp = BTreeMap::new();
             zero_comp.insert(
                 CompilationKey::from_type(Type::FALSE, ExtData::FALSE.has_free_verify, dissat_prob),
-                AstElemExt::terminal(Miniscript::FALSE),
+                AstElemExt::unsatisfiable(),
             );
             compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);
             compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
@@ -1022,12 +1064,12 @@ where
                 match Ctx::sig_type() {
                     SigType::Schnorr => {
                         if let Ok(pk_thresh) = pk_thresh.set_maximum() {
-                            insert_wrap!(AstElemExt::terminal(Miniscript::multi_a(pk_thresh)))
+                            insert_wrap!(AstElemExt::multi_a(pk_thresh))
                         }
                     }
                     SigType::Ecdsa => {
                         if let Ok(pk_thresh) = pk_thresh.set_maximum() {
-                            insert_wrap!(AstElemExt::terminal(Miniscript::multi(pk_thresh)))
+                            insert_wrap!(AstElemExt::multi(pk_thresh))
                         }
                     }
                 }
