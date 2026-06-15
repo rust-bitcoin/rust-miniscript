@@ -618,7 +618,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         // Stopping condition: When NONE of the inputs can be further enumerated.
         'outer: loop {
             //--- FIND a plausible node ---
-            let mut prob: Reverse<PositiveF64> = Reverse(PositiveF64(0.0));
+            let mut prob: Reverse<PositiveF64> = Reverse(PositiveF64::EPSILON);
             let mut curr_policy: Arc<Self> = Arc::new(Self::Unsatisfiable);
             let mut curr_pol_replace_vec: Vec<(PositiveF64, Arc<Self>)> = vec![];
             let mut no_more_enum = false;
@@ -1155,9 +1155,9 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
         let (p1, s1) = node_weights.pop().expect("len must at least be two");
         let (p2, s2) = node_weights.pop().expect("len must at least be two");
 
-        let p = (p1.0).0 + (p2.0).0;
+        let p = p1.0 + p2.0;
         node_weights.push((
-            Reverse(PositiveF64(p)),
+            Reverse(p),
             TapTree::combine(s1, s2)
                 .expect("huffman tree cannot produce depth > 128 given sane weights"),
         ));

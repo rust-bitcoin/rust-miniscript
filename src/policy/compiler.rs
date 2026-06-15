@@ -1133,7 +1133,7 @@ where
         .into_iter()
         .filter(|&(key, _)| key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob)
         .map(|(_, val)| val)
-        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64::new(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
@@ -1158,7 +1158,7 @@ where
                 && key.dissat_prob == dissat_prob
         })
         .map(|(_, val)| val)
-        .min_by_key(|ext| PositiveF64(ext.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| PositiveF64::new(ext.cost_1d(sat_prob, dissat_prob)))
         .ok_or(CompilerError::LimitsExceeded)
 }
 
