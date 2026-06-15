@@ -534,6 +534,8 @@ pub enum DescriptorKeyParseError {
     XonlyPublicKey(bitcoin::secp256k1::Error),
     /// XKey parsing error
     XKeyParseError(XKeyParseError),
+    /// Unexpected XPrivateKey when parsing [`Descriptor<DescriptorPublicKey>`][crate::Descriptor].
+    UnexpectedXPrivateKey,
 }
 
 impl fmt::Display for DescriptorKeyParseError {
@@ -553,6 +555,9 @@ impl fmt::Display for DescriptorKeyParseError {
             Self::WifPrivateKey(err) => err.fmt(f),
             Self::XonlyPublicKey(err) => err.fmt(f),
             Self::XKeyParseError(err) => err.fmt(f),
+            Self::UnexpectedXPrivateKey => f.write_str(
+                "unexpected private extended key. Use `Descriptor::parse_descriptor` instead to preserve private key data in the returned KeyMap",
+            ),
         }
     }
 }
@@ -570,7 +575,7 @@ impl error::Error for DescriptorKeyParseError {
             Self::WifPrivateKey(err) => Some(err),
             Self::XonlyPublicKey(err) => Some(err),
             Self::XKeyParseError(err) => Some(err),
-            Self::MalformedKeyData(_) => None,
+            Self::MalformedKeyData(_) | Self::UnexpectedXPrivateKey => None,
         }
     }
 }
@@ -733,50 +738,54 @@ impl FromStr for DescriptorPublicKey {
 
         let (key_part, origin) = parse_key_origin(s)?;
 
-        if key_part.contains("pub") {
-            let (xpub, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
-            if derivation_paths.len() > 1 {
-                Ok(Self::MultiXPub(DescriptorMultiXKey {
-                    origin,
-                    xkey: xpub,
-                    derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
-                    wildcard,
-                }))
-            } else {
-                Ok(Self::XPub(DescriptorXKey {
-                    origin,
-                    xkey: xpub,
-                    derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
-                    wildcard,
-                }))
+        match key_part.get(..4) {
+            Some("xprv" | "tprv") => Err(DescriptorKeyParseError::UnexpectedXPrivateKey),
+            Some("xpub" | "tpub") => {
+                let (xpub, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
+                if derivation_paths.len() > 1 {
+                    Ok(Self::MultiXPub(DescriptorMultiXKey {
+                        origin,
+                        xkey: xpub,
+                        derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
+                        wildcard,
+                    }))
+                } else {
+                    Ok(Self::XPub(DescriptorXKey {
+                        origin,
+                        xkey: xpub,
+                        derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
+                        wildcard,
+                    }))
+                }
             }
-        } else {
-            let key = match key_part.len() {
-                64 => {
-                    let x_only_key = XOnlyPublicKey::from_str(key_part)
-                        .map_err(DescriptorKeyParseError::XonlyPublicKey)?;
-                    SinglePubKey::XOnly(x_only_key)
-                }
-                66 | 130 => {
-                    if !(&key_part[0..2] == "02"
-                        || &key_part[0..2] == "03"
-                        || &key_part[0..2] == "04")
-                    {
-                        return Err(DescriptorKeyParseError::MalformedKeyData(
-                            MalformedKeyDataKind::InvalidFullPublicKeyPrefix,
-                        ));
+            _ => {
+                let key = match key_part.len() {
+                    64 => {
+                        let x_only_key = XOnlyPublicKey::from_str(key_part)
+                            .map_err(DescriptorKeyParseError::XonlyPublicKey)?;
+                        SinglePubKey::XOnly(x_only_key)
                     }
-                    let key = bitcoin::PublicKey::from_str(key_part)
-                        .map_err(DescriptorKeyParseError::FullPublicKey)?;
-                    SinglePubKey::FullKey(key)
-                }
-                _ => {
-                    return Err(DescriptorKeyParseError::MalformedKeyData(
-                        MalformedKeyDataKind::InvalidPublicKeyLength,
-                    ))
-                }
-            };
-            Ok(Self::Single(SinglePub { key, origin }))
+                    66 | 130 => {
+                        if !(&key_part[0..2] == "02"
+                            || &key_part[0..2] == "03"
+                            || &key_part[0..2] == "04")
+                        {
+                            return Err(DescriptorKeyParseError::MalformedKeyData(
+                                MalformedKeyDataKind::InvalidFullPublicKeyPrefix,
+                            ));
+                        }
+                        let key = bitcoin::PublicKey::from_str(key_part)
+                            .map_err(DescriptorKeyParseError::FullPublicKey)?;
+                        SinglePubKey::FullKey(key)
+                    }
+                    _ => {
+                        return Err(DescriptorKeyParseError::MalformedKeyData(
+                            MalformedKeyDataKind::InvalidPublicKeyLength,
+                        ))
+                    }
+                };
+                Ok(Self::Single(SinglePub { key, origin }))
+            }
         }
     }
 }
@@ -1514,7 +1523,8 @@ mod test {
     use serde_test::{assert_tokens, Token};
 
     use super::{
-        DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, MiniscriptKey, Wildcard,
+        DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
+        MiniscriptKey, Wildcard,
     };
     use crate::descriptor::key::NonDefiniteKeyError;
     use crate::prelude::*;
@@ -1569,6 +1579,13 @@ mod test {
         assert_eq!(
             DescriptorPublicKey::from_str(desc).unwrap_err().to_string(),
             "only full public keys with prefixes '02', '03' or '04' are allowed"
+        );
+
+        // unexpected xprv key when attempting to parse a DescriptorPublicKey
+        let desc = "tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc";
+        assert_eq!(
+            desc.parse::<DescriptorPublicKey>().unwrap_err().to_string(),
+            DescriptorKeyParseError::UnexpectedXPrivateKey.to_string()
         );
     }
 
