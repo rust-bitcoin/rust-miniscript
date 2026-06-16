@@ -119,7 +119,7 @@ impl GetKey for DescriptorSecretKey {
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::bip32::{ChildNumber, DerivationPath, IntoDerivationPath, Xpriv};
+    use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, IntoDerivationPath, Xpriv};
 
     use super::*;
     use crate::Descriptor;
@@ -338,5 +338,95 @@ mod tests {
         assert!(result.is_none(), "Should return None when fingerprint doesn't match");
         let result = keymap_wrapper.get_key(request_x, &secp).unwrap();
         assert!(result.is_none(), "Should return None even on error");
+    }
+
+    #[test]
+    fn get_key_xpriv_with_key_origin() {
+        // `get_key` should match the request against the key origin, strip the origin prefix
+        // from the requested path, and derive the rest from the extended key.
+        struct TestCase {
+            /// Scenario description.
+            name: &'static str,
+            /// The descriptor under test.
+            descriptor: &'static str,
+            /// Requested key source: `(master fingerprint, path from the master)`.
+            key_request: (&'static str, &'static str),
+            /// Expected steps from the extended key (requested path minus the key origin).
+            exp_derivation_path: &'static str,
+        }
+
+        let cases = [
+            TestCase {
+                name: "bare wildcard",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)",
+                key_request: ("d34db33f", "84'/1'/0'/0"),
+                exp_derivation_path: "0",
+            },
+            TestCase {
+                name: "single fixed step",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0)",
+                key_request: ("d34db33f", "84'/1'/0'/0"),
+                exp_derivation_path: "0",
+            },
+            TestCase {
+                name: "fixed step then wildcard",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0/*)",
+                key_request: ("d34db33f", "84'/1'/0'/0/5"),
+                exp_derivation_path: "0/5",
+            },
+        ];
+
+        let secp = Secp256k1::new();
+        let xpriv = Xpriv::from_str("tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS").unwrap();
+        for test_case in &cases {
+            let exp_derivation_path =
+                DerivationPath::from_str(test_case.exp_derivation_path).unwrap();
+            let exp_private_key = xpriv
+                .derive_priv(&secp, &exp_derivation_path)
+                .unwrap()
+                .to_priv();
+
+            let (_, keymap) = Descriptor::parse_descriptor(&secp, test_case.descriptor).unwrap();
+            let keymap_wrapper = KeyMapWrapper::from(keymap);
+
+            let (fingerprint, derivation_path) = test_case.key_request;
+            let key_request = KeyRequest::Bip32((
+                Fingerprint::from_str(fingerprint).unwrap(),
+                DerivationPath::from_str(derivation_path).unwrap(),
+            ));
+
+            let private_key = keymap_wrapper
+                .get_key(key_request, &secp)
+                .expect("get_key SHOULD NOT fail")
+                .expect("get_key SHOULD get a `PrivateKey`");
+
+            assert_eq!(private_key, exp_private_key, "{}", test_case.name);
+        }
+    }
+
+    #[test]
+    fn get_key_xpriv_with_key_origin_and_non_matching_path() {
+        let secp = Secp256k1::new();
+
+        // descriptor with a fixed derivation index of `0`.
+        let descriptor = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0)";
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor).unwrap();
+        let keymap_wrapper = KeyMapWrapper::from(keymap);
+
+        // the key_request has the correct `key_origin`, but the requested derivation index (`5`) does not match the
+        // descriptor's fixed derivation index (`0`), so the descriptor does not own this key.
+        let key_request = KeyRequest::Bip32((
+            Fingerprint::from_str("d34db33f").unwrap(),
+            DerivationPath::from_str("84'/1'/0'/5").unwrap(),
+        ));
+
+        let private_key = keymap_wrapper
+            .get_key(key_request, &secp)
+            .expect("get_key SHOULD NOT fail!");
+
+        assert!(
+            private_key.is_none(),
+            "SHOULD get NO private key when the requested path does not match the descriptor"
+        );
     }
 }
