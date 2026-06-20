@@ -27,6 +27,7 @@
 
 mod error;
 
+use core::num::NonZeroU32;
 use core::ops;
 use core::str::FromStr;
 
@@ -679,7 +680,7 @@ impl<'a> Tree<'a> {
 }
 
 /// Parse a string as a u32, forbidding zero.
-pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
+pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<NonZeroU32, ParseNumError> {
     if s == "0" {
         return Err(ParseNumError::IllegalZero { context });
     }
@@ -688,7 +689,7 @@ pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNum
             return Err(ParseNumError::InvalidLeadingDigit(ch));
         }
     }
-    u32::from_str(s).map_err(ParseNumError::StdParse)
+    NonZeroU32::from_str(s).map_err(ParseNumError::StdParse)
 }
 
 /// Parse a string as a u32, for timelocks or thresholds
@@ -697,7 +698,7 @@ pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
         // Special-case 0 since it is the only number which may start with a leading zero.
         return Ok(0);
     }
-    parse_num_nonzero(s, "")
+    parse_num_nonzero(s, "").map(u32::from)
 }
 
 #[cfg(test)]
