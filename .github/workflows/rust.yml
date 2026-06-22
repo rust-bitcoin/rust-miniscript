@@ -99,7 +99,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-rbmt
       - name: "Run bench"
-        run: cargo rbmt bench
+        run: RUSTFLAGS="--cfg=bench" cargo rbmt run --toolchain nightly -- bench
 
   Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
