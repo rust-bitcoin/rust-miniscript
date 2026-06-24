@@ -133,21 +133,27 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(key));
                 }
 
-                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
-                    let (_, full_path) = key_source;
+                // A successful `matches()` already guarantees the requested key source's fingerprint equals our origin
+                // (or, when there is no origin, the xkey's own) fingerprint.
+                //
+                // `xkey` is anchored at the origin, but the request path is master-relative, either:
+                // - origin: strip the origin prefix and use the remaining suffix.
+                // - no origin: use the full request path.
+                let (_, full_path) = key_source;
+                let derivation_path = match descriptor_xkey.matches(key_source, secp) {
+                    Some(_) => match &descriptor_xkey.origin {
+                        Some((_, origin_path)) => &full_path[origin_path.len()..],
+                        None => full_path.as_ref(),
+                    },
+                    None => return Ok(None),
+                };
 
-                    let derivation_path = &full_path[matched_path.len()..];
-
-                    return Ok(Some(
-                        descriptor_xkey
-                            .xkey
-                            .derive_priv(secp, &derivation_path)
-                            .map_err(GetKeyError::Bip32)?
-                            .to_priv(),
-                    ));
-                }
-
-                Ok(None)
+                Ok(Some(
+                    descriptor_xkey
+                        .xkey
+                        .derive_priv(secp, &derivation_path)?
+                        .to_priv(),
+                ))
             }
             (Self::XPrv(_), KeyRequest::XOnlyPubkey(_)) => Err(GetKeyError::NotSupported),
             (desc_multi_sk @ Self::MultiXPrv(_descriptor_multi_xkey), key_request) => {
@@ -168,7 +174,7 @@ impl GetKey for DescriptorSecretKey {
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::bip32::{ChildNumber, DerivationPath, IntoDerivationPath, Xpriv};
+    use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, IntoDerivationPath, Xpriv};
 
     use super::*;
     use crate::Descriptor;
@@ -306,38 +312,6 @@ mod tests {
     }
 
     #[test]
-    fn get_key_xpriv_with_key_origin() {
-        let secp = Secp256k1::new();
-
-        let descriptor_str = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)";
-        let (_descriptor_pk, keymap) = Descriptor::parse_descriptor(&secp, descriptor_str).unwrap();
-
-        let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*").unwrap();
-        let xpriv = match descriptor_sk {
-            DescriptorSecretKey::XPrv(descriptor_xkey) => descriptor_xkey,
-            _ => unreachable!(),
-        };
-
-        let expected_deriv_path: DerivationPath = (&[ChildNumber::Normal { index: 0 }][..]).into();
-        let expected_pk = xpriv
-            .xkey
-            .derive_priv(&secp, &expected_deriv_path)
-            .unwrap()
-            .to_priv();
-
-        let derivation_path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
-        let (fp, _) = xpriv.origin.unwrap();
-        let key_request = KeyRequest::Bip32((fp, derivation_path));
-
-        let pk = keymap
-            .get_key(key_request, &secp)
-            .expect("get_key should not fail")
-            .expect("get_key should return a `PrivateKey`");
-
-        assert_eq!(pk, expected_pk);
-    }
-
-    #[test]
     fn get_key_keymap_no_match() {
         let secp = Secp256k1::new();
 
@@ -416,5 +390,93 @@ mod tests {
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
         let result = keymap.get_key(request_x, &secp).unwrap();
         assert!(result.is_none(), "Should return None even on error");
+    }
+
+    #[test]
+    fn get_key_xpriv_with_key_origin() {
+        // `get_key` should match the request against the key origin, strip the origin prefix
+        // from the requested path, and derive the rest from the extended key.
+        struct TestCase {
+            /// Scenario description.
+            name: &'static str,
+            /// The descriptor under test.
+            descriptor: &'static str,
+            /// Requested key source: `(master fingerprint, path from the master)`.
+            key_request: (&'static str, &'static str),
+            /// Expected steps from the extended key (requested path minus the key origin).
+            exp_derivation_path: &'static str,
+        }
+
+        let cases = [
+            TestCase {
+                name: "bare wildcard",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)",
+                key_request: ("d34db33f", "84'/1'/0'/0"),
+                exp_derivation_path: "0",
+            },
+            TestCase {
+                name: "single fixed step",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0)",
+                key_request: ("d34db33f", "84'/1'/0'/0"),
+                exp_derivation_path: "0",
+            },
+            TestCase {
+                name: "fixed step then wildcard",
+                descriptor: "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0/*)",
+                key_request: ("d34db33f", "84'/1'/0'/0/5"),
+                exp_derivation_path: "0/5",
+            },
+        ];
+
+        let secp = Secp256k1::new();
+        let xpriv = Xpriv::from_str("tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS").unwrap();
+        for test_case in &cases {
+            let exp_derivation_path =
+                DerivationPath::from_str(test_case.exp_derivation_path).unwrap();
+            let exp_private_key = xpriv
+                .derive_priv(&secp, &exp_derivation_path)
+                .unwrap()
+                .to_priv();
+
+            let (_, keymap) = Descriptor::parse_descriptor(&secp, test_case.descriptor).unwrap();
+
+            let (fingerprint, derivation_path) = test_case.key_request;
+            let key_request = KeyRequest::Bip32((
+                Fingerprint::from_str(fingerprint).unwrap(),
+                DerivationPath::from_str(derivation_path).unwrap(),
+            ));
+
+            let private_key = keymap
+                .get_key(key_request, &secp)
+                .expect("get_key SHOULD NOT fail")
+                .expect("get_key SHOULD get a `PrivateKey`");
+
+            assert_eq!(private_key, exp_private_key, "{}", test_case.name);
+        }
+    }
+
+    #[test]
+    fn get_key_xpriv_with_key_origin_and_non_matching_path() {
+        let secp = Secp256k1::new();
+
+        // descriptor with a fixed derivation index of `0`.
+        let descriptor = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0)";
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor).unwrap();
+
+        // the key_request has the correct `key_origin`, but the requested derivation index (`5`) does not match the
+        // descriptor's fixed derivation index (`0`), so the descriptor does not own this key.
+        let key_request = KeyRequest::Bip32((
+            Fingerprint::from_str("d34db33f").unwrap(),
+            DerivationPath::from_str("84'/1'/0'/5").unwrap(),
+        ));
+
+        let private_key = keymap
+            .get_key(key_request, &secp)
+            .expect("get_key SHOULD NOT fail!");
+
+        assert!(
+            private_key.is_none(),
+            "SHOULD get NO private key when the requested path does not match the descriptor"
+        );
     }
 }
