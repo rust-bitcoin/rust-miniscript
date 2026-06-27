@@ -73,7 +73,7 @@ impl fmt::Display for Error {
         match self.error {
             ErrorKind::NonZeroDupIf => write!(
                 f,
-                "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
+                "fragment «{}» needs to be `z` (consumes zero stack elements) to use `d`",
                 self.fragment_string,
             ),
             ErrorKind::LeftNotDissatisfiable => write!(

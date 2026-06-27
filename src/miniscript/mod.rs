@@ -23,7 +23,7 @@ use crate::iter::TreeLike;
 use crate::prelude::*;
 use crate::{script_num_size, TranslateErr};
 
-pub mod analyzable;
+mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
@@ -337,7 +337,7 @@ mod private {
             if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
                 return Err(Error::MaxRecursiveDepthExceeded);
             }
-            Ctx::check_global_validity(&res)?;
+
             Ok(res)
         }
 
@@ -366,6 +366,7 @@ mod private {
             // Malleability is only a top-level check since you can fix malleability
             // in some cases by adding wrappers.
             if !params.allow_malleability && !self.is_non_malleable() {
+                println!("{:?}", self);
                 return Err(ValidationError::Malleable);
             }
 
@@ -744,7 +745,6 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::decode(&mut iter)?;
-        Ctx::check_global_validity(&top)?;
         types::Type::type_check(&top.node)?;
         if let Some(leading) = iter.next() {
             Err(Error::Trailing(leading.to_string()))
@@ -937,7 +937,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             translated.push(Arc::new(new_ms));
         }
 
-        Ok(Arc::try_unwrap(translated.pop().unwrap()).unwrap())
+        let ret = translated.pop().unwrap();
+        ret.validate(&CtxQ::SANE)
+            .map_err(Error::Validation)
+            .map_err(TranslateErr::OuterError)?;
+        Ok(Arc::try_unwrap(ret).unwrap())
     }
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
@@ -1214,13 +1218,6 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
 
         assert_eq!(stack.len(), 1);
         let ret = stack.pop().unwrap();
-        // Iterate through every node to check global validity. It is definitely not sufficient
-        // to check only the root, since this will fail to notice illegal xonly keys at the
-        // leaves. But probably checking every single node is overkill. This may be worth
-        // optimizing.
-        for node in ret.pre_order_iter() {
-            Ctx::check_global_validity(node)?;
-        }
         Ok(Arc::try_unwrap(ret).unwrap())
     }
 }
@@ -1801,11 +1798,11 @@ mod tests {
         let segwit_sortedmulti_a_ms = Segwitv0Ms::from_str_insane("sortedmulti_a(1,A,B,C)");
         assert_eq!(
             segwit_multi_a_ms.unwrap_err().to_string(),
-            "Multi a(CHECKSIGADD) only allowed post tapscript"
+            "non-Taproot script with a `multi_a` fragment",
         );
         assert_eq!(
             segwit_sortedmulti_a_ms.unwrap_err().to_string(),
-            "Multi a(CHECKSIGADD) only allowed post tapscript"
+            "non-Taproot script with a `multi_a` fragment"
         );
         let tap_multi_a_ms = TapMs::from_str_insane("multi_a(1,A,B,C)").unwrap();
         let tap_sortedmulti_a_ms = TapMs::from_str_insane("sortedmulti_a(1,A,B,C)").unwrap();
@@ -1937,10 +1934,8 @@ mod tests {
         // ...though you can parse one with from_str_insane
         let ok_insane =
             Miniscript::<String, Segwitv0>::from_str_insane("and_v(v:pk(A),pk(A))").unwrap();
-        // ...it can be lifted, though it's unclear whether this is a deliberate
-        // choice or just an accident. It seems weird given that duplicate public
-        // keys are forbidden in several other places.
-        ok_insane.lift().unwrap();
+        // ...but you cannot then lift it.
+        ok_insane.lift().unwrap_err();
     }
 
     #[test]
@@ -1965,10 +1960,7 @@ mod tests {
         )
         .unwrap();
         // ...but this cannot lifted
-        assert!(matches!(
-            ok_insane.lift().unwrap_err(),
-            Error::LiftError(crate::policy::LiftError::HeightTimelockCombination)
-        ));
+        assert!(matches!(ok_insane.lift().unwrap_err(), ValidationError::MixedTimeLocks,));
         // nor can it have sane rules applied to it
         assert_eq!(
             ok_insane.validate(&ValidationParams::SANE).unwrap_err(),
@@ -2154,13 +2146,15 @@ mod tests {
         type BareMs = Miniscript<String, BareCtx>;
 
         // multisig script of 20 pubkeys exceeds 520 bytes
-        let pubkey_vec_20: Vec<String> = (0..20).map(|x| x.to_string()).collect();
+        let pubkey_vec_20: Vec<Vec<String>> = (0..15)
+            .map(|n| (n * 20..(n + 1) * 20).map(|x| x.to_string()).collect())
+            .collect();
         // multisig script of 300 pubkeys exceeds 10,000 bytes
         let pubkey_vec_300: Vec<String> = (0..300).map(|x| x.to_string()).collect();
 
         // wrong multi_a for non-tapscript, while exceeding consensus size limit
         let legacy_multi_a_ms =
-            LegacyMs::from_str(&format!("multi_a(20,{})", pubkey_vec_20.join(",")));
+            LegacyMs::from_str(&format!("multi_a(20,{})", pubkey_vec_20[0].join(",")));
         let segwit_multi_a_ms =
             Segwitv0Ms::from_str(&format!("multi_a(300,{})", pubkey_vec_300.join(",")));
         let bare_multi_a_ms =
@@ -2169,41 +2163,45 @@ mod tests {
         // Should panic for wrong multi_a, even if it exceeds the max consensus size
         assert_eq!(
             legacy_multi_a_ms.unwrap_err().to_string(),
-            "Multi a(CHECKSIGADD) only allowed post tapscript"
+            "non-Taproot script with a `multi_a` fragment",
         );
         assert_eq!(
             segwit_multi_a_ms.unwrap_err().to_string(),
-            "Multi a(CHECKSIGADD) only allowed post tapscript"
+            "non-Taproot script with a `multi_a` fragment",
         );
         assert_eq!(
             bare_multi_a_ms.unwrap_err().to_string(),
-            "Multi a(CHECKSIGADD) only allowed post tapscript"
+            "non-Taproot script with a `multi_a` fragment",
         );
 
         // multisig script of 20 pubkeys exceeds 520 bytes
-        let multi_ms = format!("multi(20,{})", pubkey_vec_20.join(","));
+        let multi_ms: Vec<String> = pubkey_vec_20
+            .iter()
+            .map(|vec_20| format!("multi(20,{})", vec_20.join(",")))
+            .collect();
         // other than legacy, and_v to build 15 nested 20-of-20 multisig script
         // to exceed 10,000 bytes without violation of threshold limit(max: 20)
         let and_v_nested_multi_ms =
-            format!("and_v(v:{},", multi_ms).repeat(14) + &multi_ms + "))))))))))))))";
+            format!("and_v(v:{},{}", multi_ms[..14].join(",and_v(v:"), multi_ms[14])
+                + "))))))))))))))";
 
         // correct multi for non-tapscript, but exceeding consensus size limit
-        let legacy_multi_ms = LegacyMs::from_str(&multi_ms);
+        let legacy_multi_ms = LegacyMs::from_str(&multi_ms[0]);
         let segwit_multi_ms = Segwitv0Ms::from_str(&and_v_nested_multi_ms);
         let bare_multi_ms = BareMs::from_str(&and_v_nested_multi_ms);
 
         // Should panic for exceeding the max consensus size, as multi properly used
         assert_eq!(
             legacy_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script cannot be larger than 520 bytes, but got 685 bytes."
+            "script has size at least 685 (limit: 520).",
         );
         assert_eq!(
             segwit_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script cannot be larger than 3600 bytes, but got 4110 bytes."
+            "script has size at least 10275 (limit: 3600).",
         );
         assert_eq!(
             bare_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script cannot be larger than 10000 bytes, but got 10275 bytes."
+            "script has size at least 10275 (limit: 10000).",
         );
     }
 }

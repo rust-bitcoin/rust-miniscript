@@ -450,19 +450,10 @@ pub enum Error {
     #[cfg(feature = "compiler")]
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
-    /// Errors related to policy
-    ConcretePolicy(policy::concrete::PolicyError),
-    /// Errors related to lifting
-    LiftError(policy::LiftError),
-    /// Forward script context related errors
-    ContextError(miniscript::context::ScriptContextError),
     /// Tried to construct a Taproot tree which was too deep.
     TapTreeDepthError(crate::descriptor::TapTreeDepthError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
-    /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
-    /// up to n=3 is invalid by standardness (bare)
-    NonStandardBareScript,
     /// Miniscript is equivalent to false. No possible satisfaction
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
@@ -471,9 +462,6 @@ pub enum Error {
     PubKeyCtxError(miniscript::decode::KeyError, &'static str),
     /// No script code for Tr descriptors
     TrNoScriptCode,
-    /// At least two BIP389 key expressions in the descriptor contain tuples of
-    /// derivation indexes of different lengths.
-    MultipathDescLenMismatch,
     /// Invalid absolute locktime
     AbsoluteLockTime(AbsLockTimeError),
     /// Invalid absolute locktime
@@ -510,30 +498,18 @@ impl fmt::Display for Error {
             Self::CouldNotSatisfy => f.write_str("could not satisfy"),
             Self::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Self::Secp(ref e) => fmt::Display::fmt(e, f),
-            Self::ContextError(ref e) => fmt::Display::fmt(e, f),
             Self::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Self::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Self::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
-            Self::LiftError(ref e) => fmt::Display::fmt(e, f),
-            Self::MaxRecursiveDepthExceeded => write!(
-                f,
-                "Recursive depth over {} not permitted",
-                MAX_RECURSION_DEPTH
-            ),
-            Self::NonStandardBareScript => write!(
-                f,
-                "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
-                up to n=3 is invalid by standardness (bare).
-                "
-            ),
+            Self::MaxRecursiveDepthExceeded => {
+                write!(f, "Recursive depth over {} not permitted", MAX_RECURSION_DEPTH)
+            }
             Self::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Self::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Self::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
             Self::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
-            Self::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Self::AbsoluteLockTime(ref e) => e.fmt(f),
             Self::RelativeLockTime(ref e) => e.fmt(f),
             Self::Threshold(ref e) => e.fmt(f),
@@ -558,20 +534,15 @@ impl std::error::Error for Error {
             | CouldNotSatisfy
             | TypeCheck(_)
             | MaxRecursiveDepthExceeded
-            | NonStandardBareScript
             | ImpossibleSatisfaction
             | BareDescriptorAddr
-            | TrNoScriptCode
-            | MultipathDescLenMismatch => None,
+            | TrNoScriptCode => None,
             ScriptLexer(e) => Some(e),
             AddrError(e) => Some(e),
             AddrP2shError(e) => Some(e),
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
-            ConcretePolicy(e) => Some(e),
-            LiftError(e) => Some(e),
-            ContextError(e) => Some(e),
             TapTreeDepthError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
@@ -595,21 +566,10 @@ impl From<miniscript::types::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Self { Self::LiftError(e) }
-}
-
-#[doc(hidden)]
 impl From<crate::descriptor::TapTreeDepthError> for Error {
     fn from(e: crate::descriptor::TapTreeDepthError) -> Self { Self::TapTreeDepthError(e) }
 }
 
-#[doc(hidden)]
-impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Self { Self::ContextError(e) }
-}
-
-#[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for Error {
     fn from(e: bitcoin::secp256k1::Error) -> Self { Self::Secp(e) }
 }

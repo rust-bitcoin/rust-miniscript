@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
+    Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator, ValidationError,
 };
 
 /// A Legacy p2sh Descriptor
@@ -47,7 +47,7 @@ pub enum ShInner<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<semantic::Policy<Pk>, ValidationError> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
             ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
@@ -88,7 +88,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
             "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
             _ => {
                 let sub = Miniscript::from_tree(top)?;
-                Legacy::top_level_checks(&sub)?;
+                sub.validate(&Legacy::SANE).map_err(Error::Validation)?;
                 ShInner::Ms(sub)
             }
         };
@@ -112,20 +112,23 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn as_inner(&self) -> &ShInner<Pk> { &self.inner }
 
     /// Create a new p2sh descriptor with the raw miniscript
-    pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
-        // do the top-level checks
-        Legacy::top_level_checks(&ms)?;
+    pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, ValidationError> {
+        ms.validate(&Legacy::SANE)?;
         Ok(Self { inner: ShInner::Ms(ms) })
     }
 
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
     /// and Vec of `pks`.
-    pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
+    pub fn new_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, ValidationError> {
+        // The context checks will be carried out inside new function for
+        // sortedMultiVec
         Ok(Self { inner: ShInner::Ms(Miniscript::sortedmulti(thresh)) })
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
-    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, ValidationError> {
         Ok(Self { inner: ShInner::Wsh(Wsh::new(ms)?) })
     }
 
@@ -136,14 +139,14 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// `k` and Vec of `pks`
     pub fn new_wsh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ValidationError> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
         Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(thresh)?) })
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
+    pub fn new_wpkh(pk: Pk) -> Result<Self, ValidationError> {
         Ok(Self { inner: ShInner::Wpkh(Wpkh::new(pk)?) })
     }
 

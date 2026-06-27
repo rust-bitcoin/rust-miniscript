@@ -29,7 +29,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
-    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator,
+    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator, ValidationError,
 };
 
 mod bare;
@@ -157,41 +157,43 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 
     /// Create a new PkH descriptor
-    pub fn new_pkh(pk: Pk) -> Result<Self, Error> { Ok(Self::Pkh(Pkh::new(pk)?)) }
+    pub fn new_pkh(pk: Pk) -> Result<Self, ValidationError> { Ok(Self::Pkh(Pkh::new(pk)?)) }
 
     /// Create a new Wpkh descriptor
     /// Will return Err if uncompressed key is used
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Self::Wpkh(Wpkh::new(pk)?)) }
+    pub fn new_wpkh(pk: Pk) -> Result<Self, ValidationError> { Ok(Self::Wpkh(Wpkh::new(pk)?)) }
 
     /// Create a new sh wrapped wpkh from `Pk`.
     /// Errors when uncompressed keys are supplied
-    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Self::Sh(Sh::new_wpkh(pk)?)) }
+    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, ValidationError> { Ok(Self::Sh(Sh::new_wpkh(pk)?)) }
 
     // Miniscripts
 
     /// Create a new sh for a given redeem script
     /// Errors when miniscript exceeds resource limits under p2sh context
     /// or does not type check at the top level
-    pub fn new_sh(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> { Ok(Self::Sh(Sh::new(ms)?)) }
+    pub fn new_sh(ms: Miniscript<Pk, Legacy>) -> Result<Self, ValidationError> {
+        Ok(Self::Sh(Sh::new(ms)?))
+    }
 
     /// Create a new wsh descriptor from witness script
     /// Errors when miniscript exceeds resource limits under p2sh context
     /// or does not type check at the top level
-    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, ValidationError> {
         Ok(Self::Wsh(Wsh::new(ms)?))
     }
 
     /// Create a new sh wrapped wsh descriptor with witness script
     /// Errors when miniscript exceeds resource limits under wsh context
     /// or does not type check at the top level
-    pub fn new_sh_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+    pub fn new_sh_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, ValidationError> {
         Ok(Self::Sh(Sh::new_wsh(ms)?))
     }
 
     /// Create a new bare descriptor from witness script
     /// Errors when miniscript exceeds resource limits under bare context
     /// or does not type check at the top level
-    pub fn new_bare(ms: Miniscript<Pk, BareCtx>) -> Result<Self, Error> {
+    pub fn new_bare(ms: Miniscript<Pk, BareCtx>) -> Result<Self, ValidationError> {
         Ok(Self::Bare(Bare::new(ms)?))
     }
 
@@ -210,7 +212,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under p2sh context
     pub fn new_sh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ValidationError> {
         Ok(Self::Sh(Sh::new_sortedmulti(thresh)?))
     }
 
@@ -219,7 +221,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under segwit context
     pub fn new_sh_wsh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ValidationError> {
         Ok(Self::Sh(Sh::new_wsh_sortedmulti(thresh)?))
     }
 
@@ -227,13 +229,13 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under p2sh context
     pub fn new_wsh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ValidationError> {
         Ok(Self::Wsh(Wsh::new_sortedmulti(thresh)?))
     }
 
     /// Create new tr descriptor
     /// Errors when miniscript exceeds resource limits under Tap context
-    pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
+    pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, ValidationError> {
         Ok(Self::Tr(Tr::new(key, script)?))
     }
 
@@ -967,6 +969,12 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// For multipath descriptors it will return as many descriptors as there is
     /// "parallel" paths. For regular descriptors it will just return itself.
+    ///
+    /// # Panics
+    ///
+    /// May panic if given a descriptor which has multiple multi-path keys with different
+    /// numbers of paths. Such descriptors are rejected by the ordinary constructors,
+    /// which enforce "sanity" rules, so most users do not need to worry about this.
     #[allow(clippy::blocks_in_conditions)]
     pub fn into_single_descriptors(self) -> Result<Vec<Self>, Error> {
         // All single-path descriptors contained in this descriptor.
@@ -998,19 +1006,16 @@ impl Descriptor<DescriptorPublicKey> {
         struct IndexChoser(usize);
         impl Translator<DescriptorPublicKey> for IndexChoser {
             type TargetPk = DescriptorPublicKey;
-            type Error = Error;
+            type Error = core::convert::Infallible;
 
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DescriptorPublicKey, Error> {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
                 match pk {
                     DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
                         Ok(pk.clone())
                     }
-                    DescriptorPublicKey::MultiXPub(_) => pk
-                        .clone()
-                        .into_single_keys()
-                        .get(self.0)
-                        .cloned()
-                        .ok_or(Error::MultipathDescLenMismatch),
+                    DescriptorPublicKey::MultiXPub(_) => {
+                        Ok(pk.clone().into_single_keys()[self.0].clone())
+                    }
                 }
             }
             translate_hash_clone!(DescriptorPublicKey);
@@ -1018,9 +1023,13 @@ impl Descriptor<DescriptorPublicKey> {
 
         for (i, desc) in descriptors.iter_mut().enumerate() {
             let mut index_choser = IndexChoser(i);
+            // This ? could trigger if e.g. there are two multipath keys (a,b) and (a,c);
+            // these are distinct and will not trigger "duplicate pubkey" checks but once
+            // we fork the descriptor, 'c' will appear twice in one of them, resulting in
+            // an error.
             *desc = desc
                 .translate_pk(&mut index_choser)
-                .map_err(|e| e.expect_translator_err("No Context errors possible"))?;
+                .map_err(TranslateErr::into_outer_err)?;
         }
 
         Ok(descriptors)
@@ -1231,7 +1240,6 @@ mod tests {
 
     use super::{checksum, *};
     use crate::hex_script;
-    use crate::miniscript::context::ScriptContextError;
     #[cfg(feature = "compiler")]
     use crate::policy;
 
@@ -1254,13 +1262,15 @@ mod tests {
         // in terms of the in-memory representation -- OrI(False, False).
         // Test that the way we display the ambiguous fragment doesn't
         // change, in case somebody somehow is depending on it.
-        let desc = StdDescriptor::from_str("sh(u:0)").unwrap();
-        assert_eq!("sh(u:0)#ncq3yf9h", desc.to_string());
+        let desc = StdDescriptor::from_str("wsh(u:0)").unwrap();
+        assert_eq!("wsh(u:0)#6mwq40tt", desc.to_string());
 
         // This is a regression test for https://github.com/rust-bitcoin/rust-miniscript/pull/735
-        // which was found at the same time. It's just a bug plain and simple.
-        let desc = StdDescriptor::from_str("sh(and_n(u:0,1))").unwrap();
-        assert_eq!("sh(and_n(u:0,1))#5j5tw8nm", desc.to_string());
+        // which was found at the same time. It's just a bug plain and simple. (We were
+        // encoding and_n as "and_b".)
+        let desc_str = format!("wsh(and_n({TEST_PK},1))#a23r7pua");
+        let desc = desc_str.parse::<StdDescriptor>().unwrap();
+        assert_eq!(desc_str, desc.to_string());
     }
 
     #[test]
@@ -1648,7 +1658,9 @@ mod tests {
 
     #[test]
     fn after_is_cltv() {
-        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(after(1000))").unwrap();
+        let descriptor = format!("wsh(and_v(v:{TEST_PK},after(1000)))")
+            .parse::<Descriptor<bitcoin::PublicKey>>()
+            .unwrap();
         let script = descriptor.explicit_script().unwrap();
 
         let actual_instructions: Vec<_> = script.instructions().collect();
@@ -1659,7 +1671,9 @@ mod tests {
 
     #[test]
     fn older_is_csv() {
-        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(older(1000))").unwrap();
+        let descriptor = format!("wsh(and_v(v:{TEST_PK},older(1000)))")
+            .parse::<Descriptor<bitcoin::PublicKey>>()
+            .unwrap();
         let script = descriptor.explicit_script().unwrap();
 
         let actual_instructions: Vec<_> = script.instructions().collect();
@@ -2252,17 +2266,17 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             "sh(wpkh(020000000000000000000000000000000000000000000000000000000000000002))",
         );
 
-        let wsh = StdDescriptor::from_str("wsh(1)").unwrap();
-        assert_eq!(format!("{}", wsh), "wsh(1)#mrg7xj7p");
-        assert_eq!(format!("{:#}", wsh), "wsh(1)");
+        let wsh = StdDescriptor::from_str("wsh(0)").unwrap();
+        assert_eq!(format!("{}", wsh), "wsh(0)#a0qjqdfq");
+        assert_eq!(format!("{:#}", wsh), "wsh(0)");
 
-        let sh = StdDescriptor::from_str("sh(1)").unwrap();
-        assert_eq!(format!("{}", sh), "sh(1)#l8r75ggs");
-        assert_eq!(format!("{:#}", sh), "sh(1)");
+        let sh = StdDescriptor::from_str("sh(0)").unwrap();
+        assert_eq!(format!("{}", sh), "sh(0)#ettjjhl3");
+        assert_eq!(format!("{:#}", sh), "sh(0)");
 
-        let shwsh = StdDescriptor::from_str("sh(wsh(1))").unwrap();
-        assert_eq!(format!("{}", shwsh), "sh(wsh(1))#hcyfl07f");
-        assert_eq!(format!("{:#}", shwsh), "sh(wsh(1))");
+        let shwsh = StdDescriptor::from_str("sh(wsh(0))").unwrap();
+        assert_eq!(format!("{}", shwsh), "sh(wsh(0))#f45zwpau");
+        assert_eq!(format!("{:#}", shwsh), "sh(wsh(0))");
 
         let tr = StdDescriptor::from_str(
             "tr(020000000000000000000000000000000000000000000000000000000000000002)",
@@ -2320,11 +2334,11 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Descriptor::<DescriptorPublicKey>::from_str(
             "wsh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
         )
-        .unwrap();
+        .unwrap_err();
         Descriptor::<DescriptorPublicKey>::from_str(
             "sh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
         )
-        .unwrap();
+        .unwrap_err();
         Descriptor::<DescriptorPublicKey>::from_str(
             "tr(02baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a,1)",
         )
@@ -2934,22 +2948,29 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn too_many_pubkeys_for_p2sh() {
-        // Arbitrary 65-byte public key (66 with length prefix).
-        let pk = PublicKey::from_str(
-            "0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b",
-        )
-        .unwrap();
+        // Arbitrary 65-byte public keys (66 with length prefix). We need distinct ones
+        // to avoid getting DuplicateKey errors.
+        let pks: Vec<PublicKey> = vec![
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798b7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777".parse().unwrap(),
+            "04c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5e51e970159c23cc65c3a7be6b99315110809cd9acd992f1edc9bce55af301705".parse().unwrap(),
+            "04f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9c77084f09cd217ebf01cc819d5c80ca99aff5666cb3ddce4934602897b4715bd".parse().unwrap(),
+            "04e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13ae1266c15f2baa48a9bd1df6715aebb7269851cc404201bf30168422b88c630d".parse().unwrap(),
+            "042f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe42753ddd9c91a1c292b24562259363bd90877d8e454f297bf235782c459539959".parse().unwrap(),
+            "04fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a146029755651ed8885530449df0c4169fe80ba3a9f217f0f09ae701b5fc378f3c84f8a0998".parse().unwrap(),
+            "045cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc951435bf45daa69f5ce8729279e5ab2457ec2f47ec02184a5af7d9d6f78d9755".parse().unwrap(),
+            "042f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01a3b25758beac66b6d6c2f7d5ecd2ec4b3d1dec2945a489e84a25d3479342132b".parse().unwrap(),
+        ];
 
         // This is legal for CHECKMULTISIG, but the 8 keys consume the whole 520 bytes
         // allowed by P2SH, meaning that the full script goes over the limit.
-        let thresh = Threshold::new(2, vec![pk; 8]).expect("the thresh is ok..");
+        let thresh = Threshold::new(2, pks).expect("the thresh is ok..");
         let script = Miniscript::<_, Legacy>::sortedmulti(thresh).encode();
         let res = Miniscript::<_, Legacy>::decode(&script);
 
         let error = res.expect_err("decoding should err");
 
         match error {
-            Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }) => {} // ok
+            Error::Validation(ValidationError::MaxScriptSizeExceeded { .. }) => {} // ok
             other => panic!("unexpected error: {:?}", other),
         }
     }

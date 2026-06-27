@@ -9,15 +9,14 @@ use sync::Arc;
 use super::checksum;
 use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
-use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptContext, Tap,
-    Threshold, ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, ParseError, Satisfier,
+    ScriptContext as _, Tap, Threshold, ToPublicKey, TranslateErr, Translator, ValidationError,
 };
 
 mod spend_info;
@@ -92,8 +91,10 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
 
 impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
-    pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
-        Tap::check_pk(&internal_key)?;
+    pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, ValidationError> {
+        Tap::SANE
+            .validate_pk(&internal_key)
+            .map_err(ValidationError::Key)?;
         Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
     }
 
@@ -250,8 +251,9 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             Some(tree) => Some(tree.translate_pk(translate)?),
             None => None,
         };
-        let translate_desc =
-            Tr::new(translate.pk(&self.internal_key)?, tree).map_err(TranslateErr::OuterError)?;
+        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
+            .map_err(Error::Validation)
+            .map_err(TranslateErr::OuterError)?;
         Ok(translate_desc)
     }
 }
@@ -352,7 +354,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
             .map_err(Error::Parse)?;
 
         let tap_tree = match root_children.next() {
-            None => return Self::new(internal_key, None),
+            None => return Self::new(internal_key, None).map_err(Error::Validation),
             Some(tree) => tree,
         };
 
@@ -383,7 +385,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 tap_tree_iter.skip_descendants();
             }
         }
-        Self::new(internal_key, Some(tree_builder.finalize()))
+        Self::new(internal_key, Some(tree_builder.finalize())).map_err(Error::Validation)
     }
 }
 
@@ -410,7 +412,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Policy<Pk>, ValidationError> {
         match &self.tree {
             Some(root) => Ok(Policy::Thresh(Threshold::or(
                 Arc::new(Policy::Key(self.internal_key.clone())),

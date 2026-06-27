@@ -4,8 +4,6 @@
 //!
 
 use core::{cmp, fmt, str};
-#[cfg(feature = "std")]
-use std::error;
 
 use bitcoin::absolute;
 #[cfg(feature = "compiler")]
@@ -29,6 +27,7 @@ use crate::sync::Arc;
 use crate::Descriptor;
 use crate::{
     AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
+    ValidationError, ValidationParams,
 };
 
 /// Maximum `TapLeaf`s allowed in a compiled TapTree
@@ -117,15 +116,6 @@ impl<Pk: MiniscriptKey> Ord for Policy<Pk> {
     }
 }
 
-/// Detailed error type for concrete policies.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-pub enum PolicyError {
-    /// Cannot lift policies that have a combination of height and timelocks.
-    HeightTimelockCombination,
-    /// Duplicate Public Keys.
-    DuplicatePubKeys,
-}
-
 /// Descriptor context for [`Policy`] compilation into a [`Descriptor`].
 pub enum DescriptorCtx<Pk> {
     /// See docs for [`Descriptor::Bare`].
@@ -139,28 +129,6 @@ pub enum DescriptorCtx<Pk> {
     /// [`Descriptor::Tr`] where the `Option<Pk>` corresponds to the internal key if no
     /// internal key can be inferred from the given policy.
     Tr(Option<Pk>),
-}
-
-impl fmt::Display for PolicyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Self::HeightTimelockCombination => {
-                f.write_str("Cannot lift policies that have a heightlock and timelock combination")
-            }
-            Self::DuplicatePubKeys => f.write_str("Policy contains duplicate keys"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl error::Error for PolicyError {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        use self::PolicyError::*;
-
-        match self {
-            HeightTimelockCombination | DuplicatePubKeys => None,
-        }
-    }
 }
 
 #[cfg(feature = "compiler")]
@@ -278,7 +246,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, CompilerError> {
-        self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelSigless),
@@ -334,7 +301,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             return Err(CompilerError::TooManyTapleaves { n: 1, max: 0 });
         }
         let max_leaves = max_leaves.min(MAX_COMPILATION_LEAVES);
-        self.is_valid().map_err(CompilerError::PolicyError)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelSigless),
@@ -400,7 +366,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         unspendable_key: Option<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
@@ -433,7 +398,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                             }
                         }
                     },
-                )?;
+                )
+                .map_err(Error::Validation)?;
                 Ok(tree)
             }
         }
@@ -454,16 +420,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         desc_ctx: DescriptorCtx<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid().map_err(Error::ConcretePolicy)?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelSigless)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => match desc_ctx {
-                DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
-                DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
-                DescriptorCtx::Wsh => Descriptor::new_wsh(compiler::best_compilation(self)?),
-                DescriptorCtx::ShWsh => Descriptor::new_sh_wsh(compiler::best_compilation(self)?),
+                DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?)
+                    .map_err(Error::Validation),
+                DescriptorCtx::Sh => {
+                    Descriptor::new_sh(compiler::best_compilation(self)?).map_err(Error::Validation)
+                }
+                DescriptorCtx::Wsh => Descriptor::new_wsh(compiler::best_compilation(self)?)
+                    .map_err(Error::Validation),
+                DescriptorCtx::ShWsh => Descriptor::new_sh_wsh(compiler::best_compilation(self)?)
+                    .map_err(Error::Validation),
                 DescriptorCtx::Tr(unspendable_key) => self
                     .compile_tr(unspendable_key)
                     .map_err(Error::CompilerError),
@@ -480,7 +450,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// the compiler document in doc/compiler.md for more details.
     #[cfg(feature = "compiler")]
     pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
-        self.is_valid()?;
         self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelSigless),
@@ -786,33 +755,29 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Ok(())
     }
 
-    /// Checks whether the policy contains duplicate public keys.
-    pub fn check_duplicate_keys(&self) -> Result<(), PolicyError> {
-        let pks = self.keys();
-        let pks_len = pks.len();
-        let unique_pks_len = pks.into_iter().collect::<BTreeSet<_>>().len();
-
-        if pks_len > unique_pks_len {
-            Err(PolicyError::DuplicatePubKeys)
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Checks whether the given concrete policy contains a combination of
-    /// timelocks and heightlocks.
+    /// Validates the concrete policy against a set of validation parameters.
     ///
-    /// # Returns
-    ///
-    /// Returns an error if there is at least one satisfaction that contains
-    /// a combination of heightlock and timelock.
-    pub fn check_timelocks(&self) -> Result<(), PolicyError> {
-        let aggregated_timelock_info = self.timelock_info();
-        if aggregated_timelock_info.contains_combination {
-            Err(PolicyError::HeightTimelockCombination)
-        } else {
-            Ok(())
+    /// Because policies do not correspond directly to on-chain objects, none of the consensus
+    /// limits are checked.
+    pub fn validate(&self, params: &ValidationParams) -> Result<(), ValidationError> {
+        if !params.allow_duplicate_keys {
+            let pks = self.keys();
+            let pks_len = pks.len();
+            let unique_pks_len = pks.into_iter().collect::<BTreeSet<_>>().len();
+
+            if pks_len > unique_pks_len {
+                return Err(ValidationError::DuplicateKeys);
+            }
         }
+
+        if !params.allow_mixed_time_locks {
+            let aggregated_timelock_info = self.timelock_info();
+            if aggregated_timelock_info.contains_combination {
+                return Err(ValidationError::MixedTimeLocks);
+            }
+        }
+
+        Ok(())
     }
 
     /// Processes `Policy` using `post_order_iter`, creates a `TimelockInfo` for each `Nullary` node
@@ -859,16 +824,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
         // Ok to unwrap, we had to have visited at least one node.
         infos.pop().unwrap()
-    }
-
-    /// This returns whether the given policy is valid or not. It maybe possible that the policy
-    /// contains Non-two argument `and`, `or` or a `0` arg thresh.
-    /// Validity condition also checks whether there is a possible satisfaction
-    /// combination of timelocks and heightlocks
-    pub fn is_valid(&self) -> Result<(), PolicyError> {
-        self.check_timelocks()?;
-        self.check_duplicate_keys()?;
-        Ok(())
     }
 
     /// Checks if any possible compilation of the policy could be compiled
@@ -1000,7 +955,9 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     fn from_str(s: &str) -> Result<Self, Error> {
         let tree = expression::Tree::from_str(s)?;
         let policy: Self = FromTree::from_tree(tree.root())?;
-        policy.check_timelocks().map_err(Error::ConcretePolicy)?;
+        policy
+            .validate(&ValidationParams::SANE)
+            .map_err(Error::Validation)?;
         Ok(policy)
     }
 }
@@ -1428,6 +1385,17 @@ mod tests {
     fn check_timelocks() {
         // This implicitly tests the check_timelocks API (has height and time locks).
         let _ = Policy::<String>::from_str("and(after(10),after(500000000))").unwrap();
+    }
+
+    #[test]
+    fn parse_validation_error() {
+        let res = "or(pk(A),pk(A))".parse::<Policy<String>>();
+        assert!(matches!(res.unwrap_err(), Error::Validation(ValidationError::DuplicateKeys)));
+        let res = "and(after(100),after(1000000000))".parse::<Policy<String>>();
+        assert!(matches!(res.unwrap_err(), Error::Validation(ValidationError::MixedTimeLocks)));
+        // Same policy with `or` is not "mixing timelocks" because the timelocks are exclusive.
+        let res = "or(after(100),after(1000000000))".parse::<Policy<String>>();
+        assert!(res.is_ok());
     }
 
     #[test]
