@@ -65,14 +65,7 @@ impl GetKey for DescriptorSecretKey {
                     Ok(None)
                 }
             }
-            (
-                DescriptorSecretKey::XPrv(descriptor_xkey),
-                ref key_request @ KeyRequest::Bip32(ref key_source),
-            ) => {
-                if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
-                    return Ok(Some(key));
-                }
-
+            (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Bip32(ref key_source)) => {
                 // A successful `matches()` already guarantees the requested key source's fingerprint equals our origin
                 // (or, when there is no origin, the xkey's own) fingerprint.
                 //
