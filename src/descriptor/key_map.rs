@@ -65,14 +65,7 @@ impl GetKey for DescriptorSecretKey {
                     Ok(None)
                 }
             }
-            (
-                DescriptorSecretKey::XPrv(descriptor_xkey),
-                ref key_request @ KeyRequest::Bip32(ref key_source),
-            ) => {
-                if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
-                    return Ok(Some(key));
-                }
-
+            (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Bip32(ref key_source)) => {
                 // A successful `matches()` already guarantees the requested key source's fingerprint equals our origin
                 // (or, when there is no origin, the xkey's own) fingerprint.
                 //
@@ -428,5 +421,25 @@ mod tests {
             private_key.is_none(),
             "SHOULD get NO private key when the requested path does not match the descriptor"
         );
+    }
+
+    // Master xprv in the descriptor must not sign sibling paths (`/9/7` vs `/0/*`).
+    #[test]
+    fn get_key_bip32_rejects_sibling_with_master_xprv() {
+        let secp = Secp256k1::new();
+        let master_xprv = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi"
+            .parse::<Xpriv>()
+            .unwrap();
+        let fp = master_xprv.fingerprint(&secp);
+        let account_path: DerivationPath = "86h/1h/0h".parse().unwrap();
+        let descriptor = format!("tr({}/{}/0/*)", master_xprv, account_path);
+        let request_path: DerivationPath = format!("{}/9/7", account_path).parse().unwrap();
+        let key_request = KeyRequest::Bip32((fp, request_path));
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor).unwrap();
+        let keymap_wrapper = KeyMapWrapper::from(keymap);
+        let result = keymap_wrapper
+            .get_key(key_request, &secp)
+            .expect("key lookup should not fail");
+        assert!(result.is_none(), "expected no matching key, got: {:?}", result);
     }
 }
