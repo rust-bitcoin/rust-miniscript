@@ -6,7 +6,7 @@ use core::str::FromStr;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::key::XKeyParseError;
-use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
+use super::{DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, DescriptorXKey, Wildcard};
 use crate::{BTreeSet, Descriptor, DescriptorPublicKey, String, ToString, Translator, Vec};
 
 mod key_expression;
@@ -57,10 +57,32 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
 
     fn pk(&mut self, pk: &KeyExpression) -> Result<Self::TargetPk, Self::Error> {
         let idx = pk.index.0 as usize;
-        self.key_info
+        let key = self
+            .key_info
             .get(idx)
-            .cloned()
-            .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))
+            .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
+        let (origin, xkey) = match key {
+            DescriptorPublicKey::XPub(xpub) => (xpub.origin.clone(), xpub.xkey),
+            DescriptorPublicKey::MultiXPub(xpub) => (xpub.origin.clone(), xpub.xkey),
+            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+        };
+        let paths = pk.derivation_paths.paths();
+        // The derivation path appended will come from the placeholder that refers to it.
+        Ok(if paths.len() == 1 {
+            DescriptorPublicKey::XPub(DescriptorXKey {
+                origin,
+                xkey,
+                derivation_path: paths[0].clone(),
+                wildcard: pk.wildcard,
+            })
+        } else {
+            DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+                origin,
+                xkey,
+                derivation_paths: pk.derivation_paths.clone(),
+                wildcard: pk.wildcard,
+            })
+        })
     }
 
     // Hash terminals: KeyExpression stores hashes as hex `String` (for
@@ -236,6 +258,8 @@ pub enum WalletPolicyError {
     KeyIndexParseInvalidIndex(String),
     /// The key info is not found for the given index
     KeyInfoInvalidKeyIndex(usize),
+    /// A key information item is not an extended key
+    KeyInfoNotExtendedKey,
     /// The key indexes in the template are out of order
     TemplateValidationKeyIndexOutOfOrder,
     /// The key indexes in the template are the same but the paths are non-disjoint
@@ -283,6 +307,9 @@ impl Display for WalletPolicyError {
             }
             WalletPolicyError::KeyInfoInvalidKeyIndex(idx) => {
                 write!(f, "Invalid index [{idx}] into key info for wallet policy")
+            }
+            WalletPolicyError::KeyInfoNotExtendedKey => {
+                write!(f, "Key information items must be extended keys")
             }
             WalletPolicyError::TemplateValidationKeyIndexOutOfOrder => {
                 write!(f, "The template has indexes that are out of order")
@@ -484,7 +511,10 @@ mod tests {
             .collect::<Result<Vec<DescriptorPublicKey>, _>>()
             .unwrap();
         template_only.set_key_info(&keys).unwrap();
-        assert!(template_only.clone().into_descriptor().is_ok());
+        assert_eq!(
+            format!("{:#}", template_only.into_descriptor().unwrap()),
+            "wsh(sortedmulti(2,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<0;1>/*,[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*))"
+        );
     }
 
     // Regression test for a bug where set_key_info() counted key-expression
@@ -506,7 +536,12 @@ mod tests {
             Err(WalletPolicyError::WalletPolicyInvalidKeyInfo),
         );
 
-        // Must accept: 1 key for 1 unique placeholder
-        assert!(policy.set_key_info(&[attacker_key]).is_ok());
+        // Must accept: 1 key for 1 unique placeholder, filling both @0
+        // occurrences with the derivation each placeholder carries.
+        policy.set_key_info(&[attacker_key]).unwrap();
+        assert_eq!(
+            format!("{:#}", policy.into_descriptor().unwrap()),
+            "wsh(sortedmulti(2,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<0;1>/*,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<2;3>/*))"
+        );
     }
 }
