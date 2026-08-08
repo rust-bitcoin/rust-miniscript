@@ -193,20 +193,28 @@ impl WalletPolicy {
     /// Validates the wallet policy template.
     #[must_use = "Wallet policy won't be considered valid until this is called"]
     fn validate(self) -> Result<WalletPolicy, WalletPolicyError> {
-        // HACK: don't know how else to prevent the following invalid cases from
-        // the test vectors while still using the current Descriptor parsing:
-        // skipped or out of order placeholders, repeated placeholds,
-        // non-disjoin multipath expressions
-        let mut prev: Option<KeyExpression> = None;
+        // The child numbers placeholder @i has used so far. Indexes are dense,
+        // since @i is only accepted once @0..@i-1 have appeared.
+        let mut used: Vec<BTreeSet<_>> = vec![];
         for key in self.template.iter_pk() {
-            if let (Some(prev), curr) = (&prev, &key) {
-                if prev.index.0 > curr.index.0 || prev.index.0 != curr.index.0.saturating_sub(1) {
-                    return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
-                } else if prev.index.0 == curr.index.0 && !prev.is_disjoint(curr) {
+            let paths: BTreeSet<_> = key
+                .derivation_paths
+                .paths()
+                .iter()
+                .flat_map(|p| p.into_iter().copied())
+                .collect();
+            let i = key.index.0 as usize;
+            if i == used.len() {
+                used.push(paths);
+            } else if let Some(prev) = used.get_mut(i) {
+                // A placeholder may be reused, but not over a path it already covers.
+                if !prev.is_disjoint(&paths) {
                     return Err(WalletPolicyError::TemplateValidationNonDisjointPaths);
                 }
+                prev.extend(paths);
+            } else {
+                return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
             }
-            prev = Some(key);
         }
         Ok(self)
     }
@@ -377,6 +385,16 @@ mod tests {
     (
        "sh(multi(1,@0/**,@0/<2;3>/*))",
        "sh(multi(1,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<0;1>/*,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<2;3>/*))"
+    ),
+    // Only the first occurrence of a placeholder has to be in order, so a
+    // placeholder other than @0 may be reused, and reuses need not be adjacent.
+    (
+       "wsh(multi(2,@0/**,@1/**,@1/<2;3>/*))",
+       "wsh(multi(2,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<0;1>/*,xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*,xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<2;3>/*))"
+    ),
+    (
+       "wsh(multi(2,@0/**,@1/**,@0/<2;3>/*))",
+       "wsh(multi(2,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<0;1>/*,xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<2;3>/*))"
     ),
     // TODO: uncomment if BIP-390 is ever supported
     // (

@@ -6,7 +6,7 @@ use core::str::FromStr;
 use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
 use crate::descriptor::key::{fmt_derivation_paths, parse_xkey_deriv};
 use crate::descriptor::WalletPolicyError;
-use crate::{BTreeSet, MiniscriptKey, String};
+use crate::{MiniscriptKey, String};
 
 const RECEIVE_CHANGE_SHORTHAND: &str = "**";
 const RECEIVE_CHANGE_PATH: &str = "<0;1>/*";
@@ -25,24 +25,6 @@ pub struct KeyExpression {
 
 #[derive(Debug, Clone, Copy, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct KeyIndex(pub u32);
-
-impl KeyExpression {
-    pub fn is_disjoint(&self, other: &KeyExpression) -> bool {
-        let lhs: BTreeSet<_> = self
-            .derivation_paths
-            .paths()
-            .iter()
-            .flat_map(|p| p.into_iter().copied())
-            .collect();
-
-        !other
-            .derivation_paths
-            .paths()
-            .iter()
-            .flat_map(|p| p.into_iter())
-            .any(|cn| lhs.contains(cn))
-    }
-}
 
 impl TryFrom<&str> for KeyExpression {
     type Error = DescriptorKeyParseError;
@@ -135,16 +117,4 @@ impl FromStr for KeyIndex {
 
 impl Display for KeyIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "@{}", self.0) }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn can_test_disjoin_deriv_paths() {
-        assert!(!KeyExpression::from_str("@0/<0;1>/*")
-            .unwrap()
-            .is_disjoint(&KeyExpression::from_str("@0/<1;2>/*").unwrap()));
-    }
 }
