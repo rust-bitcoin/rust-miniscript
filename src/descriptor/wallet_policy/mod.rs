@@ -3,9 +3,10 @@
 use core::fmt::{self, Display};
 use core::str::FromStr;
 
+use bitcoin::bip32;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 
-use super::key::XKeyParseError;
+use super::key::{maybe_fmt_master_id, XKeyParseError};
 use super::{DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, DescriptorXKey, Wildcard};
 use crate::{BTreeSet, Descriptor, DescriptorPublicKey, String, ToString, Translator, Vec};
 
@@ -18,7 +19,7 @@ use key_expression::{KeyExpression, KeyIndex};
 ///```rust
 /// use std::str::FromStr;
 /// use miniscript::{Descriptor, DescriptorPublicKey};
-/// use miniscript::descriptor::WalletPolicy;
+/// use miniscript::descriptor::{KeyInfo, WalletPolicy};
 ///
 /// // Convert from a `Descriptor<DescriptorPublicKey>`:
 /// let desc_str = "pkh([6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb/<0;1>/*)";
@@ -30,25 +31,100 @@ use key_expression::{KeyExpression, KeyIndex};
 /// assert_eq!(policy1, policy2);
 ///
 /// // Convert from/to a wallet policy template string:
-/// let from_template = WalletPolicy::from_str("pkh(@0/**)").unwrap();
+/// let mut from_template = WalletPolicy::from_str("pkh(@0/**)").unwrap();
 /// assert_eq!(from_template.to_string(), "pkh(@0/**)");
 ///
 /// // Cannot go back into descriptor if you created from template:
-/// assert!(from_template.into_descriptor().is_err());
+/// assert!(from_template.clone().into_descriptor().is_err());
 ///
 /// // Convert into a full descriptor:
 /// assert_eq!(policy1.into_descriptor().unwrap(), descriptor);
+///
+/// // A template needs its key information items first. These are bare keys;
+/// // the derivation comes from the template's placeholders:
+/// let key = KeyInfo::from_str("[6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb").unwrap();
+/// from_template.set_key_info(vec![key]).unwrap();
+/// assert_eq!(from_template.key_info().len(), 1);
+/// assert_eq!(from_template.into_descriptor().unwrap(), descriptor);
 ///```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletPolicy {
     /// Wallet descriptor template
     template: Descriptor<KeyExpression>,
     /// Vector of key information items
-    key_info: Vec<DescriptorPublicKey>,
+    key_info: Vec<KeyInfo>,
+}
+
+/// A BIP-388 key information item: an extended public key with an optional key
+/// origin, and no derivation path or wildcard of its own. The derivation comes
+/// from the key placeholders in the wallet policy template.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KeyInfo {
+    /// Origin information
+    pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
+    /// The extended public key
+    pub xkey: bip32::Xpub,
+}
+
+impl TryFrom<DescriptorPublicKey> for KeyInfo {
+    type Error = WalletPolicyError;
+
+    /// Rejects rather than strips, since dropping a derivation the caller wrote
+    /// would silently use a different key than they asked for.
+    fn try_from(pk: DescriptorPublicKey) -> Result<Self, Self::Error> {
+        match pk {
+            DescriptorPublicKey::XPub(xpub)
+                if xpub.derivation_path.is_empty() && xpub.wildcard == Wildcard::None =>
+            {
+                Ok(Self { origin: xpub.origin, xkey: xpub.xkey })
+            }
+            DescriptorPublicKey::XPub(_) | DescriptorPublicKey::MultiXPub(_) => {
+                Err(WalletPolicyError::KeyInfoUnexpectedDerivation(pk.to_string()))
+            }
+            DescriptorPublicKey::Single(_) => Err(WalletPolicyError::KeyInfoNotExtendedKey),
+        }
+    }
+}
+
+impl From<KeyInfo> for DescriptorPublicKey {
+    fn from(key: KeyInfo) -> Self {
+        Self::XPub(DescriptorXKey {
+            origin: key.origin,
+            xkey: key.xkey,
+            derivation_path: bip32::DerivationPath::from(vec![]),
+            wildcard: Wildcard::None,
+        })
+    }
+}
+
+impl FromStr for KeyInfo {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(DescriptorPublicKey::from_str(s)?).map_err(Into::into)
+    }
+}
+
+impl Display for KeyInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        self.xkey.fmt(f)
+    }
+}
+
+/// Reduces a descriptor key to its key information item form. Unlike the public
+/// `TryFrom`, drops any derivation: the template captures it instead.
+fn to_key_info(pk: &DescriptorPublicKey) -> Result<KeyInfo, WalletPolicyError> {
+    let (origin, xkey) = match pk {
+        DescriptorPublicKey::XPub(xpub) => (xpub.origin.clone(), xpub.xkey),
+        DescriptorPublicKey::MultiXPub(xpub) => (xpub.origin.clone(), xpub.xkey),
+        DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+    };
+    Ok(KeyInfo { origin, xkey })
 }
 
 struct WalletPolicyTranslator {
-    key_info: Vec<DescriptorPublicKey>,
+    key_info: Vec<KeyInfo>,
 }
 
 impl Translator<KeyExpression> for WalletPolicyTranslator {
@@ -57,15 +133,11 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
 
     fn pk(&mut self, pk: &KeyExpression) -> Result<Self::TargetPk, Self::Error> {
         let idx = pk.index.0 as usize;
-        let key = self
+        let KeyInfo { origin, xkey } = self
             .key_info
             .get(idx)
+            .cloned()
             .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
-        let (origin, xkey) = match key {
-            DescriptorPublicKey::XPub(xpub) => (xpub.origin.clone(), xpub.xkey),
-            DescriptorPublicKey::MultiXPub(xpub) => (xpub.origin.clone(), xpub.xkey),
-            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
-        };
         let paths = pk.derivation_paths.paths();
         // The derivation path appended will come from the placeholder that refers to it.
         Ok(if paths.len() == 1 {
@@ -116,9 +188,15 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
     type Error = WalletPolicyError;
 
     fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+        // Pre-populated by the only caller in textual order, so the lookup always hits.
+        let key = to_key_info(pk)?;
+        let index = self
+            .key_info
+            .iter()
+            .position(|p| *p == key)
+            .ok_or(WalletPolicyError::WalletPolicyInvalidKeyInfo)?;
         let ke = KeyExpression {
-            // FIXME: use a BTreeSet here? maybe doesn't really matter
-            index: KeyIndex(self.key_info.iter().position(|p| p == pk).unwrap() as u32),
+            index: KeyIndex(index as u32),
             derivation_paths: DerivPaths::new(pk.derivation_paths())
                 .ok_or(WalletPolicyError::TranslatorEmptyDerivationPaths)?,
             wildcard: pk
@@ -153,7 +231,16 @@ impl WalletPolicy {
     pub fn from_descriptor_unchecked(
         descriptor: &Descriptor<DescriptorPublicKey>,
     ) -> Result<WalletPolicy, WalletPolicyError> {
-        let mut translator = WalletPolicyTranslator { key_info: descriptor.iter_pk().collect() };
+        // One entry per distinct key, numbered in textual order. Must use
+        // `iter_pk` here; `translate_pk` walks the descriptor right-to-left.
+        let mut key_info: Vec<KeyInfo> = vec![];
+        for pk in descriptor.iter_pk() {
+            let key = to_key_info(&pk)?;
+            if !key_info.contains(&key) {
+                key_info.push(key);
+            }
+        }
+        let mut translator = WalletPolicyTranslator { key_info };
         Ok(WalletPolicy {
             template: descriptor.translate_pk(&mut translator).map_err(|e| {
                 e.expect_translator_err("converting descriptor to wallet policy template")
@@ -178,19 +265,24 @@ impl WalletPolicy {
             .map_err(|e| e.expect_translator_err("converting to full descriptor"))
     }
 
+    /// The key information items, where `key_info()[i]` fills placeholder `@i`.
+    pub fn key_info(&self) -> &[KeyInfo] { &self.key_info }
+
     /// Sets the key information so that `WalletPolicy::into_descriptor` can be
-    /// called successfully. Errors when there are not enough keys for the template.
-    pub fn set_key_info(&mut self, keys: &[DescriptorPublicKey]) -> Result<(), WalletPolicyError> {
+    /// called successfully. Errors when there are not enough keys for the
+    /// template, or when the keys are not pairwise distinct. `keys[i]` fills
+    /// placeholder `@i`.
+    pub fn set_key_info(&mut self, keys: Vec<KeyInfo>) -> Result<(), WalletPolicyError> {
         let unique_placeholders: BTreeSet<u32> =
             self.template.iter_pk().map(|k| k.index.0).collect();
         if keys.len() != unique_placeholders.len() {
             return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
         }
-        self.key_info = keys.to_vec();
+        self.key_info = keys;
         Ok(())
     }
 
-    /// Validates the wallet policy template.
+    /// Validates the wallet policy template and its key information items.
     #[must_use = "Wallet policy won't be considered valid until this is called"]
     fn validate(self) -> Result<WalletPolicy, WalletPolicyError> {
         // The child numbers placeholder @i has used so far. Indexes are dense,
@@ -268,6 +360,8 @@ pub enum WalletPolicyError {
     KeyInfoInvalidKeyIndex(usize),
     /// A key information item is not an extended key
     KeyInfoNotExtendedKey,
+    /// A key information item has a derivation path or wildcard of its own
+    KeyInfoUnexpectedDerivation(String),
     /// The key indexes in the template are out of order
     TemplateValidationKeyIndexOutOfOrder,
     /// The key indexes in the template are the same but the paths are non-disjoint
@@ -318,6 +412,12 @@ impl Display for WalletPolicyError {
             }
             WalletPolicyError::KeyInfoNotExtendedKey => {
                 write!(f, "Key information items must be extended keys")
+            }
+            WalletPolicyError::KeyInfoUnexpectedDerivation(key) => {
+                write!(
+                    f,
+                    "Key information items must not have a derivation path or wildcard, got {key}"
+                )
             }
             WalletPolicyError::TemplateValidationKeyIndexOutOfOrder => {
                 write!(f, "The template has indexes that are out of order")
@@ -445,6 +545,9 @@ mod tests {
             let policy = WalletPolicy::from_str(desc).expect("invalid descriptor");
             let template = WalletPolicy::from_str(t).expect("invalid template");
             assert_eq!(format!("{:#}", template.template), *t);
+            // The round trip below is satisfied by any self-consistent
+            // numbering, so check the template text too.
+            assert_eq!(format!("{:#}", policy.template), *t);
             assert_eq!(policy.into_descriptor().unwrap(), descriptor);
         }
     }
@@ -497,6 +600,45 @@ mod tests {
         }
     }
 
+    const XPUB: &str = "xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9";
+
+    // A key information item is a bare KEY expression, so anything carrying its
+    // own derivation, or not an extended key at all, fails to convert rather
+    // than silently overriding the template.
+    #[test]
+    fn key_info_rejects_non_bare_keys() {
+        for suffix in ["/<0;1>/*", "/0/*", "/44'/0'", "/<0;1>"] {
+            let s = format!("{XPUB}{suffix}");
+            let pk: DescriptorPublicKey = s.parse().unwrap();
+            assert!(
+                matches!(
+                    KeyInfo::try_from(pk),
+                    Err(WalletPolicyError::KeyInfoUnexpectedDerivation(_))
+                ),
+                "accepted key info with a derivation: {suffix}"
+            );
+            assert!(KeyInfo::from_str(&s).is_err(), "{suffix}");
+        }
+
+        let single: DescriptorPublicKey =
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+                .parse()
+                .unwrap();
+        assert_eq!(KeyInfo::try_from(single), Err(WalletPolicyError::KeyInfoNotExtendedKey));
+    }
+
+    // `Display` emits the BIP-388 serialization, so it round trips via `FromStr`
+    // and matches what the key prints as inside a descriptor.
+    #[test]
+    fn key_info_round_trips_through_string() {
+        for s in [XPUB, "[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw"] {
+            let key = KeyInfo::from_str(s).unwrap();
+            assert_eq!(key.to_string(), s);
+            assert_eq!(DescriptorPublicKey::from(key.clone()).to_string(), s);
+            assert_eq!(KeyInfo::from_str(&key.to_string()).unwrap(), key);
+        }
+    }
+
     // The public parser validates hex length up-front, so invalid hex
     // never reaches the translator through `from_str`. This drives the
     // translator directly to pin the defensive `TranslatorInvalidHashHex`
@@ -525,10 +667,10 @@ mod tests {
         assert!(template_only.clone().into_descriptor().is_err());
         let keys = ["[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw", "[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7"]
             .into_iter()
-            .map(FromStr::from_str)
-            .collect::<Result<Vec<DescriptorPublicKey>, _>>()
+            .map(KeyInfo::from_str)
+            .collect::<Result<Vec<KeyInfo>, _>>()
             .unwrap();
-        template_only.set_key_info(&keys).unwrap();
+        template_only.set_key_info(keys).unwrap();
         assert_eq!(
             format!("{:#}", template_only.into_descriptor().unwrap()),
             "wsh(sortedmulti(2,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<0;1>/*,[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*))"
@@ -545,18 +687,18 @@ mod tests {
     #[test]
     fn set_key_info_rejects_extra_keys_for_repeated_placeholder() {
         let mut policy = WalletPolicy::from_str("wsh(sortedmulti(2,@0/**,@0/<2;3>/*))").unwrap();
-        let attacker_key: DescriptorPublicKey = "[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw".parse().unwrap();
-        let victim_key: DescriptorPublicKey = "[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7".parse().unwrap();
+        let attacker_key = KeyInfo::from_str("[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw").unwrap();
+        let victim_key = KeyInfo::from_str("[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7").unwrap();
 
         // Must reject: 2 keys provided but only 1 unique placeholder (@0)
         assert_eq!(
-            policy.set_key_info(&[attacker_key.clone(), victim_key]),
+            policy.set_key_info(vec![attacker_key.clone(), victim_key]),
             Err(WalletPolicyError::WalletPolicyInvalidKeyInfo),
         );
 
         // Must accept: 1 key for 1 unique placeholder, filling both @0
         // occurrences with the derivation each placeholder carries.
-        policy.set_key_info(&[attacker_key]).unwrap();
+        policy.set_key_info(vec![attacker_key]).unwrap();
         assert_eq!(
             format!("{:#}", policy.into_descriptor().unwrap()),
             "wsh(sortedmulti(2,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<0;1>/*,[6738736c/48'/0'/0'/2']xpub6FC1fXFP1GXLX5TKtcjHGT4q89SDRehkQLtbKJ2PzWcvbBHtyDsJPLtpLtkGqYNYZdVVAjRQ5kug9CsapegmmeRutpP7PW4u4wVF9JfkDhw/<2;3>/*))"

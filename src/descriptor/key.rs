@@ -612,7 +612,7 @@ impl DescriptorSecretKey {
 }
 
 /// Writes the fingerprint of the origin, if there is one.
-fn maybe_fmt_master_id(
+pub(crate) fn maybe_fmt_master_id(
     f: &mut fmt::Formatter,
     origin: &Option<(bip32::Fingerprint, bip32::DerivationPath)>,
 ) -> fmt::Result {
