@@ -112,6 +112,19 @@ impl Display for KeyInfo {
     }
 }
 
+/// Checks that the key information items are pairwise distinct: BIP-388 requires
+/// the deserialized public keys to be so. Only the compressed public key is
+/// compared, since two xpubs sharing one are never legitimate.
+fn check_keys_distinct(key_info: &[KeyInfo]) -> Result<(), WalletPolicyError> {
+    let same_pubkey = |a: &KeyInfo, b: &KeyInfo| a.xkey.public_key == b.xkey.public_key;
+    for (i, key) in key_info.iter().enumerate() {
+        if key_info[..i].iter().any(|other| same_pubkey(other, key)) {
+            return Err(WalletPolicyError::KeyInfoDuplicateKey(key.to_string()));
+        }
+    }
+    Ok(())
+}
+
 /// Reduces a descriptor key to its key information item form. Unlike the public
 /// `TryFrom`, drops any derivation: the template captures it instead.
 fn to_key_info(pk: &DescriptorPublicKey) -> Result<KeyInfo, WalletPolicyError> {
@@ -278,6 +291,7 @@ impl WalletPolicy {
         if keys.len() != unique_placeholders.len() {
             return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
         }
+        check_keys_distinct(&keys)?;
         self.key_info = keys;
         Ok(())
     }
@@ -308,6 +322,7 @@ impl WalletPolicy {
                 return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
             }
         }
+        check_keys_distinct(&self.key_info)?;
         Ok(self)
     }
 }
@@ -360,6 +375,8 @@ pub enum WalletPolicyError {
     KeyInfoInvalidKeyIndex(usize),
     /// A key information item is not an extended key
     KeyInfoNotExtendedKey,
+    /// The same key appears twice in the key information items
+    KeyInfoDuplicateKey(String),
     /// A key information item has a derivation path or wildcard of its own
     KeyInfoUnexpectedDerivation(String),
     /// The key indexes in the template are out of order
@@ -413,6 +430,9 @@ impl Display for WalletPolicyError {
             WalletPolicyError::KeyInfoNotExtendedKey => {
                 write!(f, "Key information items must be extended keys")
             }
+            WalletPolicyError::KeyInfoDuplicateKey(key) => {
+                write!(f, "Key information items must be pairwise distinct, got {key} twice")
+            }
             WalletPolicyError::KeyInfoUnexpectedDerivation(key) => {
                 write!(
                     f,
@@ -452,6 +472,8 @@ mod tests {
 
     use super::*;
     use crate::Descriptor;
+
+    const XPUB: &str = "xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9";
 
     const VALID_TEMPLATES: &[(&str, &str)] = &[
     (
@@ -557,6 +579,15 @@ mod tests {
         for t in INVALID_TEMPLATES {
             assert!(WalletPolicy::from_str(t).is_err());
         }
+        // The same xpub under two origins is still one key, so the key
+        // information items would not be pairwise distinct.
+        let dup = format!(
+            "wsh(multi(2,[6738736c/48'/0'/0'/2']{XPUB}/<0;1>/*,[b2b1f0cf/48'/0'/0'/2']{XPUB}/<2;3>/*))"
+        );
+        assert!(matches!(
+            WalletPolicy::from_str(&dup),
+            Err(WalletPolicyError::KeyInfoDuplicateKey(_))
+        ));
     }
 
     // Hash-terminal round-trip tests. Before this fix the translator used
@@ -600,8 +631,6 @@ mod tests {
         }
     }
 
-    const XPUB: &str = "xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9";
-
     // A key information item is a bare KEY expression, so anything carrying its
     // own derivation, or not an extended key at all, fails to convert rather
     // than silently overriding the template.
@@ -637,6 +666,30 @@ mod tests {
             assert_eq!(DescriptorPublicKey::from(key.clone()).to_string(), s);
             assert_eq!(KeyInfo::from_str(&key.to_string()).unwrap(), key);
         }
+    }
+
+    #[test]
+    fn set_key_info_rejects_duplicate_keys() {
+        // The same key cannot fill two placeholders: `wsh(multi(2,K,K))` is a
+        // 2-of-2 that one keyholder can satisfy alone.
+        let key = KeyInfo::from_str(XPUB).unwrap();
+        let mut two_keys = WalletPolicy::from_str("wsh(multi(2,@0/**,@1/**))").unwrap();
+        assert!(matches!(
+            two_keys.set_key_info(vec![key.clone(), key.clone()]),
+            Err(WalletPolicyError::KeyInfoDuplicateKey(_))
+        ));
+
+        // A differing chain code does not make it a second key: the public keys
+        // still collide, which is what BIP-388 requires to be pairwise distinct.
+        let other = KeyInfo::from_str("[b2b1f0cf/48'/0'/0'/2']xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7").unwrap();
+        let mutant = KeyInfo {
+            origin: None,
+            xkey: bip32::Xpub { chain_code: other.xkey.chain_code, ..key.xkey },
+        };
+        assert!(matches!(
+            two_keys.set_key_info(vec![key, mutant]),
+            Err(WalletPolicyError::KeyInfoDuplicateKey(_))
+        ));
     }
 
     // The public parser validates hex length up-front, so invalid hex
