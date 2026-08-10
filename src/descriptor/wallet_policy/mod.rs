@@ -33,6 +33,7 @@ use key_expression::{KeyExpression, KeyIndex};
 /// // Convert from/to a wallet policy template string:
 /// let mut from_template = WalletPolicy::from_str("pkh(@0/**)").unwrap();
 /// assert_eq!(from_template.to_string(), "pkh(@0/**)");
+/// assert_eq!(from_template.n_keys(), 1);
 ///
 /// // Cannot go back into descriptor if you created from template:
 /// assert!(from_template.clone().into_descriptor().is_err());
@@ -72,11 +73,11 @@ impl TryFrom<DescriptorPublicKey> for KeyInfo {
     /// Rejects rather than strips, since dropping a derivation the caller wrote
     /// would silently use a different key than they asked for.
     fn try_from(pk: DescriptorPublicKey) -> Result<Self, Self::Error> {
-        match pk {
+        match &pk {
             DescriptorPublicKey::XPub(xpub)
                 if xpub.derivation_path.is_empty() && xpub.wildcard == Wildcard::None =>
             {
-                Ok(Self { origin: xpub.origin, xkey: xpub.xkey })
+                to_key_info(&pk)
             }
             DescriptorPublicKey::XPub(_) | DescriptorPublicKey::MultiXPub(_) => {
                 Err(WalletPolicyError::KeyInfoUnexpectedDerivation(pk.to_string()))
@@ -212,22 +213,26 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
     type Error = WalletPolicyError;
 
     fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+        // One extraction serves both the index lookup and the placeholder.
+        let (origin, xkey, derivation_paths, wildcard) = match pk {
+            DescriptorPublicKey::XPub(x) => (
+                &x.origin,
+                &x.xkey,
+                DerivPaths::new(vec![x.derivation_path.clone()]).expect("always one path"),
+                x.wildcard,
+            ),
+            DescriptorPublicKey::MultiXPub(x) => {
+                (&x.origin, &x.xkey, x.derivation_paths.clone(), x.wildcard)
+            }
+            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+        };
         // Pre-populated by the only caller in textual order, so the lookup always hits.
-        let key = to_key_info(pk)?;
         let index = self
             .key_info
             .iter()
-            .position(|p| *p == key)
+            .position(|k| k.origin == *origin && k.xkey == *xkey)
             .ok_or(WalletPolicyError::WalletPolicyInvalidKeyInfo)?;
-        let ke = KeyExpression {
-            index: KeyIndex(index as u32),
-            derivation_paths: DerivPaths::new(pk.derivation_paths())
-                .ok_or(WalletPolicyError::TranslatorEmptyDerivationPaths)?,
-            wildcard: pk
-                .wildcard()
-                .ok_or(WalletPolicyError::TranslatorMissingWildcard)?,
-        };
-        Ok(ke)
+        Ok(KeyExpression { index: KeyIndex(index as u32), derivation_paths, wildcard })
     }
 
     // Hash terminals: DescriptorPublicKey uses concrete Hash types,
@@ -249,10 +254,8 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
 }
 
 impl WalletPolicy {
-    /// Create a new `WalletPolicy` from a
-    /// `Descriptor<DescriptorPublicKey>`. Does not validate the underlying
-    /// template.
-    pub fn from_descriptor_unchecked(
+    /// Creates a `WalletPolicy` from a `Descriptor<DescriptorPublicKey>`.
+    pub fn from_descriptor(
         descriptor: &Descriptor<DescriptorPublicKey>,
     ) -> Result<Self, WalletPolicyError> {
         // One entry per distinct key, numbered in textual order. Must use
@@ -265,20 +268,10 @@ impl WalletPolicy {
             }
         }
         let mut translator = WalletPolicyTranslator { key_info };
-        Ok(Self {
-            template: descriptor.translate_pk(&mut translator).map_err(|e| {
-                e.expect_translator_err("converting descriptor to wallet policy template")
-            })?,
-            key_info: translator.key_info,
-        })
-    }
-
-    /// Create a new `WalletPolicy` from a `Descriptor<DescriptorPublicKey>` and
-    /// validates the underyling template.
-    pub fn from_descriptor(
-        descriptor: &Descriptor<DescriptorPublicKey>,
-    ) -> Result<Self, WalletPolicyError> {
-        Self::from_descriptor_unchecked(descriptor).and_then(Self::validate)
+        let template = descriptor.translate_pk(&mut translator).map_err(|e| {
+            e.expect_translator_err("converting descriptor to wallet policy template")
+        })?;
+        Self { template, key_info: translator.key_info }.validate()
     }
 
     /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
@@ -292,14 +285,22 @@ impl WalletPolicy {
     /// The key information items, where `key_info()[i]` fills placeholder `@i`.
     pub fn key_info(&self) -> &[KeyInfo] { &self.key_info }
 
+    /// Counts the distinct key placeholders in the template, which is how many
+    /// key information items `WalletPolicy::set_key_info` requires.
+    pub fn n_keys(&self) -> usize {
+        self.template
+            .iter_pk()
+            .map(|k| k.index.0)
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
     /// Sets the key information so that `WalletPolicy::into_descriptor` can be
-    /// called successfully. Errors when there are not enough keys for the
-    /// template, or when the keys are not pairwise distinct. `keys[i]` fills
+    /// called successfully. Errors unless the number of keys matches the number
+    /// of placeholders and the keys are pairwise distinct. `keys[i]` fills
     /// placeholder `@i`.
     pub fn set_key_info(&mut self, keys: Vec<KeyInfo>) -> Result<(), WalletPolicyError> {
-        let unique_placeholders: BTreeSet<u32> =
-            self.template.iter_pk().map(|k| k.index.0).collect();
-        if keys.len() != unique_placeholders.len() {
+        if keys.len() != self.n_keys() {
             return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
         }
         check_keys_distinct(&keys)?;
@@ -308,7 +309,6 @@ impl WalletPolicy {
     }
 
     /// Validates the wallet policy template and its key information items.
-    #[must_use = "Wallet policy won't be considered valid until this is called"]
     fn validate(self) -> Result<Self, WalletPolicyError> {
         // The child numbers placeholder @i has used so far. Indexes are dense,
         // since @i is only accepted once @0..@i-1 have appeared.
@@ -360,7 +360,7 @@ impl TryFrom<&str> for WalletPolicy {
             Err(err1) => match Descriptor::<DescriptorPublicKey>::from_str(desc) {
                 Ok(desc) => Ok(Self::from_descriptor(&desc)?),
                 Err(err2) => Err(WalletPolicyError::WalletPolicyParseFromString(format!(
-                    "Couldn't parse from descriptor [{err1}], or wallet policy template: [{err2}]"
+                    "Couldn't parse as a wallet policy template [{err1}], or as a descriptor [{err2}]"
                 ))),
             },
         }
@@ -396,10 +396,6 @@ pub enum WalletPolicyError {
     /// A key placeholder is not followed by "/**" or "/<NUM;NUM>/*" with two
     /// distinct canonical unhardened NUMs
     TemplateValidationInvalidPlaceholderDeriv,
-    /// There must be at least one derivation path for a xpub
-    TranslatorEmptyDerivationPaths,
-    /// Missing wildcard on xpub
-    TranslatorMissingWildcard,
     /// Couldn't parse wallet policy from string
     WalletPolicyParseFromString(String),
     /// Couldn't set key info on WalletPolicy
@@ -459,12 +455,6 @@ impl Display for WalletPolicyError {
                     "Key placeholders must be followed by \"/**\" or \"/<NUM;NUM>/*\" \
                      with two distinct unhardened NUMs"
                 )
-            }
-            Self::TranslatorEmptyDerivationPaths => {
-                write!(f, "Expected derivation paths when translating into KeyExpression")
-            }
-            Self::TranslatorMissingWildcard => {
-                write!(f, "Missing wildcard. Not an xpub?")
             }
             Self::WalletPolicyParseFromString(msg) => msg.fmt(f),
             Self::WalletPolicyInvalidKeyInfo => {
