@@ -310,6 +310,11 @@ impl WalletPolicy {
 
     /// Validates the wallet policy template and its key information items.
     fn validate(self) -> Result<Self, WalletPolicyError> {
+        // BIP-388's DESCRIPTOR_TEMPLATE grammar only produces sh, wsh, pkh,
+        // wpkh and tr at the top level.
+        if matches!(self.template, Descriptor::Bare(_)) {
+            return Err(WalletPolicyError::TemplateValidationBareTopLevel);
+        }
         // The child numbers placeholder @i has used so far. Indexes are dense,
         // since @i is only accepted once @0..@i-1 have appeared.
         let mut used: Vec<BTreeSet<_>> = vec![];
@@ -333,6 +338,9 @@ impl WalletPolicy {
             } else {
                 return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
             }
+        }
+        if used.is_empty() {
+            return Err(WalletPolicyError::TemplateValidationNoKeyPlaceholder);
         }
         check_keys_distinct(&self.key_info)?;
         Ok(self)
@@ -396,6 +404,10 @@ pub enum WalletPolicyError {
     /// A key placeholder is not followed by "/**" or "/<NUM;NUM>/*" with two
     /// distinct canonical unhardened NUMs
     TemplateValidationInvalidPlaceholderDeriv,
+    /// The template has no key placeholder
+    TemplateValidationNoKeyPlaceholder,
+    /// The template is a bare script, which BIP-388 does not allow at the top level
+    TemplateValidationBareTopLevel,
     /// Couldn't parse wallet policy from string
     WalletPolicyParseFromString(String),
     /// Couldn't set key info on WalletPolicy
@@ -454,6 +466,15 @@ impl Display for WalletPolicyError {
                     f,
                     "Key placeholders must be followed by \"/**\" or \"/<NUM;NUM>/*\" \
                      with two distinct unhardened NUMs"
+                )
+            }
+            Self::TemplateValidationNoKeyPlaceholder => {
+                write!(f, "A wallet policy must have at least one key placeholder")
+            }
+            Self::TemplateValidationBareTopLevel => {
+                write!(
+                    f,
+                    "A wallet policy template must be sh, wsh, pkh, wpkh or tr at the top level"
                 )
             }
             Self::WalletPolicyParseFromString(msg) => msg.fmt(f),
@@ -541,6 +562,13 @@ mod tests {
     ];
 
     const INVALID_TEMPLATES: &[&str] = &[
+    // No key placeholder at all
+    "wsh(older(1))",
+
+    // Bare scripts are not in BIP-388's top-level grammar
+    "pk(@0/**)",
+    "multi(1,@0/**,@1/**)",
+
     // Key placeholder with no path following it
     "pkh(@0)",
 
@@ -608,6 +636,11 @@ mod tests {
         for suffix in ["", "/0/*", "/0h/*h", "/<0;1>/2/*"] {
             assert!(WalletPolicy::from_str(&format!("wpkh({XPUB}{suffix})")).is_err(), "{suffix}");
         }
+        // A bare descriptor is rejected the same way as a bare template.
+        assert_eq!(
+            WalletPolicy::from_str(&format!("pk({XPUB}/<0;1>/*)")),
+            Err(WalletPolicyError::TemplateValidationBareTopLevel)
+        );
         // The same xpub under two origins is still one key, so the key
         // information items would not be pairwise distinct.
         let dup = format!(
