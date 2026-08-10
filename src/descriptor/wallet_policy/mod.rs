@@ -125,6 +125,25 @@ fn check_keys_distinct(key_info: &[KeyInfo]) -> Result<(), WalletPolicyError> {
     Ok(())
 }
 
+/// Checks that a key placeholder is followed by `/**` or `/<NUM;NUM>/*` for two
+/// distinct unhardened NUMs, the only derivations BIP-388 allows. Both the
+/// template parser and `from_descriptor` build placeholders that must satisfy it.
+fn check_placeholder_deriv(key: &KeyExpression) -> Result<(), WalletPolicyError> {
+    let paths = key.derivation_paths.paths();
+    let step = |p: &bip32::DerivationPath| match p.as_ref() {
+        [cn] if cn.is_normal() => Some(*cn),
+        _ => None,
+    };
+    if key.wildcard == Wildcard::Unhardened
+        && paths.len() == 2
+        && matches!((step(&paths[0]), step(&paths[1])), (Some(a), Some(b)) if a != b)
+    {
+        Ok(())
+    } else {
+        Err(WalletPolicyError::TemplateValidationInvalidPlaceholderDeriv)
+    }
+}
+
 /// Reduces a descriptor key to its key information item form. Unlike the public
 /// `TryFrom`, drops any derivation: the template captures it instead.
 fn to_key_info(pk: &DescriptorPublicKey) -> Result<KeyInfo, WalletPolicyError> {
@@ -151,23 +170,15 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
             .get(idx)
             .cloned()
             .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
-        let paths = pk.derivation_paths.paths();
         // The derivation path appended will come from the placeholder that refers to it.
-        Ok(if paths.len() == 1 {
-            DescriptorPublicKey::XPub(DescriptorXKey {
-                origin,
-                xkey,
-                derivation_path: paths[0].clone(),
-                wildcard: pk.wildcard,
-            })
-        } else {
-            DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
-                origin,
-                xkey,
-                derivation_paths: pk.derivation_paths.clone(),
-                wildcard: pk.wildcard,
-            })
-        })
+        // `validate` (via `check_placeholder_deriv`) guarantees every placeholder carries
+        // exactly two paths, so the materialized key is always a multipath one.
+        Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+            origin,
+            xkey,
+            derivation_paths: pk.derivation_paths.clone(),
+            wildcard: pk.wildcard,
+        }))
     }
 
     // Hash terminals: KeyExpression stores hashes as hex `String` (for
@@ -303,6 +314,7 @@ impl WalletPolicy {
         // since @i is only accepted once @0..@i-1 have appeared.
         let mut used: Vec<BTreeSet<_>> = vec![];
         for key in self.template.iter_pk() {
+            check_placeholder_deriv(&key)?;
             let paths: BTreeSet<_> = key
                 .derivation_paths
                 .paths()
@@ -365,8 +377,6 @@ impl FromStr for WalletPolicy {
 pub enum WalletPolicyError {
     /// A derivation path must be present when parsing a KeyExpression
     KeyExpressionParseMustHaveDerivPath,
-    /// The derivation path for a KeyExpression is invalid
-    KeyExpressionParseInvalidDerivPath,
     /// The KeyIndex is missing an '@' sign
     KeyIndexParseExpectedAtSign(char),
     /// The KeyIndex is not a valid unsigned integer
@@ -383,6 +393,8 @@ pub enum WalletPolicyError {
     TemplateValidationKeyIndexOutOfOrder,
     /// The key indexes in the template are the same but the paths are non-disjoint
     TemplateValidationNonDisjointPaths,
+    /// A key placeholder is not followed by "/**" or "/<NUM;NUM>/*"
+    TemplateValidationInvalidPlaceholderDeriv,
     /// There must be at least one derivation path for a xpub
     TranslatorEmptyDerivationPaths,
     /// Missing wildcard on xpub
@@ -412,12 +424,6 @@ impl Display for WalletPolicyError {
             WalletPolicyError::KeyExpressionParseMustHaveDerivPath => {
                 write!(f, "Key expression placeholder must have a derivation path after it")
             }
-            WalletPolicyError::KeyExpressionParseInvalidDerivPath => {
-                write!(
-                    f,
-                    "Key expression placeholder must be of the format \"/**\" or \"/<NUM;NUM>/*\""
-                )
-            }
             WalletPolicyError::KeyIndexParseInvalidIndex(index_str) => {
                 write!(f, "Couldn't parse index, got {index_str}")
             }
@@ -444,6 +450,9 @@ impl Display for WalletPolicyError {
             }
             WalletPolicyError::TemplateValidationNonDisjointPaths => {
                 write!(f, "The template has identical indexes but the paths are non-disjoint")
+            }
+            WalletPolicyError::TemplateValidationInvalidPlaceholderDeriv => {
+                write!(f, "Key placeholders must be followed by \"/**\" or \"/<NUM;NUM>/*\"")
             }
             WalletPolicyError::TranslatorEmptyDerivationPaths => {
                 write!(f, "Expected derivation paths when translating into KeyExpression")
@@ -518,6 +527,11 @@ mod tests {
        "wsh(multi(2,@0/**,@1/**,@0/<2;3>/*))",
        "wsh(multi(2,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<0;1>/*,xpub6EWhjpPa6FqrcaPBuGBZRJVjzGJ1ZsMygRF26RwN932Vfkn1gyCiTbECVitBjRCkexEvetLdiqzTcYimmzYxyR1BZ79KNevgt61PDcukmC7/<0;1>/*,xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<2;3>/*))"
     ),
+    // BIP-388 requires the two NUMs of a `/<NUM;NUM>/*` placeholder to be distinct, not ascending.
+    (
+        "wpkh(@0/<1;0>/*)",
+        "wpkh(xpub6Bex1CHWGXNNwGVKHLqNC7kcV348FxkCxpZXyCWp1k27kin8sRPayjZUKDjyQeZzGUdyeAj2emoW5zStFFUAHRgd5w8iVVbLgZ7PmjAKAm9/<1;0>/*)"
+    ),
     // TODO: uncomment if BIP-390 is ever supported
     // (
     //     "tr(@0/**,{sortedmulti_a(1,@0/<2;3>/*,@1/**),or_b(pk(@2/**),s:pk(@3/**))})",
@@ -578,6 +592,12 @@ mod tests {
     fn can_error_on_invalid_wallet_policy_templates() {
         for t in INVALID_TEMPLATES {
             assert!(WalletPolicy::from_str(t).is_err());
+        }
+        // Descriptor keys whose derivation is not a valid key placeholder path.
+        // These parse as descriptors, so they reach the template only through
+        // `from_descriptor`, which used to accept them.
+        for suffix in ["", "/0/*", "/0h/*h", "/<0;1>/2/*"] {
+            assert!(WalletPolicy::from_str(&format!("wpkh({XPUB}{suffix})")).is_err(), "{suffix}");
         }
         // The same xpub under two origins is still one key, so the key
         // information items would not be pairwise distinct.

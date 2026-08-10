@@ -30,44 +30,17 @@ impl TryFrom<&str> for KeyExpression {
     type Error = DescriptorKeyParseError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        let path = match s.split_once('/') {
-            Some((_placeholder, path)) => path,
-            None => return Err(WalletPolicyError::KeyExpressionParseMustHaveDerivPath.into()),
-        };
-        if path != RECEIVE_CHANGE_SHORTHAND && !valid_unhardened_derivation_path(path) {
-            return Err(WalletPolicyError::KeyExpressionParseInvalidDerivPath.into());
-        }
-        let (ki, derivation_paths, wildcard) =
+        let (index, derivation_paths, wildcard) =
             parse_xkey_deriv(&s.replace(RECEIVE_CHANGE_SHORTHAND, RECEIVE_CHANGE_PATH))?;
-        Ok(KeyExpression {
-            index: ki,
+        let key = Self {
+            index,
             derivation_paths: DerivPaths::new(derivation_paths)
                 .ok_or(WalletPolicyError::KeyExpressionParseMustHaveDerivPath)?,
             wildcard,
-        })
+        };
+        super::check_placeholder_deriv(&key)?;
+        Ok(key)
     }
-}
-
-// Returns true if `path` is a string of the form /<NUM;NUM>/*, for two distinct
-// decimal numbers NUM representing unhardened derivations
-// NOTE: the prefix '/' should be stripped in the caller
-fn valid_unhardened_derivation_path(path: &str) -> bool {
-    let (left, right) = match path.split_once(';') {
-        Some(pair) => pair,
-        None => return false,
-    };
-    let left_num = match left.strip_prefix("<") {
-        Some(num) => num,
-        None => return false,
-    };
-    let right_num = match right.strip_suffix(">/*") {
-        Some(num) => num,
-        None => return false,
-    };
-    matches!(
-        (left_num.parse::<u32>(), right_num.parse::<u32>()),
-        (Ok(a), Ok(b)) if a < b
-    )
 }
 
 impl FromStr for KeyExpression {
