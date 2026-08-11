@@ -4,11 +4,12 @@ use core::fmt::{self, Display, Write};
 use core::str::FromStr;
 
 use bitcoin::bip32;
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
 use crate::descriptor::key::fmt_derivation_paths;
 use crate::descriptor::WalletPolicyError;
-use crate::{MiniscriptKey, String};
+use crate::{hash256, MiniscriptKey, String};
 
 const RECEIVE_CHANGE_SHORTHAND: &str = "**";
 const RECEIVE_CHANGE_PATH: &str = "<0;1>/*";
@@ -86,10 +87,10 @@ impl Display for KeyExpression {
 }
 
 impl MiniscriptKey for KeyExpression {
-    type Sha256 = String;
-    type Hash256 = String;
-    type Ripemd160 = String;
-    type Hash160 = String;
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
 
     fn is_x_only_key(&self) -> bool { false }
     fn num_der_paths(&self) -> usize { self.derivation_paths.paths().len() }

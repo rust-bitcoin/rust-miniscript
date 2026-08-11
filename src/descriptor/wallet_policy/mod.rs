@@ -4,7 +4,6 @@ use core::fmt::{self, Display};
 use core::str::FromStr;
 
 use bitcoin::bip32;
-use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::key::{maybe_fmt_master_id, XKeyParseError};
 use super::{DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, DescriptorXKey, Wildcard};
@@ -182,30 +181,8 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
         }))
     }
 
-    // Hash terminals: KeyExpression stores hashes as hex `String` (for
-    // template round-tripping), DescriptorPublicKey uses the concrete
-    // `bitcoin::hashes::*::Hash` types. Parse the hex string into the
-    // binary form during materialization.
-
-    fn sha256(&mut self, s: &String) -> Result<sha256::Hash, Self::Error> {
-        s.parse::<sha256::Hash>()
-            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("sha256", s.clone()))
-    }
-
-    fn hash256(&mut self, s: &String) -> Result<crate::hash256::Hash, Self::Error> {
-        s.parse::<crate::hash256::Hash>()
-            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("hash256", s.clone()))
-    }
-
-    fn ripemd160(&mut self, s: &String) -> Result<ripemd160::Hash, Self::Error> {
-        s.parse::<ripemd160::Hash>()
-            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("ripemd160", s.clone()))
-    }
-
-    fn hash160(&mut self, s: &String) -> Result<hash160::Hash, Self::Error> {
-        s.parse::<hash160::Hash>()
-            .map_err(|_| WalletPolicyError::TranslatorInvalidHashHex("hash160", s.clone()))
-    }
+    // Both key types use the concrete `Hash` types for hash terminals.
+    translate_hash_clone!(KeyExpression);
 }
 
 impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
@@ -235,22 +212,8 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
         Ok(KeyExpression { index: KeyIndex(index as u32), derivation_paths, wildcard })
     }
 
-    // Hash terminals: DescriptorPublicKey uses concrete Hash types,
-    // KeyExpression stores them as hex `String`. Render to lowercase hex
-    // (the `Display` impl on `bitcoin::hashes::*::Hash`) so the resulting
-    // template prints hashes in their canonical form.
-
-    fn sha256(&mut self, h: &sha256::Hash) -> Result<String, Self::Error> { Ok(h.to_string()) }
-
-    fn hash256(&mut self, h: &crate::hash256::Hash) -> Result<String, Self::Error> {
-        Ok(h.to_string())
-    }
-
-    fn ripemd160(&mut self, h: &ripemd160::Hash) -> Result<String, Self::Error> {
-        Ok(h.to_string())
-    }
-
-    fn hash160(&mut self, h: &hash160::Hash) -> Result<String, Self::Error> { Ok(h.to_string()) }
+    // Both key types use the concrete `Hash` types for hash terminals.
+    translate_hash_clone!(DescriptorPublicKey);
 }
 
 impl WalletPolicy {
@@ -412,8 +375,6 @@ pub enum WalletPolicyError {
     WalletPolicyParseFromString(String),
     /// Couldn't set key info on WalletPolicy
     WalletPolicyInvalidKeyInfo,
-    /// Hash terminal in template had invalid hex (kind, raw input)
-    TranslatorInvalidHashHex(&'static str, String),
 }
 
 impl From<WalletPolicyError> for DescriptorKeyParseError {
@@ -480,9 +441,6 @@ impl Display for WalletPolicyError {
             Self::WalletPolicyParseFromString(msg) => msg.fmt(f),
             Self::WalletPolicyInvalidKeyInfo => {
                 write!(f, "Invalid key information for WalletPolicy template")
-            }
-            Self::TranslatorInvalidHashHex(kind, raw) => {
-                write!(f, "Invalid hex for {kind} hash terminal: {raw}")
             }
         }
     }
@@ -604,6 +562,9 @@ mod tests {
     "pkh(@0/<+0;1>/*)",
     "pkh(@0/<0;0>/*)",
     "pkh(@0/1**)",
+
+    // Hash terminal whose payload is not valid hex of the right length
+    "wsh(and_v(v:pk(@0/**),sha256(nothex)))",
 
     // Derivation before aggregation is not allowed in wallet policies (despite
         // being allowed in BIP-390)
@@ -752,27 +713,6 @@ mod tests {
             two_keys.set_key_info(vec![key, mutant]),
             Err(WalletPolicyError::KeyInfoDuplicateKey(_))
         ));
-    }
-
-    // The public parser validates hex length up-front, so invalid hex
-    // never reaches the translator through `from_str`. This drives the
-    // translator directly to pin the defensive `TranslatorInvalidHashHex`
-    // variant.
-    #[test]
-    fn translator_invalid_hash_hex_errors() {
-        let mut t = WalletPolicyTranslator { key_info: Vec::new() };
-        let bad = String::from("not_hex");
-
-        macro_rules! assert_bad {
-            ($method:ident, $kind:literal) => {{
-                let err = Translator::<KeyExpression>::$method(&mut t, &bad).unwrap_err();
-                assert!(matches!(err, WalletPolicyError::TranslatorInvalidHashHex($kind, _)));
-            }};
-        }
-        assert_bad!(sha256, "sha256");
-        assert_bad!(hash256, "hash256");
-        assert_bad!(ripemd160, "ripemd160");
-        assert_bad!(hash160, "hash160");
     }
 
     #[test]
