@@ -468,6 +468,9 @@ pub enum Error {
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
     BareDescriptorAddr,
+    /// A `Bare` descriptor was encountered while parsing with `allow_bare`
+    /// disabled in the validation parameters.
+    BareDescriptorDisallowed,
     /// PubKey invalid under current context
     PubKeyCtxError(miniscript::decode::KeyError, &'static str),
     /// No script code for Tr descriptors
@@ -530,6 +533,7 @@ impl fmt::Display for Error {
             ),
             Self::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Self::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
+            Self::BareDescriptorDisallowed => write!(f, "Bare descriptors are not allowed"),
             Self::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
@@ -562,6 +566,7 @@ impl std::error::Error for Error {
             | NonStandardBareScript
             | ImpossibleSatisfaction
             | BareDescriptorAddr
+            | BareDescriptorDisallowed
             | TrNoScriptCode
             | MultipathDescLenMismatch => None,
             ScriptLexer(e) => Some(e),

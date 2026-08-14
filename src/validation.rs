@@ -46,6 +46,11 @@ pub struct ValidationParams {
     pub allow_x_only_keys: bool,
     /// Allow multipath keys with inconsistent lengths.
     pub allow_inconsistent_multipath_keys: bool,
+    /// Allow `Bare` descriptors (i.e. a raw miniscript at the top level, with no
+    /// `pkh`/`wpkh`/`sh`/`wsh`/`tr` wrapper). When disabled, the parser refuses
+    /// to produce a `Descriptor::Bare`, forcing every descriptor to resolve to one
+    /// of the typed top-level variants.
+    pub allow_bare: bool,
     /// Maximum number of non-push opcodes executed in any branch.
     pub max_opcode_count: usize,
     /// Maximum size of the encoded script.
@@ -87,6 +92,7 @@ impl ValidationParams {
         allow_unsatisfiable: true,
         allow_x_only_keys: true,
         allow_inconsistent_multipath_keys: true,
+        allow_bare: true,
         max_opcode_count: usize::MAX,
         max_script_size: usize::MAX,
         max_witness_items: usize::MAX,
@@ -118,6 +124,7 @@ impl ValidationParams {
         allow_unsatisfiable: true,
         allow_x_only_keys: true,
         allow_inconsistent_multipath_keys: false,
+        allow_bare: true,
         max_opcode_count: usize::MAX,
         max_script_size: usize::MAX,
         max_witness_items: usize::MAX,
@@ -147,6 +154,7 @@ impl ValidationParams {
         allow_unsatisfiable: true,
         allow_x_only_keys: true,
         allow_inconsistent_multipath_keys: true,
+        allow_bare: true,
         max_opcode_count: usize::MAX,
         max_script_size: usize::MAX,
         max_witness_items: usize::MAX,
@@ -173,6 +181,7 @@ impl ValidationParams {
             && self.allow_unsatisfiable == other.allow_unsatisfiable
             && self.allow_x_only_keys == other.allow_x_only_keys
             && self.allow_inconsistent_multipath_keys == other.allow_inconsistent_multipath_keys
+            && self.allow_bare == other.allow_bare
             && self.max_opcode_count == other.max_opcode_count
             && self.max_script_size == other.max_script_size
             && self.max_witness_items == other.max_witness_items
@@ -203,6 +212,7 @@ impl ValidationParams {
             allow_x_only_keys: self.allow_x_only_keys && other.allow_x_only_keys,
             allow_inconsistent_multipath_keys: self.allow_inconsistent_multipath_keys
                 && other.allow_inconsistent_multipath_keys,
+            allow_bare: self.allow_bare && other.allow_bare,
             // cannot use cmp::min in const ctx
             max_opcode_count: if self.max_opcode_count < other.max_opcode_count {
                 self.max_opcode_count

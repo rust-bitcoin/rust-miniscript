@@ -29,7 +29,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
-    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator,
+    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator, ValidationParams,
 };
 
 mod bare;
@@ -65,6 +65,20 @@ pub use self::wallet_policy::{WalletPolicy, WalletPolicyError};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
+    ///
+    /// Note that bare descriptors are serialized as just their inner miniscript,
+    /// with no explicit `bare()` wrapper (there is no such wrapper in
+    /// [BIP380](https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki)).
+    /// In particular, a `Bare` over a `pkh(...)` fragment encodes identically to
+    /// a `Pkh` descriptor: both serialize as `"pkh(KEY)"`. Because the two are
+    /// semantically equivalent (same scriptPubKey, same satisfaction assets), the
+    /// parser always decodes `"pkh(KEY)"` as a `Pkh`, so a `Bare(Pkh)` cannot be
+    /// recovered from its string form. This is inherent to the standard encoding;
+    /// see [rust-bitcoin/rust-miniscript#890](https://github.com/rust-bitcoin/rust-miniscript/issues/890).
+    /// If you need to reject bare descriptors entirely (and force every descriptor
+    /// to resolve to a typed top-level variant), parse with
+    /// [`Self::from_str_with_validation_params`] using `ValidationParams` with
+    /// `allow_bare` set to `false`.
     Bare(Bare<Pk>),
     /// Pay-to-PubKey-Hash
     Pkh(Pkh<Pk>),
@@ -880,6 +894,86 @@ impl Descriptor<DescriptorPublicKey> {
         Ok((descriptor, keymap_pk.0))
     }
 
+    /// Parse a descriptor that may contain secret keys, applying the given validation
+    /// parameters.
+    ///
+    /// This is like [`Self::parse_descriptor`] but additionally allows the caller to
+    /// control what counts as a valid descriptor via [`ValidationParams`]. In
+    /// particular, setting `params.allow_bare` to `false` refuses to parse any
+    /// descriptor into a [`Descriptor::Bare`]. See
+    /// [`Self::from_str_with_validation_params`] for details.
+    pub fn parse_descriptor_with_validation_params<C: secp256k1::Signing>(
+        secp: &secp256k1::Secp256k1<C>,
+        s: &str,
+        params: &ValidationParams,
+    ) -> Result<(Self, KeyMap), Error> {
+        fn parse_key<C: secp256k1::Signing>(
+            s: &str,
+            key_map: &mut KeyMap,
+            secp: &secp256k1::Secp256k1<C>,
+        ) -> Result<DescriptorPublicKey, Error> {
+            match DescriptorSecretKey::from_str(s) {
+                Ok(sk) => {
+                    let pk = key_map
+                        .insert(secp, sk)
+                        .map_err(|e| Error::Unexpected(e.to_string()))?;
+                    Ok(pk)
+                }
+                Err(_) => {
+                    // try to parse as a public key if parsing as a secret key failed
+                    let pk = s
+                        .parse()
+                        .map_err(|e| Error::Parse(ParseError::box_from_str(e)))?;
+                    Ok(pk)
+                }
+            }
+        }
+
+        let mut keymap_pk = KeyMapWrapper(KeyMap::new(), secp);
+
+        struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
+
+        impl<C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'_, C> {
+            type TargetPk = DescriptorPublicKey;
+            type Error = Error;
+
+            fn pk(&mut self, pk: &String) -> Result<DescriptorPublicKey, Error> {
+                parse_key(pk, &mut self.0, self.1)
+            }
+
+            fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Error> {
+                sha256
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
+            }
+
+            fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Error> {
+                hash256
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
+            }
+
+            fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, Error> {
+                ripemd160
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
+            }
+
+            fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, Error> {
+                hash160
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
+            }
+        }
+
+        let descriptor = Descriptor::<String>::from_str_with_validation_params(s, params)?;
+        let descriptor = descriptor
+            .translate_pk(&mut keymap_pk)
+            .map_err(TranslateErr::flatten)?;
+
+        Ok((descriptor, keymap_pk.0))
+    }
+
     /// Serialize a descriptor to string with its secret keys
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
         struct KeyMapLookUp<'a>(&'a KeyMap);
@@ -1174,6 +1268,37 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
     }
 }
 
+impl<Pk: FromStrKey> Descriptor<Pk> {
+    /// Parse a descriptor from a string, applying the given validation parameters.
+    ///
+    /// This behaves like [`Self::from_str`] but additionally lets the caller
+    /// control what counts as a "valid" descriptor via [`ValidationParams`]. In
+    /// particular, setting `params.allow_bare` to `false` refuses to parse any
+    /// descriptor into a [`Descriptor::Bare`], forcing every descriptor to
+    /// resolve to one of the typed top-level variants. This is useful when
+    /// descriptor-type fidelity matters, since a `Bare` over a `pkh(...)` fragment
+    /// is indistinguishable after string roundtrip from a [`Descriptor::Pkh`]
+    /// (see <https://github.com/rust-bitcoin/rust-miniscript/issues/890>).
+    pub fn from_str_with_validation_params(
+        s: &str,
+        params: &ValidationParams,
+    ) -> Result<Self, Error> {
+        let top = expression::Tree::from_str(s)?;
+        let ret = Self::from_tree(top.root())?;
+        if let Self::Tr(ref inner) = ret {
+            for item in inner.leaves() {
+                item.miniscript()
+                    .validate(&Tap::SANE)
+                    .map_err(Error::Validation)?;
+            }
+        }
+        if !params.allow_bare && matches!(ret, Self::Bare(_)) {
+            return Err(Error::BareDescriptorDisallowed);
+        }
+        Ok(ret)
+    }
+}
+
 impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -1237,6 +1362,92 @@ mod tests {
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
+
+    /// Parse parameters that forbid bare descriptors.
+    fn no_bare_params() -> ValidationParams {
+        ValidationParams { allow_bare: false, ..ValidationParams::MAX }
+    }
+
+    #[test]
+    fn bare_descriptor_disallowed() {
+        // A bare miniscript ("pk(...)") is refused when allow_bare is false.
+        let params = no_bare_params();
+        let err =
+            Descriptor::<String>::from_str_with_validation_params(TEST_PK, &params).unwrap_err();
+        assert!(matches!(err, Error::BareDescriptorDisallowed));
+
+        // A bare `multi(...)` script is also refused.
+        let multi = "multi(1,020000000000000000000000000000000000000000000000000000000000000002)";
+        let err =
+            Descriptor::<String>::from_str_with_validation_params(multi, &params).unwrap_err();
+        assert!(matches!(err, Error::BareDescriptorDisallowed));
+    }
+
+    #[test]
+    fn typed_descriptors_allowed_when_bare_disallowed() {
+        let params = no_bare_params();
+        // These are the typed top-level variants and must still parse even when
+        // bare descriptors are disallowed.
+        let pkh = "pkh(020000000000000000000000000000000000000000000000000000000000000002)";
+        assert!(matches!(
+            Descriptor::<String>::from_str_with_validation_params(pkh, &params).unwrap(),
+            Descriptor::Pkh(_)
+        ));
+
+        let wpkh = "wpkh(020000000000000000000000000000000000000000000000000000000000000002)";
+        assert!(matches!(
+            Descriptor::<String>::from_str_with_validation_params(wpkh, &params).unwrap(),
+            Descriptor::Wpkh(_)
+        ));
+
+        let sh = "sh(pk(020000000000000000000000000000000000000000000000000000000000000002))";
+        assert!(matches!(
+            Descriptor::<String>::from_str_with_validation_params(sh, &params).unwrap(),
+            Descriptor::Sh(_)
+        ));
+
+        let wsh = "wsh(pk(020000000000000000000000000000000000000000000000000000000000000002))";
+        assert!(matches!(
+            Descriptor::<String>::from_str_with_validation_params(wsh, &params).unwrap(),
+            Descriptor::Wsh(_)
+        ));
+
+        // A `pkh(...)` under `sh(...)` must still produce a `Sh`, not a `Bare`.
+        let sh_pkh = "sh(pkh(020000000000000000000000000000000000000000000000000000000000000002))";
+        assert!(matches!(
+            Descriptor::<String>::from_str_with_validation_params(sh_pkh, &params).unwrap(),
+            Descriptor::Sh(_)
+        ));
+    }
+
+    #[test]
+    fn bare_descriptor_allowed_by_default() {
+        // Default parsing (no validation params) keeps producing Bare descriptors.
+        let desc = Descriptor::<String>::from_str(TEST_PK).unwrap();
+        assert!(matches!(desc, Descriptor::Bare(_)));
+    }
+
+    #[test]
+    fn parse_descriptor_disallows_bare() {
+        use bitcoin::secp256k1::Secp256k1;
+
+        let secp = Secp256k1::new();
+        let params = no_bare_params();
+        let err = Descriptor::<DescriptorPublicKey>::parse_descriptor_with_validation_params(
+            &secp, TEST_PK, &params,
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::BareDescriptorDisallowed));
+
+        // And when bare is allowed it works as before.
+        let params = ValidationParams { allow_bare: true, ..ValidationParams::MAX };
+        let (desc, _keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor_with_validation_params(
+                &secp, TEST_PK, &params,
+            )
+            .unwrap();
+        assert!(matches!(desc, Descriptor::Bare(_)));
+    }
 
     fn roundtrip_descriptor(s: &str) {
         let desc = Descriptor::<String>::from_str(s).unwrap();
