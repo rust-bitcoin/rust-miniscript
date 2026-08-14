@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use bitcoin::absolute::LockTime;
@@ -253,16 +254,25 @@ fn main() {
     //let _res = psbt.sign(&intneral_xpriv.xkey, secp).unwrap();
 
     // how you would sign using the leaf that uses index 0 keys
-    let _res = psbt.sign(&a_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&b_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&c_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&d_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&e_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&f_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&h_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&i_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&j_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&l_prvs[0], secp).unwrap();
+    //
+    // The descriptor above uses raw (non-xpub) public keys with no origin, so their
+    // `master_fingerprint` is the all-zero fingerprint and there is no BIP32 keysource
+    // to match an `Xpriv` against. We therefore sign by public key, using a map from
+    // each public key to its corresponding private key. `psbt.sign` falls back to the
+    // `KeyRequest::Pubkey`/`KeyRequest::XOnlyPubkey` lookup when the BIP32 keysource
+    // lookup fails, which is what actually produces the signatures here.
+    let mut sig_map: BTreeMap<bitcoin::PublicKey, bitcoin::PrivateKey> = BTreeMap::new();
+    sig_map.insert(a_pks[0], a_prvs[0].to_priv());
+    sig_map.insert(b_pks[0], b_prvs[0].to_priv());
+    sig_map.insert(c_pks[0], c_prvs[0].to_priv());
+    sig_map.insert(d_pks[0], d_prvs[0].to_priv());
+    sig_map.insert(e_pks[0], e_prvs[0].to_priv());
+    sig_map.insert(f_pks[0], f_prvs[0].to_priv());
+    sig_map.insert(h_pks[0], h_prvs[0].to_priv());
+    sig_map.insert(i_pks[0], i_prvs[0].to_priv());
+    sig_map.insert(j_pks[0], j_prvs[0].to_priv());
+    sig_map.insert(l_pks[0], l_prvs[0].to_priv());
+    let _res = psbt.sign(&sig_map, secp).unwrap();
 
     psbt.inputs[0]
         .sha256_preimages
