@@ -1,3 +1,12 @@
+# Unreleased
+
+- descriptor: `DescriptorPublicKey::master_fingerprint` now returns the all-zero
+  fingerprint (`0x00000000`) for raw (non-xpub) keys with no origin, matching its
+  documented contract. Previously it returned a synthetic fingerprint derived from
+  the key bytes, which also leaked a fabricated keysource into PSBT
+  `bip32_derivation`/`tap_key_origins`.
+  [#998](https://github.com/rust-bitcoin/rust-miniscript/issues/998)
+
 # 13.1.0 - June 9, 2026
 
 - plan: make `Plan`'s `descriptor` field public.

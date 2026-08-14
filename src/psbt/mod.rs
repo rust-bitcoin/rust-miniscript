@@ -1648,4 +1648,44 @@ mod tests {
             "output script_pubkey no longer matches"
         );
     }
+
+    #[test]
+    fn test_update_item_raw_key_no_origin() {
+        // A raw (non-xpub) key with no origin must not leak a fabricated
+        // fingerprint into the PSBT; its master fingerprint is all zeros, as
+        // documented by `DescriptorPublicKey::master_fingerprint`.
+        let pubkey = "02a489e0ea42b56148d212d325b7c67c6460483ff931c303ea311edfef667c8f35";
+
+        // Non-Taproot: wpkh over a raw key.
+        let desc =
+            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("wpkh({})", pubkey)).unwrap();
+        let pk = DescriptorPublicKey::from_str(pubkey)
+            .unwrap()
+            .at_derivation_index(0)
+            .unwrap();
+        assert_eq!(pk.master_fingerprint().as_bytes(), b"\x00\x00\x00\x00");
+
+        let mut psbt_input = psbt::Input::default();
+        psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        let expected_bip32 = [(
+            pk.to_public_key().inner,
+            (bip32::Fingerprint::default(), DerivationPath::from(vec![])),
+        )]
+        .into_iter()
+        .collect::<BTreeMap<secp256k1::PublicKey, _>>();
+        assert_eq!(psbt_input.bip32_derivation, expected_bip32);
+
+        // Taproot: tr over a raw x-only key.
+        let x_only = "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115";
+        let tr_desc =
+            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("tr({})", x_only)).unwrap();
+        let xpk = XOnlyPublicKey::from_str(x_only).unwrap();
+        let mut psbt_tr = psbt::Input::default();
+        psbt_tr.update_with_descriptor_unchecked(&tr_desc).unwrap();
+        assert_eq!(psbt_tr.tap_internal_key, Some(xpk));
+        assert_eq!(
+            psbt_tr.tap_key_origins.get(&xpk),
+            Some(&(vec![], (bip32::Fingerprint::default(), DerivationPath::from(vec![]))))
+        );
+    }
 }

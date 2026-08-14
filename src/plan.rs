@@ -503,6 +503,14 @@ pub struct Assets {
     /// by exactly one child number. For example, if the derivation path `m/0/1` is provided, the
     /// user can sign with either `m/0/1` or `m/0/1/*`.
     pub keys: BTreeSet<(bip32::KeySource, CanSign)>,
+    /// Raw (non-xpub) keys the user can sign for, and how.
+    ///
+    /// Unlike [`Assets::keys`], these are keyed by the key itself rather than by a
+    /// `(fingerprint, derivation_path)` pair. They are used for keys with no origin, whose
+    /// `master_fingerprint` is the all-zero fingerprint (see
+    /// [`DescriptorPublicKey::master_fingerprint`]); because that fingerprint is shared by all
+    /// such keys, it cannot disambiguate them, so the raw key is stored directly.
+    raw_keys: BTreeSet<(DefiniteDescriptorKey, CanSign)>,
     /// Set of available sha256 preimages
     pub sha256_preimages: BTreeSet<sha256::Hash>,
     /// Set of available hash256 preimages
@@ -548,20 +556,34 @@ impl Assets {
             can_sign.ecdsa
                 && pk.master_fingerprint() == keysource.0
                 && is_key_direct_child_of(pk, &keysource.1)
-        })
+        }) || self
+            .raw_keys
+            .iter()
+            .any(|(raw_pk, can_sign)| can_sign.ecdsa && raw_pk == pk)
     }
 
     pub(crate) fn has_taproot_internal_key(&self, pk: &DefiniteDescriptorKey) -> Option<usize> {
-        self.keys.iter().find_map(|(keysource, can_sign)| {
-            if !can_sign.taproot.key_spend
-                || pk.master_fingerprint() != keysource.0
-                || !is_key_direct_child_of(pk, &keysource.1)
-            {
-                None
-            } else {
-                Some(can_sign.taproot.sig_len())
-            }
-        })
+        self.keys
+            .iter()
+            .find_map(|(keysource, can_sign)| {
+                if !can_sign.taproot.key_spend
+                    || pk.master_fingerprint() != keysource.0
+                    || !is_key_direct_child_of(pk, &keysource.1)
+                {
+                    None
+                } else {
+                    Some(can_sign.taproot.sig_len())
+                }
+            })
+            .or_else(|| {
+                self.raw_keys.iter().find_map(|(raw_pk, can_sign)| {
+                    if !can_sign.taproot.key_spend || raw_pk != pk {
+                        None
+                    } else {
+                        Some(can_sign.taproot.sig_len())
+                    }
+                })
+            })
     }
 
     pub(crate) fn has_taproot_script_key(
@@ -569,16 +591,27 @@ impl Assets {
         pk: &DefiniteDescriptorKey,
         tap_leaf_hash: &TapLeafHash,
     ) -> Option<usize> {
-        self.keys.iter().find_map(|(keysource, can_sign)| {
-            if !can_sign.taproot.script_spend.is_available(tap_leaf_hash)
-                || pk.master_fingerprint() != keysource.0
-                || !is_key_direct_child_of(pk, &keysource.1)
-            {
-                None
-            } else {
-                Some(can_sign.taproot.sig_len())
-            }
-        })
+        self.keys
+            .iter()
+            .find_map(|(keysource, can_sign)| {
+                if !can_sign.taproot.script_spend.is_available(tap_leaf_hash)
+                    || pk.master_fingerprint() != keysource.0
+                    || !is_key_direct_child_of(pk, &keysource.1)
+                {
+                    None
+                } else {
+                    Some(can_sign.taproot.sig_len())
+                }
+            })
+            .or_else(|| {
+                self.raw_keys.iter().find_map(|(raw_pk, can_sign)| {
+                    if !can_sign.taproot.script_spend.is_available(tap_leaf_hash) || raw_pk != pk {
+                        None
+                    } else {
+                        Some(can_sign.taproot.sig_len())
+                    }
+                })
+            })
     }
 }
 
@@ -635,12 +668,21 @@ impl AssetProvider<DefiniteDescriptorKey> for Assets {
 impl FromIterator<DescriptorPublicKey> for Assets {
     fn from_iter<I: IntoIterator<Item = DescriptorPublicKey>>(iter: I) -> Self {
         let mut keys = BTreeSet::new();
+        let mut raw_keys = BTreeSet::new();
         for pk in iter {
-            for deriv_path in pk.full_derivation_paths() {
-                keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
+            // Raw (non-xpub) keys with no origin share the all-zero fingerprint, so they
+            // cannot be disambiguated by `(fingerprint, path)`; store them by key directly.
+            if pk.master_fingerprint() == bip32::Fingerprint::default() {
+                if let Ok(definite) = DefiniteDescriptorKey::new(pk) {
+                    raw_keys.insert((definite, CanSign::default()));
+                }
+            } else {
+                for deriv_path in pk.full_derivation_paths() {
+                    keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
+                }
             }
         }
-        Self { keys, ..Default::default() }
+        Self { keys, raw_keys, ..Default::default() }
     }
 }
 
@@ -715,6 +757,7 @@ impl Assets {
 
     fn append(&mut self, b: Self) {
         self.keys.extend(b.keys);
+        self.raw_keys.extend(b.raw_keys);
         self.sha256_preimages.extend(b.sha256_preimages);
         self.hash256_preimages.extend(b.hash256_preimages);
         self.ripemd160_preimages.extend(b.ripemd160_preimages);

@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::convert::TryInto;
 use core::str::FromStr;
 use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
-use bitcoin::NetworkKind;
+use bitcoin::{bip32, NetworkKind};
 
 use super::WalletPolicyError;
 use crate::prelude::*;
@@ -824,18 +822,9 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let mut engine = XKeyIdentifier::engine();
-                    match single.key {
-                        SinglePubKey::FullKey(pk) => {
-                            pk.write_into(&mut engine).expect("engines don't error")
-                        }
-                        SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
-                    };
-                    bip32::Fingerprint::from(
-                        &XKeyIdentifier::from_engine(engine)[..4]
-                            .try_into()
-                            .expect("4 byte slice"),
-                    )
+                    // A raw (non-xpub) key with no origin has no associated master
+                    // key, so its fingerprint is all zeros, as documented.
+                    bip32::Fingerprint::default()
                 }
             }
         }
@@ -1668,6 +1657,8 @@ mod test {
 
     #[test]
     fn test_master_fingerprint() {
+        // A raw (non-xpub) key with no origin has no associated master key,
+        // so its fingerprint is all zeros.
         assert_eq!(
             DescriptorPublicKey::from_str(
                 "02a489e0ea42b56148d212d325b7c67c6460483ff931c303ea311edfef667c8f35",
@@ -1675,7 +1666,7 @@ mod test {
             .unwrap()
             .master_fingerprint()
             .as_bytes(),
-            b"\xb0\x59\x11\x6a"
+            b"\x00\x00\x00\x00"
         );
     }
 
