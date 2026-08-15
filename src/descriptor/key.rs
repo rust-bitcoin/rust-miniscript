@@ -9,6 +9,8 @@ use std::error;
 use bitcoin::bip32::{self, XKeyIdentifier};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
+#[cfg(feature = "std")]
+use bitcoin::secp256k1::VerifyOnly;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::NetworkKind;
 
@@ -1470,10 +1472,28 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     fn num_der_paths(&self) -> usize { self.0.num_der_paths() }
 }
 
+#[cfg(feature = "std")]
+thread_local! {
+    /// Cached verification-only secp context.
+    ///
+    /// `to_public_key` is on the hot path for deriving many keys from a
+    /// descriptor (e.g. expanding into N addresses), and creating a fresh
+    /// context on every call is expensive (~20µs each). We reuse a single
+    /// per-thread context instead. (rust-miniscript#847)
+    static VERIFY_SECP: Secp256k1<VerifyOnly> = Secp256k1::verification_only();
+}
+
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        let secp = Secp256k1::verification_only();
-        self.derive_public_key(&secp)
+        #[cfg(feature = "std")]
+        {
+            VERIFY_SECP.with(|secp| self.derive_public_key(secp))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let secp = Secp256k1::verification_only();
+            self.derive_public_key(&secp)
+        }
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }

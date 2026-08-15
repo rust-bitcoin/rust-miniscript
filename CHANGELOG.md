@@ -1,3 +1,10 @@
+# Unreleased
+
+- cache a thread-local verification-only secp context in
+  `DefiniteDescriptorKey::to_public_key` instead of creating a fresh one on every
+  call, which was expensive when deriving many keys from a descriptor.
+  [#847](https://github.com/rust-bitcoin/rust-miniscript/issues/847)
+
 # 13.1.0 - June 9, 2026
 
 - plan: make `Plan`'s `descriptor` field public.
