@@ -389,6 +389,22 @@ mod tests {
     }
 
     #[test]
+    fn set_key_info_rejects_missing_keys() {
+        let mut policy = WalletPolicy::from_str("wsh(multi(2,@0/**,@1/**))").unwrap();
+        let key = KeyInfo::from_str(XPUB).unwrap();
+        // An empty vector is a valid state but never a valid argument.
+        assert_eq!(policy.set_key_info(vec![]), Err(WalletPolicyError::WalletPolicyInvalidKeyInfo));
+        // Under-supplied keys
+        assert_eq!(
+            policy.set_key_info(vec![key]),
+            Err(WalletPolicyError::WalletPolicyInvalidKeyInfo)
+        );
+        // Failed calls leave the policy unchanged.
+        assert!(policy.key_info().is_empty());
+        assert_eq!(policy.to_string(), "wsh(multi(2,@0/**,@1/**))");
+    }
+
+    #[test]
     fn can_set_key_info() {
         let mut template_only =
             WalletPolicy::from_str("wsh(sortedmulti(2,@0/**,@1/**))").expect("invalid template");
