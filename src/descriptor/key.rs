@@ -85,6 +85,9 @@ impl DerivPaths {
         }
     }
 
+    /// Create a derivation paths list containing a single path.
+    pub fn single(path: bip32::DerivationPath) -> Self { Self(vec![path]) }
+
     /// Get the list of derivation paths.
     pub fn paths(&self) -> &Vec<bip32::DerivationPath> { &self.0 }
 

@@ -192,12 +192,9 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
     fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
         // One extraction serves both the index lookup and the placeholder.
         let (origin, xkey, derivation_paths, wildcard) = match pk {
-            DescriptorPublicKey::XPub(x) => (
-                &x.origin,
-                &x.xkey,
-                DerivPaths::new(vec![x.derivation_path.clone()]).expect("always one path"),
-                x.wildcard,
-            ),
+            DescriptorPublicKey::XPub(x) => {
+                (&x.origin, &x.xkey, DerivPaths::single(x.derivation_path.clone()), x.wildcard)
+            }
             DescriptorPublicKey::MultiXPub(x) => {
                 (&x.origin, &x.xkey, x.derivation_paths.clone(), x.wildcard)
             }
