@@ -77,22 +77,21 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
     type Error = WalletPolicyError;
 
     fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
-        // One extraction serves both the index lookup and the placeholder.
-        let (origin, xkey, derivation_paths, wildcard) = match pk {
+        let (derivation_paths, wildcard) = match pk {
             DescriptorPublicKey::XPub(x) => {
-                (&x.origin, &x.xkey, DerivPaths::single(x.derivation_path.clone()), x.wildcard)
+                (DerivPaths::single(x.derivation_path.clone()), x.wildcard)
             }
-            DescriptorPublicKey::MultiXPub(x) => {
-                (&x.origin, &x.xkey, x.derivation_paths.clone(), x.wildcard)
-            }
+            DescriptorPublicKey::MultiXPub(x) => (x.derivation_paths.clone(), x.wildcard),
             DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
         };
-        // Pre-populated by the only caller in textual order, so the lookup always hits.
-        let index = self
-            .key_info
-            .iter()
-            .position(|k| k.origin == *origin && k.xkey == *xkey)
-            .ok_or(WalletPolicyError::WalletPolicyInvalidKeyInfo)?;
+        let key = to_key_info(pk)?;
+        let index = match self.key_info.iter().position(|k| *k == key) {
+            Some(i) => i,
+            None => {
+                self.key_info.push(key);
+                self.key_info.len() - 1
+            }
+        };
         Ok(KeyExpression { index: KeyIndex(index as u32), derivation_paths, wildcard })
     }
 
@@ -147,16 +146,7 @@ impl WalletPolicy {
     pub fn from_descriptor(
         descriptor: &Descriptor<DescriptorPublicKey>,
     ) -> Result<Self, WalletPolicyError> {
-        // One entry per distinct key, numbered in textual order. Must use
-        // `iter_pk` here; `translate_pk` walks the descriptor right-to-left.
-        let mut key_info: Vec<KeyInfo> = vec![];
-        for pk in descriptor.iter_pk() {
-            let key = to_key_info(&pk)?;
-            if !key_info.contains(&key) {
-                key_info.push(key);
-            }
-        }
-        let mut translator = WalletPolicyTranslator { key_info };
+        let mut translator = WalletPolicyTranslator { key_info: vec![] };
         let template = descriptor.translate_pk(&mut translator).map_err(|e| {
             e.expect_translator_err("converting descriptor to wallet policy template")
         })?;
