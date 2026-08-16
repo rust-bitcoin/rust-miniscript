@@ -42,6 +42,50 @@ fn check_placeholder_deriv(key: &KeyExpression) -> Result<(), WalletPolicyError>
     }
 }
 
+/// Checks every BIP-388 wallet policy invariant: the template's top-level and
+/// placeholder rules, and that `key_info` is either empty (no key information
+/// supplied yet) or exactly one pairwise-distinct item per placeholder. Every
+/// construction and mutation of a `WalletPolicy` goes through this.
+fn check_policy(
+    template: &Descriptor<KeyExpression>,
+    key_info: &[KeyInfo],
+) -> Result<(), WalletPolicyError> {
+    // BIP-388's DESCRIPTOR_TEMPLATE grammar only produces sh, wsh, pkh,
+    // wpkh and tr at the top level.
+    if matches!(template, Descriptor::Bare(_)) {
+        return Err(WalletPolicyError::TemplateValidationBareTopLevel);
+    }
+    // The child numbers placeholder @i has used so far. Indexes are dense,
+    // since @i is only accepted once @0..@i-1 have appeared.
+    let mut used: Vec<BTreeSet<_>> = vec![];
+    for key in template.iter_pk() {
+        check_placeholder_deriv(&key)?;
+        let paths = key.derivation_paths.paths();
+        let paths: BTreeSet<_> = paths.iter().flatten().copied().collect();
+        let i = key.index.0 as usize;
+        if i == used.len() {
+            used.push(paths);
+        } else if let Some(prev) = used.get_mut(i) {
+            // A placeholder may be reused, but not over a path it already covers.
+            if !prev.is_disjoint(&paths) {
+                return Err(WalletPolicyError::TemplateValidationNonDisjointPaths);
+            }
+            prev.extend(paths);
+        } else {
+            return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
+        }
+    }
+    if used.is_empty() {
+        return Err(WalletPolicyError::TemplateValidationNoKeyPlaceholder);
+    }
+    // Key information is all-or-nothing: absent for a bare template, or
+    // exactly one item per distinct placeholder.
+    if !key_info.is_empty() && key_info.len() != used.len() {
+        return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
+    }
+    check_keys_distinct(key_info)
+}
+
 struct WalletPolicyTranslator {
     key_info: Vec<KeyInfo>,
 }
@@ -58,7 +102,7 @@ impl Translator<KeyExpression> for WalletPolicyTranslator {
             .cloned()
             .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
         // The derivation path appended will come from the placeholder that refers to it.
-        // `validate` (via `check_placeholder_deriv`) guarantees every placeholder carries
+        // `check_policy` (via `check_placeholder_deriv`) guarantees every placeholder carries
         // exactly two paths, so the materialized key is always a multipath one.
         Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
             origin,
@@ -150,7 +194,8 @@ impl WalletPolicy {
         let template = descriptor.translate_pk(&mut translator).map_err(|e| {
             e.expect_translator_err("converting descriptor to wallet policy template")
         })?;
-        Self { template, key_info: translator.key_info }.validate()
+        check_policy(&template, &translator.key_info)?;
+        Ok(Self { template, key_info: translator.key_info })
     }
 
     /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
@@ -177,10 +222,12 @@ impl WalletPolicy {
     /// of placeholders and the keys are pairwise distinct. `keys[i]` fills
     /// placeholder `@i`.
     pub fn set_key_info(&mut self, keys: Vec<KeyInfo>) -> Result<(), WalletPolicyError> {
-        if keys.len() != self.n_keys() {
+        // An empty vector is a valid *state* (a template-only policy) but never
+        // a valid argument here: this method exists to supply the keys.
+        if keys.is_empty() {
             return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
         }
-        check_keys_distinct(&keys)?;
+        check_policy(&self.template, &keys)?;
         self.key_info = keys;
         Ok(())
     }
@@ -189,45 +236,8 @@ impl WalletPolicy {
     /// yet. The only way to build one from a bare template, so that every
     /// construction path is validated.
     fn from_template(template: Descriptor<KeyExpression>) -> Result<Self, WalletPolicyError> {
-        Self { template, key_info: vec![] }.validate()
-    }
-
-    /// Validates the wallet policy template and its key information items.
-    fn validate(self) -> Result<Self, WalletPolicyError> {
-        // BIP-388's DESCRIPTOR_TEMPLATE grammar only produces sh, wsh, pkh,
-        // wpkh and tr at the top level.
-        if matches!(self.template, Descriptor::Bare(_)) {
-            return Err(WalletPolicyError::TemplateValidationBareTopLevel);
-        }
-        // The child numbers placeholder @i has used so far. Indexes are dense,
-        // since @i is only accepted once @0..@i-1 have appeared.
-        let mut used: Vec<BTreeSet<_>> = vec![];
-        for key in self.template.iter_pk() {
-            check_placeholder_deriv(&key)?;
-            let paths: BTreeSet<_> = key
-                .derivation_paths
-                .paths()
-                .iter()
-                .flat_map(|p| p.into_iter().copied())
-                .collect();
-            let i = key.index.0 as usize;
-            if i == used.len() {
-                used.push(paths);
-            } else if let Some(prev) = used.get_mut(i) {
-                // A placeholder may be reused, but not over a path it already covers.
-                if !prev.is_disjoint(&paths) {
-                    return Err(WalletPolicyError::TemplateValidationNonDisjointPaths);
-                }
-                prev.extend(paths);
-            } else {
-                return Err(WalletPolicyError::TemplateValidationKeyIndexOutOfOrder);
-            }
-        }
-        if used.is_empty() {
-            return Err(WalletPolicyError::TemplateValidationNoKeyPlaceholder);
-        }
-        check_keys_distinct(&self.key_info)?;
-        Ok(self)
+        check_policy(&template, &[])?;
+        Ok(Self { template, key_info: vec![] })
     }
 }
 
