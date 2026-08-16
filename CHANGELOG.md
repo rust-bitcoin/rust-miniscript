@@ -1,3 +1,12 @@
+# Unreleased
+
+- Add `ValidationParams::allow_bare` and `Descriptor::{from_str_with_validation_params,
+  parse_descriptor_with_validation_params}` to optionally refuse to parse
+  `Descriptor::Bare` descriptors. This lets callers force every descriptor to resolve to a typed
+  top-level variant, working around the fact that a `Bare` over a `pkh(...)` fragment is
+  indistinguishable from a `Pkh` after string roundtrip (issue #890).
+  [#890](https://github.com/rust-bitcoin/rust-miniscript/issues/890)
+
 # 13.1.0 - June 9, 2026
 
 - plan: make `Plan`'s `descriptor` field public.
