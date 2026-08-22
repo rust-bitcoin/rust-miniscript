@@ -1,18 +1,144 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::fmt::Display;
+use core::fmt::{self, Display};
+use core::str::FromStr;
 
 use super::key::XKeyParseError;
-use super::{DerivPaths, DescriptorKeyParseError, Wildcard};
-use crate::String;
+use super::{DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, Wildcard};
+use crate::{Descriptor, DescriptorPublicKey, String, Translator, Vec};
 
 mod key_expression;
 mod key_info;
 mod policy;
 
+use key_expression::{KeyExpression, KeyIndex};
 use key_info::to_key_info;
 pub use key_info::KeyInfo;
 pub use policy::WalletPolicy;
+
+struct WalletPolicyTranslator {
+    key_info: Vec<KeyInfo>,
+}
+
+impl Translator<KeyExpression> for WalletPolicyTranslator {
+    type TargetPk = DescriptorPublicKey;
+    type Error = WalletPolicyError;
+
+    fn pk(&mut self, pk: &KeyExpression) -> Result<Self::TargetPk, Self::Error> {
+        let idx = pk.index.0 as usize;
+        let KeyInfo { origin, xkey } = self
+            .key_info
+            .get(idx)
+            .cloned()
+            .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
+        // The derivation path appended will come from the placeholder that refers to it.
+        // `check_policy` (via `check_placeholder_deriv`) guarantees every placeholder carries
+        // exactly two paths, so the materialized key is always a multipath one.
+        Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+            origin,
+            xkey,
+            derivation_paths: pk.derivation_paths.clone(),
+            wildcard: pk.wildcard,
+        }))
+    }
+
+    // Both key types use the concrete `Hash` types for hash terminals.
+    translate_hash_clone!(KeyExpression);
+}
+
+impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
+    type TargetPk = KeyExpression;
+    type Error = WalletPolicyError;
+
+    fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+        let (derivation_paths, wildcard) = match pk {
+            DescriptorPublicKey::XPub(x) => {
+                (DerivPaths::single(x.derivation_path.clone()), x.wildcard)
+            }
+            DescriptorPublicKey::MultiXPub(x) => (x.derivation_paths.clone(), x.wildcard),
+            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+        };
+        let key = to_key_info(pk)?;
+        let index = match self.key_info.iter().position(|k| *k == key) {
+            Some(i) => i,
+            None => {
+                self.key_info.push(key);
+                self.key_info.len() - 1
+            }
+        };
+        Ok(KeyExpression { index: KeyIndex(index as u32), derivation_paths, wildcard })
+    }
+
+    // Both key types use the concrete `Hash` types for hash terminals.
+    translate_hash_clone!(DescriptorPublicKey);
+}
+
+impl WalletPolicy {
+    /// Creates a `WalletPolicy` from a `Descriptor<DescriptorPublicKey>`.
+    pub fn from_descriptor(
+        descriptor: &Descriptor<DescriptorPublicKey>,
+    ) -> Result<Self, WalletPolicyError> {
+        let mut translator = WalletPolicyTranslator { key_info: vec![] };
+        let template = descriptor.translate_pk(&mut translator).map_err(|e| {
+            e.expect_translator_err("converting descriptor to wallet policy template")
+        })?;
+        let mut policy = Self::from_template(template)?;
+        policy.set_key_info(translator.key_info)?;
+        Ok(policy)
+    }
+
+    /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
+    /// the underlying template and key information.
+    pub fn into_descriptor(self) -> Result<Descriptor<DescriptorPublicKey>, WalletPolicyError> {
+        let mut translator = WalletPolicyTranslator { key_info: self.key_info().to_vec() };
+        self.into_template()
+            .translate_pk(&mut translator)
+            .map_err(|e| e.expect_translator_err("converting to full descriptor"))
+    }
+
+    /// Counts the distinct key placeholders in the template, which is how many
+    /// key information items `WalletPolicy::set_key_info` requires.
+    pub fn n_keys(&self) -> usize {
+        self.as_template()
+            .iter_pk()
+            .fold(0, |n, k| n.max(k.index.0 as usize + 1))
+    }
+}
+
+impl Display for WalletPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#}", self.as_template())
+    }
+}
+
+impl TryFrom<&Descriptor<DescriptorPublicKey>> for WalletPolicy {
+    type Error = WalletPolicyError;
+
+    fn try_from(desc: &Descriptor<DescriptorPublicKey>) -> Result<Self, Self::Error> {
+        Self::from_descriptor(desc)
+    }
+}
+
+impl TryFrom<&str> for WalletPolicy {
+    type Error = WalletPolicyError;
+
+    fn try_from(desc: &str) -> Result<Self, Self::Error> {
+        match Descriptor::<KeyExpression>::from_str(desc) {
+            Ok(template) => Self::from_template(template),
+            Err(err1) => match Descriptor::<DescriptorPublicKey>::from_str(desc) {
+                Ok(desc) => Self::from_descriptor(&desc),
+                Err(err2) => Err(WalletPolicyError::WalletPolicyParseFromString(format!(
+                    "Couldn't parse as a wallet policy template [{err1}], or as a descriptor [{err2}]"
+                ))),
+            },
+        }
+    }
+}
+
+impl FromStr for WalletPolicy {
+    type Err = WalletPolicyError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> { s.try_into() }
+}
 
 /// WalletPolicy errors
 #[derive(Debug, PartialEq, Eq, Clone)]
