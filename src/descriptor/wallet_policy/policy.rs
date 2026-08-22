@@ -1,14 +1,86 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::fmt::{self, Display};
-use core::str::FromStr;
-
 use bitcoin::bip32;
 
-use super::key_expression::{KeyExpression, KeyIndex};
-use super::{to_key_info, KeyInfo, WalletPolicyError};
-use crate::descriptor::{DerivPaths, DescriptorMultiXKey, Wildcard};
-use crate::{BTreeSet, Descriptor, DescriptorPublicKey, ToString, Translator, Vec};
+use super::key_expression::KeyExpression;
+use super::{KeyInfo, WalletPolicyError};
+use crate::descriptor::Wildcard;
+use crate::{BTreeSet, Descriptor, ToString, Vec};
+
+/// A wallet policy as described in BIP-388
+///
+///```rust
+/// use std::str::FromStr;
+/// use miniscript::{Descriptor, DescriptorPublicKey};
+/// use miniscript::descriptor::{KeyInfo, WalletPolicy};
+///
+/// // Convert from a `Descriptor<DescriptorPublicKey>`:
+/// let desc_str = "pkh([6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb/<0;1>/*)";
+/// let descriptor = Descriptor::<DescriptorPublicKey>::from_str(desc_str).unwrap();
+/// let policy1: WalletPolicy = (&descriptor).try_into().unwrap();
+///
+/// // Convert from a Descriptor<DescriptorPublicKey> string:
+/// let policy2 = WalletPolicy::from_str(desc_str).unwrap();
+/// assert_eq!(policy1, policy2);
+///
+/// // Convert from/to a wallet policy template string:
+/// let mut from_template = WalletPolicy::from_str("pkh(@0/**)").unwrap();
+/// assert_eq!(from_template.to_string(), "pkh(@0/**)");
+/// assert_eq!(from_template.n_keys(), 1);
+///
+/// // Cannot go back into descriptor if you created from template:
+/// assert!(from_template.clone().into_descriptor().is_err());
+///
+/// // Convert into a full descriptor:
+/// assert_eq!(policy1.into_descriptor().unwrap(), descriptor);
+///
+/// // A template needs its key information items first. These are bare keys;
+/// // the derivation comes from the template's placeholders:
+/// let key = KeyInfo::from_str("[6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb").unwrap();
+/// from_template.set_key_info(vec![key]).unwrap();
+/// assert_eq!(from_template.key_info().len(), 1);
+/// assert_eq!(from_template.into_descriptor().unwrap(), descriptor);
+///```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalletPolicy {
+    /// Wallet descriptor template
+    template: Descriptor<KeyExpression>,
+    /// Vector of key information items
+    key_info: Vec<KeyInfo>,
+}
+
+impl WalletPolicy {
+    /// Creates a `WalletPolicy` from a template, with no key information items
+    /// yet.
+    pub(super) fn from_template(
+        template: Descriptor<KeyExpression>,
+    ) -> Result<Self, WalletPolicyError> {
+        check_policy(&template, &[])?;
+        Ok(Self { template, key_info: vec![] })
+    }
+
+    pub(super) fn as_template(&self) -> &Descriptor<KeyExpression> { &self.template }
+
+    pub(super) fn into_template(self) -> Descriptor<KeyExpression> { self.template }
+
+    /// The key information items, where `key_info()[i]` fills placeholder `@i`.
+    pub fn key_info(&self) -> &[KeyInfo] { &self.key_info }
+
+    /// Sets the key information so that `WalletPolicy::into_descriptor` can be
+    /// called successfully. Errors unless the number of keys matches the number
+    /// of placeholders and the keys are pairwise distinct. `keys[i]` fills
+    /// placeholder `@i`.
+    pub fn set_key_info(&mut self, keys: Vec<KeyInfo>) -> Result<(), WalletPolicyError> {
+        // An empty vector is a valid *state* (a template-only policy) but never
+        // a valid argument here: this method exists to supply the keys.
+        if keys.is_empty() {
+            return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
+        }
+        check_policy(&self.template, &keys)?;
+        self.key_info = keys;
+        Ok(())
+    }
+}
 
 /// Checks that the key information items are pairwise distinct: BIP-388 requires
 /// the deserialized public keys to be so. Only the compressed public key is
@@ -84,192 +156,4 @@ fn check_policy(
         return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
     }
     check_keys_distinct(key_info)
-}
-
-struct WalletPolicyTranslator {
-    key_info: Vec<KeyInfo>,
-}
-
-impl Translator<KeyExpression> for WalletPolicyTranslator {
-    type TargetPk = DescriptorPublicKey;
-    type Error = WalletPolicyError;
-
-    fn pk(&mut self, pk: &KeyExpression) -> Result<Self::TargetPk, Self::Error> {
-        let idx = pk.index.0 as usize;
-        let KeyInfo { origin, xkey } = self
-            .key_info
-            .get(idx)
-            .cloned()
-            .ok_or(WalletPolicyError::KeyInfoInvalidKeyIndex(idx))?;
-        // The derivation path appended will come from the placeholder that refers to it.
-        // `check_policy` (via `check_placeholder_deriv`) guarantees every placeholder carries
-        // exactly two paths, so the materialized key is always a multipath one.
-        Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
-            origin,
-            xkey,
-            derivation_paths: pk.derivation_paths.clone(),
-            wildcard: pk.wildcard,
-        }))
-    }
-
-    // Both key types use the concrete `Hash` types for hash terminals.
-    translate_hash_clone!(KeyExpression);
-}
-
-impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
-    type TargetPk = KeyExpression;
-    type Error = WalletPolicyError;
-
-    fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
-        let (derivation_paths, wildcard) = match pk {
-            DescriptorPublicKey::XPub(x) => {
-                (DerivPaths::single(x.derivation_path.clone()), x.wildcard)
-            }
-            DescriptorPublicKey::MultiXPub(x) => (x.derivation_paths.clone(), x.wildcard),
-            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
-        };
-        let key = to_key_info(pk)?;
-        let index = match self.key_info.iter().position(|k| *k == key) {
-            Some(i) => i,
-            None => {
-                self.key_info.push(key);
-                self.key_info.len() - 1
-            }
-        };
-        Ok(KeyExpression { index: KeyIndex(index as u32), derivation_paths, wildcard })
-    }
-
-    // Both key types use the concrete `Hash` types for hash terminals.
-    translate_hash_clone!(DescriptorPublicKey);
-}
-
-/// A wallet policy as described in BIP-388
-///
-///```rust
-/// use std::str::FromStr;
-/// use miniscript::{Descriptor, DescriptorPublicKey};
-/// use miniscript::descriptor::{KeyInfo, WalletPolicy};
-///
-/// // Convert from a `Descriptor<DescriptorPublicKey>`:
-/// let desc_str = "pkh([6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb/<0;1>/*)";
-/// let descriptor = Descriptor::<DescriptorPublicKey>::from_str(desc_str).unwrap();
-/// let policy1: WalletPolicy = (&descriptor).try_into().unwrap();
-///
-/// // Convert from a Descriptor<DescriptorPublicKey> string:
-/// let policy2 = WalletPolicy::from_str(desc_str).unwrap();
-/// assert_eq!(policy1, policy2);
-///
-/// // Convert from/to a wallet policy template string:
-/// let mut from_template = WalletPolicy::from_str("pkh(@0/**)").unwrap();
-/// assert_eq!(from_template.to_string(), "pkh(@0/**)");
-/// assert_eq!(from_template.n_keys(), 1);
-///
-/// // Cannot go back into descriptor if you created from template:
-/// assert!(from_template.clone().into_descriptor().is_err());
-///
-/// // Convert into a full descriptor:
-/// assert_eq!(policy1.into_descriptor().unwrap(), descriptor);
-///
-/// // A template needs its key information items first. These are bare keys;
-/// // the derivation comes from the template's placeholders:
-/// let key = KeyInfo::from_str("[6738736c/44'/0'/0']xpub6Br37sWxruYfT8ASpCjVHKGwgdnYFEn98DwiN76i2oyY6fgH1LAPmmDcF46xjxJr22gw4jmVjTE2E3URMnRPEPYyo1zoPSUba563ESMXCeb").unwrap();
-/// from_template.set_key_info(vec![key]).unwrap();
-/// assert_eq!(from_template.key_info().len(), 1);
-/// assert_eq!(from_template.into_descriptor().unwrap(), descriptor);
-///```
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WalletPolicy {
-    /// Wallet descriptor template
-    template: Descriptor<KeyExpression>,
-    /// Vector of key information items
-    key_info: Vec<KeyInfo>,
-}
-
-impl WalletPolicy {
-    /// Creates a `WalletPolicy` from a `Descriptor<DescriptorPublicKey>`.
-    pub fn from_descriptor(
-        descriptor: &Descriptor<DescriptorPublicKey>,
-    ) -> Result<Self, WalletPolicyError> {
-        let mut translator = WalletPolicyTranslator { key_info: vec![] };
-        let template = descriptor.translate_pk(&mut translator).map_err(|e| {
-            e.expect_translator_err("converting descriptor to wallet policy template")
-        })?;
-        check_policy(&template, &translator.key_info)?;
-        Ok(Self { template, key_info: translator.key_info })
-    }
-
-    /// Convert a `WalletPolicy` into a `Descriptor<DescriptorPublicKey>` using
-    /// the underlying template and key information.
-    pub fn into_descriptor(self) -> Result<Descriptor<DescriptorPublicKey>, WalletPolicyError> {
-        self.template
-            .translate_pk(&mut WalletPolicyTranslator { key_info: self.key_info })
-            .map_err(|e| e.expect_translator_err("converting to full descriptor"))
-    }
-
-    /// The key information items, where `key_info()[i]` fills placeholder `@i`.
-    pub fn key_info(&self) -> &[KeyInfo] { &self.key_info }
-
-    /// Counts the distinct key placeholders in the template, which is how many
-    /// key information items `WalletPolicy::set_key_info` requires.
-    pub fn n_keys(&self) -> usize {
-        self.template
-            .iter_pk()
-            .fold(0, |n, k| n.max(k.index.0 as usize + 1))
-    }
-
-    /// Sets the key information so that `WalletPolicy::into_descriptor` can be
-    /// called successfully. Errors unless the number of keys matches the number
-    /// of placeholders and the keys are pairwise distinct. `keys[i]` fills
-    /// placeholder `@i`.
-    pub fn set_key_info(&mut self, keys: Vec<KeyInfo>) -> Result<(), WalletPolicyError> {
-        // An empty vector is a valid *state* (a template-only policy) but never
-        // a valid argument here: this method exists to supply the keys.
-        if keys.is_empty() {
-            return Err(WalletPolicyError::WalletPolicyInvalidKeyInfo);
-        }
-        check_policy(&self.template, &keys)?;
-        self.key_info = keys;
-        Ok(())
-    }
-
-    /// Creates a `WalletPolicy` from a template, with no key information items
-    /// yet. The only way to build one from a bare template, so that every
-    /// construction path is validated.
-    fn from_template(template: Descriptor<KeyExpression>) -> Result<Self, WalletPolicyError> {
-        check_policy(&template, &[])?;
-        Ok(Self { template, key_info: vec![] })
-    }
-}
-
-impl Display for WalletPolicy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{:#}", self.template) }
-}
-
-impl TryFrom<&Descriptor<DescriptorPublicKey>> for WalletPolicy {
-    type Error = WalletPolicyError;
-
-    fn try_from(desc: &Descriptor<DescriptorPublicKey>) -> Result<Self, Self::Error> {
-        Self::from_descriptor(desc)
-    }
-}
-
-impl TryFrom<&str> for WalletPolicy {
-    type Error = WalletPolicyError;
-
-    fn try_from(desc: &str) -> Result<Self, Self::Error> {
-        match Descriptor::<KeyExpression>::from_str(desc) {
-            Ok(template) => Ok(Self::from_template(template)?),
-            Err(err1) => match Descriptor::<DescriptorPublicKey>::from_str(desc) {
-                Ok(desc) => Ok(Self::from_descriptor(&desc)?),
-                Err(err2) => Err(WalletPolicyError::WalletPolicyParseFromString(format!(
-                    "Couldn't parse as a wallet policy template [{err1}], or as a descriptor [{err2}]"
-                ))),
-            },
-        }
-    }
-}
-
-impl FromStr for WalletPolicy {
-    type Err = WalletPolicyError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> { s.try_into() }
 }
