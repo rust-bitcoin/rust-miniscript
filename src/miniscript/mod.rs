@@ -365,7 +365,7 @@ mod private {
             }
 
             // Sigless branches can be fixed by adding a conjunction with a signature.
-            if !params.allow_sigless_branch && !self.requires_sig() {
+            if !params.allow_sigless_branch && !self.non_malleable_and_requires_sig() {
                 return Err(ValidationError::SiglessBranch);
             }
 
@@ -636,7 +636,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         let satisfaction = satisfy::Satisfaction::satisfy(
             self,
             &satisfier,
-            self.requires_sig(),
+            self.non_malleable_and_requires_sig(),
             self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
@@ -654,7 +654,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         let satisfaction = satisfy::Satisfaction::satisfy_mall(
             self,
             &satisfier,
-            self.requires_sig(),
+            self.non_malleable_and_requires_sig(),
             self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
@@ -683,7 +683,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         satisfy::Satisfaction::build_template(
             self,
             provider,
-            self.requires_sig(),
+            self.non_malleable_and_requires_sig(),
             self.leaf_hash_internal(),
         )
     }
@@ -699,7 +699,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         satisfy::Satisfaction::build_template_mall(
             self,
             provider,
-            self.requires_sig(),
+            self.non_malleable_and_requires_sig(),
             self.leaf_hash_internal(),
         )
     }
@@ -1346,7 +1346,7 @@ mod tests {
             (Ok(ms), true) => {
                 assert_eq!(format!("{:x}", ms.encode()), expected_hex);
                 assert_eq!(ms.is_non_malleable(), non_mal);
-                assert_eq!(ms.requires_sig(), non_mal && need_sig);
+                assert_eq!(ms.non_malleable_and_requires_sig(), non_mal && need_sig);
                 assert_eq!(ms.ext.static_ops + ms.ext.sat_data.unwrap().max_exec_op_count, ops);
             }
             (Err(_), false) => {}
