@@ -38,13 +38,13 @@ mod tests {
             // A malleable fragment carries none of the three malleability
             // properties, since they only describe a fragment that is
             // non-malleable to begin with.
-            if self.0.mall.non_malleable {
-                f.write_str(match self.0.mall.dissat {
+            if let types::Malleability::NonMalleable { dissat, signed } = self.0.mall {
+                f.write_str(match dissat {
                     types::Dissat::None => "f",
                     types::Dissat::Unique => "e",
                     types::Dissat::Unknown => "",
                 })?;
-                if self.0.mall.signed {
+                if signed {
                     fmt::Write::write_char(f, 's')?;
                 }
                 fmt::Write::write_char(f, 'm')?;
