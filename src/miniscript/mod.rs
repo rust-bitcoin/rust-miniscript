@@ -2233,4 +2233,43 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn malleable_has_no_malleability_properties() {
+        // or_b requires one of its children to be signed. Two hash fragments
+        // are not, so the expression is valid but malleable, and then it
+        // carries none of the three malleability properties.
+        let hash = sha256::Hash::hash(&[]);
+        let malleable = Miniscript::<String, Segwitv0>::from_str_insane(&format!(
+            "or_b(sha256({}),a:sha256({}))",
+            hash, hash
+        ))
+        .unwrap();
+        assert_eq!(malleable.ty.mall, types::Malleability::Malleable);
+        assert!(!malleable.is_non_malleable());
+        assert!(!malleable.non_malleable_and_requires_sig());
+        assert_eq!(malleable.ty.to_string(), "B/du");
+
+        // The same shape with signed children keeps all of them.
+        let sane = Miniscript::<String, Segwitv0>::from_str_insane("or_b(pk(A),a:pk(B))").unwrap();
+        assert_eq!(
+            sane.ty.mall,
+            types::Malleability::NonMalleable { dissat: types::Dissat::Unique, signed: true }
+        );
+        assert!(sane.is_non_malleable());
+        assert!(sane.non_malleable_and_requires_sig());
+        assert_eq!(sane.ty.to_string(), "B/duesm");
+
+        // The or_b above was never signed, so it only pins the erasure of the
+        // dissatisfaction property. This one did carry "s": and_b is signed if
+        // either child is, and the multi is, so it rendered as "B/ndus" while
+        // still being malleable.
+        let signed_but_malleable = Miniscript::<String, Segwitv0>::from_str_insane(
+            "j:and_b(multi(2,A,B),s:or_i(older(1),older(4252898)))",
+        )
+        .unwrap();
+        assert_eq!(signed_but_malleable.ty.mall, types::Malleability::Malleable);
+        assert!(!signed_but_malleable.is_non_malleable());
+        assert!(!signed_but_malleable.non_malleable_and_requires_sig());
+        assert_eq!(signed_but_malleable.ty.to_string(), "B/ndu");
+    }
 }
