@@ -89,27 +89,34 @@ fn fmt_helper<Pk: MiniscriptKey>(
     f: &mut fmt::Formatter,
     mut fmt_ms: impl FnMut(&mut fmt::Formatter, &Miniscript<Pk, Tap>) -> fmt::Result,
 ) -> fmt::Result {
-    let mut last_depth = 0;
+    let mut child_counts = Vec::<u8>::with_capacity(TAPROOT_CONTROL_MAX_NODE_COUNT);
+
     for item in view.leaves() {
-        if last_depth > 0 {
+        let depth = usize::from(item.depth());
+
+        if !child_counts.is_empty() {
             f.write_str(",")?;
         }
 
-        while last_depth < item.depth() {
+        while child_counts.len() < depth {
             f.write_str("{")?;
-            last_depth += 1;
+            child_counts.push(0);
         }
+
         fmt_ms(f, item.miniscript())?;
-        while last_depth > item.depth() {
+
+        if let Some(child_count) = child_counts.last_mut() {
+            *child_count += 1;
+        }
+        while let Some(2) = child_counts.last() {
             f.write_str("}")?;
-            last_depth -= 1;
+            child_counts.pop();
+            if let Some(child_count) = child_counts.last_mut() {
+                *child_count += 1;
+            }
         }
     }
 
-    while last_depth > 0 {
-        f.write_str("}")?;
-        last_depth -= 1;
-    }
     Ok(())
 }
 
@@ -282,5 +289,33 @@ impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
     }
 
     #[inline]
-    pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
+    pub(super) fn finalize(self) -> TapTree<Pk> {
+        assert!(!self.depths_leaves.is_empty(), "TapTreeBuilder must not finalize an empty tree");
+        TapTree { depths_leaves: self.depths_leaves }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use super::*;
+
+    fn leaf(ms: &str) -> TapTree<String> {
+        TapTree::leaf(Arc::new(Miniscript::<String, Tap>::from_str(ms).unwrap()))
+    }
+
+    #[test]
+    fn display_single_leaf_taptree() {
+        let tree = leaf("pk(A)");
+
+        assert_eq!(format!("{}", tree), "pk(A)");
+    }
+
+    #[test]
+    fn debug_binary_taptree() {
+        let tree = TapTree::combine(leaf("pk(A)"), leaf("pk(B)")).unwrap();
+
+        assert_eq!(format!("{:?}", tree), "{[B/onduesm]pk(\"A\"),[B/onduesm]pk(\"B\")}");
+    }
 }
