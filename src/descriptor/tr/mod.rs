@@ -255,12 +255,12 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     where
         T: Translator<Pk>,
     {
+        let internal_key = translate.pk(&self.internal_key)?;
         let tree = match &self.tree {
             Some(tree) => Some(tree.translate_pk(translate)?),
             None => None,
         };
-        let translate_desc =
-            Tr::new(translate.pk(&self.internal_key)?, tree).map_err(TranslateErr::OuterError)?;
+        let translate_desc = Tr::new(internal_key, tree).map_err(TranslateErr::OuterError)?;
         Ok(translate_desc)
     }
 }
