@@ -21,7 +21,7 @@ pub mod semantic;
 pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
-use crate::iter::TreeLike as _;
+use crate::iter::{StackExt as _, TreeLike as _};
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
 #[cfg(all(not(feature = "std"), not(test)))]
@@ -114,7 +114,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
         self.lift_check()?;
 
         let mut stack = vec![];
-        for item in self.rtl_post_order_iter() {
+        for item in self.post_order_iter() {
             let new_term = match item.node.node {
                 Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => {
                     Arc::new(Semantic::Key(pk.clone()))
@@ -137,24 +137,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
                 | Terminal::Verify(..)
                 | Terminal::NonZero(..)
                 | Terminal::ZeroNotEqual(..) => stack.pop().unwrap(),
-                Terminal::AndV(..) | Terminal::AndB(..) => Arc::new(Semantic::Thresh(
-                    Threshold::and(stack.pop().unwrap(), stack.pop().unwrap()),
-                )),
-                Terminal::AndOr(..) => Arc::new(Semantic::Thresh(Threshold::or(
-                    Arc::new(Semantic::Thresh(Threshold::and(
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
-                    ))),
-                    stack.pop().unwrap(),
-                ))),
-                Terminal::OrB(..) | Terminal::OrD(..) | Terminal::OrC(..) | Terminal::OrI(..) => {
+                Terminal::AndV(..) | Terminal::AndB(..) => {
+                    stack.pop2(|a, b| Arc::new(Semantic::Thresh(Threshold::and(a, b))))
+                }
+                Terminal::AndOr(..) => stack.pop3(|a, b, c| {
                     Arc::new(Semantic::Thresh(Threshold::or(
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
+                        Arc::new(Semantic::Thresh(Threshold::and(a, b))),
+                        c,
                     )))
+                }),
+                Terminal::OrB(..) | Terminal::OrD(..) | Terminal::OrC(..) | Terminal::OrI(..) => {
+                    stack.pop2(|a, b| Arc::new(Semantic::Thresh(Threshold::or(a, b))))
                 }
                 Terminal::Thresh(ref thresh) => {
-                    Arc::new(Semantic::Thresh(thresh.map_ref(|_| stack.pop().unwrap())))
+                    Arc::new(Semantic::Thresh(stack.pop_thresh(thresh)))
                 }
                 Terminal::Multi(ref thresh) => Arc::new(Semantic::Thresh(
                     thresh
