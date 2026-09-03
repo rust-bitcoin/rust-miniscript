@@ -2,8 +2,9 @@
 
 use core::{cmp, fmt, hash};
 
+use bitcoin::compat::Weight;
 use bitcoin::taproot::{TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE};
-use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
+use bitcoin::{opcodes, Address, Network, ScriptBuf};
 use sync::Arc;
 
 use super::checksum;

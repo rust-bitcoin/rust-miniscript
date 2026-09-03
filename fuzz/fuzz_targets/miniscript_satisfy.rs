@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use descriptor_fuzz::FuzzPk;
 use honggfuzz::fuzz;
+use miniscript::bitcoin::compat::{absolute, relative};
 use miniscript::bitcoin::hashes::hash160;
-use miniscript::bitcoin::locktime::{absolute, relative};
 use miniscript::bitcoin::taproot::Signature;
 use miniscript::bitcoin::{secp256k1, PublicKey, TapLeafHash, TapSighashType, XOnlyPublicKey};
 use miniscript::{Miniscript, Satisfier, Segwitv0, Tap};

@@ -7,8 +7,9 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
+use bitcoin::compat::absolute;
 use bitcoin::hashes::Hash;
-use bitcoin::{absolute, opcodes, script};
+use bitcoin::{opcodes, script};
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::ScriptContext;

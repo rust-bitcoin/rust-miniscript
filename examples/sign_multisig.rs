@@ -6,7 +6,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::{absolute, ecdsa, transaction, Amount, Sequence};
+#[allow(clippy::disallowed_types)]
+use bitcoin::{absolute::LockTime as UnstableLockTime, Sequence as UnstableSequence};
+use bitcoin::{ecdsa, transaction, Amount};
 
 fn main() {
     let mut tx = spending_transaction();
@@ -76,14 +78,15 @@ fn main() {
 }
 
 // Transaction which spends some output.
+#[allow(clippy::disallowed_types)]
 fn spending_transaction() -> bitcoin::Transaction {
     bitcoin::Transaction {
         version: transaction::Version::TWO,
-        lock_time: absolute::LockTime::ZERO,
+        lock_time: UnstableLockTime::ZERO,
         input: vec![bitcoin::TxIn {
             previous_output: Default::default(),
             script_sig: bitcoin::ScriptBuf::new(),
-            sequence: Sequence::MAX,
+            sequence: UnstableSequence::MAX,
             witness: Witness::default(),
         }],
         output: vec![bitcoin::TxOut {

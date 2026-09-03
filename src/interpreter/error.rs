@@ -5,11 +5,12 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::compat::{absolute, relative};
 use bitcoin::hashes::hash160;
 use bitcoin::hex::DisplayHex;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
-use bitcoin::{absolute, relative, taproot};
+use bitcoin::taproot;
 
 use super::BitcoinKey;
 use crate::prelude::*;

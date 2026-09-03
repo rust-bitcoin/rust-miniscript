@@ -1,11 +1,12 @@
 use std::str::FromStr;
 
-use bitcoin::absolute::LockTime;
 use bitcoin::consensus::encode::serialize;
 use bitcoin::hashes::Hash;
 use bitcoin::hex::{Case, DisplayHex};
 use bitcoin::transaction::Version;
-use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut};
+#[allow(clippy::disallowed_types)]
+use bitcoin::{absolute::LockTime as UnstableLockTime, Sequence as UnstableSequence};
+use bitcoin::{Address, Amount, Network, Psbt, PublicKey, TxIn, TxOut};
 use helper_fns::{produce_grim_hash, produce_kelly_hash, produce_key_pairs};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::policy::Concrete;
@@ -204,6 +205,7 @@ fn main() {
 
     let secp: &secp256k1::Secp256k1<secp256k1::All> = &secp256k1::Secp256k1::new();
 
+    #[allow(clippy::disallowed_types)]
     let tx_in = TxIn {
         previous_output: bitcoin::OutPoint {
             txid: "8888888899999999aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff"
@@ -211,7 +213,7 @@ fn main() {
                 .unwrap(),
             vout: 0,
         },
-        sequence: Sequence(0),
+        sequence: UnstableSequence(0),
         //        sequence: Sequence(40),
         ..Default::default()
     };
@@ -230,9 +232,10 @@ fn main() {
 
     let time = oct_23_morning;
 
+    #[allow(clippy::disallowed_types)]
     let unsigned_tx = bitcoin::Transaction {
         version: Version::TWO,
-        lock_time: LockTime::from_time(time).unwrap(),
+        lock_time: UnstableLockTime::from_time(time).unwrap(),
         input: vec![tx_in],
         output: vec![destination_output],
     };

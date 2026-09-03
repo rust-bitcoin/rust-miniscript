@@ -4,8 +4,8 @@
 //! Interpreter stack
 
 use bitcoin::blockdata::{opcodes, script};
+use bitcoin::compat::{absolute, relative, Sequence};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::{absolute, relative, Sequence};
 
 use super::error::PkEvalErrInner;
 use super::{verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint};

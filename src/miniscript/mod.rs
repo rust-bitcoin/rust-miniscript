@@ -1836,9 +1836,9 @@ mod tests {
                 }
             }
 
-            fn check_older(&self, _: bitcoin::relative::LockTime) -> bool { true }
+            fn check_older(&self, _: bitcoin::compat::relative::LockTime) -> bool { true }
 
-            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool { true }
+            fn check_after(&self, _: bitcoin::compat::absolute::LockTime) -> bool { true }
         }
 
         let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();

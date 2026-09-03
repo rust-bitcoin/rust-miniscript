@@ -8,7 +8,8 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin::compat::Weight;
+use bitcoin::{Address, Network, ScriptBuf};
 
 use super::SortedMultiVec;
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};

@@ -7,7 +7,7 @@
 
 use core::{fmt, str};
 
-use bitcoin::{absolute, relative};
+use bitcoin::compat::{absolute, relative};
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::iter::{Tree, TreeLike};
@@ -885,7 +885,7 @@ mod tests {
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_mtp(500_000_001).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(policy.n_keys(), 0);
@@ -920,25 +920,25 @@ mod tests {
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(absolute::LockTime::from_time(500_000_000).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_mtp(500_000_000).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_mtp(500_000_001).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(absolute::LockTime::from_time(500_000_010).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_mtp(500_000_010).expect("valid timestamp")),
             policy
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(absolute::LockTime::from_time(500_000_012).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_mtp(500_000_012).expect("valid timestamp")),
             policy
         );
         assert_eq!(policy.n_keys(), 0);

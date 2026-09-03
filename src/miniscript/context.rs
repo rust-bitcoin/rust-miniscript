@@ -5,8 +5,8 @@ use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::compat::Weight;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::Weight;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
