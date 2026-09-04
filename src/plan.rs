@@ -1348,4 +1348,67 @@ mod test {
         assert_eq!(plan.scriptsig_size(), varint_len(script_sig.len()) + script_sig.len());
         assert_eq!(plan.satisfaction_weight(), max_weight + 4 + 1);
     }
+
+    /// A plan sizes every ECDSA signature at its 73-byte maximum (including the
+    /// length prefix, per the convention in `types::extra_props::SatData`), so a
+    /// satisfier that hands out signatures exactly filling that budget makes
+    /// even signature-bearing paths exact to the byte.
+    #[test]
+    fn sizes_match_max_sig_satisfaction() {
+        // A 72-byte signature: r with the high bit set and s without, so r is a
+        // 33-byte DER integer and s a 32-byte one (71 bytes of DER) plus the
+        // sighash flag. With its length prefix the witness element is exactly
+        // the 73 bytes a plan budgets.
+        let mut raw = [0x01u8; 64];
+        raw[0] = 0x80;
+        let sig = bitcoin::ecdsa::Signature::sighash_all(
+            secp256k1::ecdsa::Signature::from_compact(&raw).unwrap(),
+        );
+        assert_eq!(sig.to_vec().len(), 72);
+
+        let keys = [
+            DescriptorPublicKey::from_str(
+                "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+            )
+            .unwrap(),
+            DescriptorPublicKey::from_str(
+                "0257f4a2816338436cccabc43aa724cf6e69e43e84c3c8a305212761389dd73a8a",
+            )
+            .unwrap(),
+        ];
+        let def_keys = keys
+            .iter()
+            .map(|k| DefiniteDescriptorKey::new(k.clone()).unwrap())
+            .collect::<Vec<_>>();
+
+        let sigs = def_keys
+            .iter()
+            .map(|k| (k.clone(), sig))
+            .collect::<BTreeMap<_, _>>();
+        let pkh_sigs = def_keys
+            .iter()
+            .map(|k| (k.to_pubkeyhash(SigType::Ecdsa), (k.clone(), sig)))
+            .collect::<BTreeMap<_, _>>();
+        let satisfier = (sigs, pkh_sigs);
+        let assets = Assets::new().add(keys[0].clone()).add(keys[1].clone());
+
+        for desc in [
+            format!("wpkh({})", keys[0]),
+            format!("sh(wpkh({}))", keys[0]),
+            format!("wsh(and_v(v:pk({}),pk({})))", keys[0], keys[1]),
+            format!("sh(wsh(and_v(v:pk({}),pk({}))))", keys[0], keys[1]),
+        ] {
+            let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+            let max_weight = desc.max_weight_to_satisfy().unwrap().to_wu() as usize;
+            let plan = desc.clone().into_plan(&assets).unwrap();
+            let (witness, script_sig) = plan.satisfy(&satisfier).unwrap();
+
+            // Same wire-exact checks as `sizes_match_satisfaction`, now on paths
+            // that carry signatures.
+            let witness = bitcoin::Witness::from_slice(&witness);
+            assert_eq!(plan.witness_size(), bitcoin::consensus::serialize(&witness).len());
+            assert_eq!(plan.scriptsig_size(), varint_len(script_sig.len()) + script_sig.len());
+            assert_eq!(plan.satisfaction_weight(), max_weight + 4 + 1);
+        }
+    }
 }
