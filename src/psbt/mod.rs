@@ -142,6 +142,8 @@ pub enum InputError {
         /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
+    /// Pass through the underlying errors in miniscript.
+    Validation(crate::ValidationError),
 }
 
 #[cfg(feature = "std")]
@@ -167,6 +169,7 @@ impl error::Error for InputError {
             KeyErr(e) => Some(e),
             Interpreter(e) => Some(e),
             MiniscriptError(e) => Some(e),
+            Validation(e) => Some(e),
         }
     }
 }
@@ -214,6 +217,7 @@ impl fmt::Display for InputError {
             Self::NonStandardSighashType(ref e) => {
                 write!(f, "Non-standard sighash type {}", e)
             }
+            Self::Validation(ref e) => e.fmt(f),
         }
     }
 }
