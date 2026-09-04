@@ -28,7 +28,7 @@ use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
 use crate::miniscript::satisfy::{Placeholder, Satisfier, SchnorrSigType};
 use crate::prelude::*;
-use crate::util::witness_size;
+use crate::util::{varint_len, witness_size};
 use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ToPublicKey};
 
 /// Trait describing a present/missing lookup table for constructing witness templates
@@ -242,10 +242,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Plan<Pk> {
             (None, _) => witness_size(self.template.as_ref()),
             // Taproot doesn't have a "wrapped" version (scriptSig len (1))
             (Some(WitnessVersion::V1), _) => 1,
-            // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_20 (1) + <pk hash> (20)
-            (_, DescriptorType::ShWpkh) => 1 + 1 + 1 + 20,
-            // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
-            (_, DescriptorType::ShWsh) => 1 + 1 + 1 + 32,
+            // scriptSig len (1) + OP_PUSHBYTES_22 (1) + OP_0 (1) + OP_PUSHBYTES_20 (1) + <pk hash> (20)
+            (_, DescriptorType::ShWpkh) => 1 + 1 + 1 + 1 + 20,
+            // scriptSig len (1) + OP_PUSHBYTES_34 (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
+            (_, DescriptorType::ShWsh) => 1 + 1 + 1 + 1 + 32,
             // Native Segwit v0 (scriptSig len (1))
             _ => 1,
         }
@@ -257,7 +257,20 @@ impl<Pk: MiniscriptKey + ToPublicKey> Plan<Pk> {
     /// if there's at least one segwit input in the tx. See ["Empty script witnesses are encoded as a zero byte"](https://github.com/bitcoin/bips/blob/d8a56c9f2b521bf4af5d588f217e7618cc44952c/bip-0144.mediawiki#serialization).
     pub fn witness_size(&self) -> usize {
         if self.descriptor.desc_type().segwit_version().is_some() {
-            witness_size(self.template.as_ref())
+            let template_size = witness_size(self.template.as_ref());
+            match self.descriptor.desc_type() {
+                DescriptorType::Wsh | DescriptorType::ShWsh => {
+                    let script_len = self
+                        .descriptor
+                        .explicit_script()
+                        .expect("wsh descriptors have explicit script")
+                        .len();
+                    template_size + varint_len(script_len) + script_len
+                        - varint_len(self.template.len())
+                        + varint_len(self.template.len() + 1)
+                }
+                _ => template_size,
+            }
         } else {
             0
         }
@@ -792,10 +805,11 @@ mod test {
         let desc = format!("wsh(t:or_c(pk({}),v:pkh({})))", keys[0], keys[1]);
 
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig)
+        // + 1 (witness script len) + 63 (witness script)
         let tests = vec![
             (vec![], vec![], None, None, None),
-            (vec![0], vec![], None, None, Some(4 + 1 + 73)),
-            (vec![0, 1], vec![], None, None, Some(4 + 1 + 73)),
+            (vec![0], vec![], None, None, Some(4 + 1 + 73 + 1 + 63)),
+            (vec![0, 1], vec![], None, None, Some(4 + 1 + 73 + 1 + 63)),
         ];
 
         test_inner(&desc, keys, hashes, tests);
@@ -817,10 +831,11 @@ mod test {
         let desc = format!("wsh(and_v(v:pk({}),pk({})))", keys[0], keys[1]);
 
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2
+        // + 1 (witness script len) + 70 (witness script)
         let tests = vec![
             (vec![], vec![], None, None, None),
             (vec![0], vec![], None, None, None),
-            (vec![0, 1], vec![], None, None, Some(4 + 1 + 73 * 2)),
+            (vec![0, 1], vec![], None, None, Some(4 + 1 + 73 * 2 + 1 + 70)),
         ];
 
         test_inner(&desc, keys, hashes, tests);
@@ -853,7 +868,8 @@ mod test {
             (vec![], vec![], None, None, None),
             (vec![0, 1], vec![], None, None, None),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 3 + 1 (dummy push)
-            (vec![0, 1, 3], vec![], None, None, Some(4 + 1 + 73 * 3 + 1)),
+            // + 1 (witness script len) + 139 (witness script)
+            (vec![0, 1, 3], vec![], None, None, Some(4 + 1 + 73 * 3 + 1 + 1 + 139)),
         ];
 
         test_inner(&desc, keys, hashes, tests);
@@ -887,24 +903,28 @@ mod test {
             ),
             (vec![0], vec![], None, None, None),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
+            // + 1 (witness script len) + 85 (witness script)
             (
                 vec![0],
                 vec![],
                 Some(Sequence(1000).to_relative_lock_time().unwrap()),
                 None,
-                Some(80),
+                Some(166),
             ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
-            (vec![0, 1], vec![], None, None, Some(153)),
+            // + 1 (witness script len) + 85 (witness script)
+            (vec![0, 1], vec![], None, None, Some(239)),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
+            // + 1 (witness script len) + 85 (witness script)
             (
                 vec![0, 1],
                 vec![],
                 Some(Sequence(1000).to_relative_lock_time().unwrap()),
                 None,
-                Some(80),
+                Some(166),
             ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
+            // + 1 (witness script len) + 85 (witness script)
             (
                 vec![0, 1],
                 vec![],
@@ -914,7 +934,7 @@ mod test {
                         .unwrap(),
                 ),
                 None,
-                Some(153),
+                Some(239),
             ), // incompatible timelock
         ];
 
@@ -924,20 +944,22 @@ mod test {
 
         let tests = vec![
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
+            // + 1 (witness script len) + 85 (witness script)
             (
                 vec![0],
                 vec![],
                 None,
                 Some(absolute::LockTime::from_height(1000).unwrap()),
-                Some(80),
+                Some(166),
             ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
+            // + 1 (witness script len) + 85 (witness script)
             (
                 vec![0, 1],
                 vec![],
                 None,
                 Some(absolute::LockTime::from_time(500_001_000).unwrap()),
-                Some(153),
+                Some(239),
             ), // incompatible timelock
         ];
 
@@ -1081,7 +1103,8 @@ mod test {
             (vec![], vec![0], None, None, None),
             // Key + hash
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_PUSH) + 32 (preimage)
-            (vec![0], vec![0], None, None, Some(111)),
+            // + 1 (witness script len) + 62 (witness script)
+            (vec![0], vec![0], None, None, Some(174)),
         ];
 
         test_inner(&desc, keys, hashes, tests);
@@ -1259,5 +1282,133 @@ mod test {
         .unwrap();
 
         assert!(desc.into_plan(&assets).is_err());
+    }
+
+    /// A [`Satisfier`] that knows hash preimages only.
+    ///
+    /// A plan sizes a signature at its 73-byte maximum while a real one varies
+    /// in length, so a spend path that carries no signature is the one whose
+    /// witness has a size a plan can be held to byte for byte.
+    struct Preimages(BTreeMap<sha256::Hash, [u8; 32]>);
+
+    impl Satisfier<DefiniteDescriptorKey> for Preimages {
+        fn lookup_sha256(&self, h: &sha256::Hash) -> Option<[u8; 32]> { self.0.get(h).copied() }
+    }
+
+    #[test]
+    fn sizes_match_satisfaction() {
+        use bitcoin::hashes::Hash as _;
+
+        let preimages = [[1u8; 32], [2u8; 32]];
+        let hashes = preimages.map(|p| sha256::Hash::hash(&p));
+        let satisfier = Preimages(hashes.iter().copied().zip(preimages).collect());
+        let assets = Assets::new().add(hashes[0]).add(hashes[1]);
+
+        // Sigless, so it has to go around the sanity checks of `from_str`.
+        let ms = Miniscript::<DefiniteDescriptorKey, Segwitv0>::from_str_insane(&format!(
+            "and_v(v:sha256({}),sha256({}))",
+            hashes[0], hashes[1]
+        ))
+        .unwrap();
+
+        for desc in [
+            Descriptor::new_wsh(ms.clone()).unwrap(),
+            Descriptor::new_sh_wsh(ms).unwrap(),
+        ] {
+            let max_weight = desc.max_weight_to_satisfy().unwrap().to_wu() as usize;
+            let plan = desc.into_plan(&assets).unwrap();
+            let (witness, script_sig) = plan.satisfy(&satisfier).unwrap();
+
+            // The witness as it goes on the wire: an element count followed by
+            // length-prefixed elements, the witness script among them.
+            let witness = bitcoin::Witness::from_slice(&witness);
+            assert_eq!(plan.witness_size(), bitcoin::consensus::serialize(&witness).len());
+            assert_eq!(plan.scriptsig_size(), varint_len(script_sig.len()) + script_sig.len());
+
+            // `max_weight_to_satisfy` is the weight that satisfying adds to an
+            // input, so it leaves out the scriptSig length byte (4 WU) and the
+            // witness count byte (1 WU) that an unsatisfied input carries too.
+            // The plan reports the absolute size, so it is larger by exactly those.
+            assert_eq!(plan.satisfaction_weight(), max_weight + 4 + 1);
+        }
+
+        // sh(wpkh) needs a signature, whose real size varies, so only what a plan
+        // can be held to exactly is checked: the scriptSig it returns, and the
+        // relation to `max_weight_to_satisfy`, which sizes a signature the way the
+        // plan does.
+        let key = DescriptorPublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+        let desc =
+            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("sh(wpkh({}))", key)).unwrap();
+        let max_weight = desc.max_weight_to_satisfy().unwrap().to_wu() as usize;
+        let script_sig = desc.unsigned_script_sig();
+        let plan = desc.into_plan(&Assets::new().add(key)).unwrap();
+        assert_eq!(plan.scriptsig_size(), varint_len(script_sig.len()) + script_sig.len());
+        assert_eq!(plan.satisfaction_weight(), max_weight + 4 + 1);
+    }
+
+    /// A plan sizes every ECDSA signature at its 73-byte maximum (including the
+    /// length prefix, per the convention in `types::extra_props::SatData`), so a
+    /// satisfier that hands out signatures exactly filling that budget makes
+    /// even signature-bearing paths exact to the byte.
+    #[test]
+    fn sizes_match_max_sig_satisfaction() {
+        // A 72-byte signature: r with the high bit set and s without, so r is a
+        // 33-byte DER integer and s a 32-byte one (71 bytes of DER) plus the
+        // sighash flag. With its length prefix the witness element is exactly
+        // the 73 bytes a plan budgets.
+        let mut raw = [0x01u8; 64];
+        raw[0] = 0x80;
+        let sig = bitcoin::ecdsa::Signature::sighash_all(
+            secp256k1::ecdsa::Signature::from_compact(&raw).unwrap(),
+        );
+        assert_eq!(sig.to_vec().len(), 72);
+
+        let keys = [
+            DescriptorPublicKey::from_str(
+                "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+            )
+            .unwrap(),
+            DescriptorPublicKey::from_str(
+                "0257f4a2816338436cccabc43aa724cf6e69e43e84c3c8a305212761389dd73a8a",
+            )
+            .unwrap(),
+        ];
+        let def_keys = keys
+            .iter()
+            .map(|k| DefiniteDescriptorKey::new(k.clone()).unwrap())
+            .collect::<Vec<_>>();
+
+        let sigs = def_keys
+            .iter()
+            .map(|k| (k.clone(), sig))
+            .collect::<BTreeMap<_, _>>();
+        let pkh_sigs = def_keys
+            .iter()
+            .map(|k| (k.to_pubkeyhash(SigType::Ecdsa), (k.clone(), sig)))
+            .collect::<BTreeMap<_, _>>();
+        let satisfier = (sigs, pkh_sigs);
+        let assets = Assets::new().add(keys[0].clone()).add(keys[1].clone());
+
+        for desc in [
+            format!("wpkh({})", keys[0]),
+            format!("sh(wpkh({}))", keys[0]),
+            format!("wsh(and_v(v:pk({}),pk({})))", keys[0], keys[1]),
+            format!("sh(wsh(and_v(v:pk({}),pk({}))))", keys[0], keys[1]),
+        ] {
+            let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+            let max_weight = desc.max_weight_to_satisfy().unwrap().to_wu() as usize;
+            let plan = desc.clone().into_plan(&assets).unwrap();
+            let (witness, script_sig) = plan.satisfy(&satisfier).unwrap();
+
+            // Same wire-exact checks as `sizes_match_satisfaction`, now on paths
+            // that carry signatures.
+            let witness = bitcoin::Witness::from_slice(&witness);
+            assert_eq!(plan.witness_size(), bitcoin::consensus::serialize(&witness).len());
+            assert_eq!(plan.scriptsig_size(), varint_len(script_sig.len()) + script_sig.len());
+            assert_eq!(plan.satisfaction_weight(), max_weight + 4 + 1);
+        }
     }
 }
