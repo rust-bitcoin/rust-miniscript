@@ -559,9 +559,64 @@ impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::{absolute, PublicKey};
+    use bitcoin::{absolute, relative, PublicKey};
 
+    use super::{Satisfaction, Witness};
     use crate::descriptor::Descriptor;
+    use crate::{Miniscript, Segwitv0};
+
+    #[test]
+    fn regression_1037() {
+        let key = PublicKey::from_str(
+            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad1",
+        )
+        .unwrap();
+        let sig = bitcoin::ecdsa::Signature::sighash_all(
+            secp256k1::ecdsa::Signature::from_compact(&[1; 64]).unwrap(),
+        );
+        let mut signatures = std::collections::BTreeMap::new();
+        signatures.insert(key, sig);
+        let satisfier = (
+            signatures,
+            absolute::LockTime::from_height(100).unwrap(),
+            relative::LockTime::from_height(100),
+        );
+
+        for timelock in ["after", "older"] {
+            let ms = Miniscript::<PublicKey, Segwitv0>::from_str_insane(&format!(
+                "and_v(v:pk({key}),or_i({timelock}(100),{timelock}(200)))",
+            ))
+            .unwrap();
+
+            // Every spend requires the signature, but the unsigned or_i makes
+            // the expression malleable, erasing its type-level signature property.
+            assert!(!ms.is_non_malleable());
+
+            // Only the first timelock is met. The mandatory signature prevents
+            // a third party from changing the transaction's timelock to select
+            // the other branch, so this witness is actually non-malleable.
+            let expected = vec![vec![1], sig.to_vec()];
+            assert_eq!(ms.satisfy_malleable(&satisfier).unwrap(), expected);
+
+            // FIXME: The root's erased signature property makes the unmet
+            // timelock Unavailable rather than Impossible. Both or_i branches
+            // then appear possible and unsigned, so satisfy rejects the witness.
+            // Track signatures that a third party cannot remove in the
+            // satisfaction algorithm instead of relying on root_has_sig.
+            assert!(matches!(ms.satisfy(&satisfier), Err(crate::Error::CouldNotSatisfy)));
+            assert_eq!(
+                Satisfaction::satisfy(&ms, &satisfier, false, None).stack,
+                Witness::Unavailable,
+            );
+
+            // Supplying the signature property explicitly demonstrates that
+            // root_has_sig is the reason the non-malleable witness is rejected.
+            assert_eq!(
+                Satisfaction::satisfy(&ms, &satisfier, true, None).stack,
+                Witness::Stack(expected),
+            );
+        }
+    }
 
     #[test]
     fn regression_895() {
