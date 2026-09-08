@@ -5,15 +5,30 @@
 //! Tools for determining whether the guarantees offered by the library
 //! actually hold.
 
+use crate::miniscript::types::Malleability;
 use crate::prelude::*;
 use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Whether all spend paths of miniscript require a signature
-    pub fn requires_sig(&self) -> bool { self.ty.mall.signed }
+    /// Whether the miniscript is non-malleable and all of its spend paths
+    /// require a signature.
+    ///
+    /// Returns `false` for a malleable miniscript. The "s" property only
+    /// describes the satisfactions of an expression that is non-malleable to
+    /// begin with, so nothing is known for a malleable one, and `false` is the
+    /// assumption that keeps a caller from relying on a signature being
+    /// required.
+    #[deprecated(
+        since = "TBD",
+        note = "check the `signed` property of the malleability type instead"
+    )]
+    pub fn non_malleable_and_requires_sig(&self) -> bool {
+        matches!(self.ty.mall, Malleability::NonMalleable { signed: true, .. })
+    }
 
-    /// Whether the miniscript is malleable
-    pub fn is_non_malleable(&self) -> bool { self.ty.mall.non_malleable }
+    /// Whether the miniscript is guaranteed to have a non-malleable
+    /// satisfaction, if it has a satisfaction at all.
+    pub fn is_non_malleable(&self) -> bool { self.ty.mall.is_non_malleable() }
 
     /// Whether the miniscript can exceed the resource limits(Opcodes, Stack limit etc)
     // It maybe possible to return a detail error type containing why the miniscript
