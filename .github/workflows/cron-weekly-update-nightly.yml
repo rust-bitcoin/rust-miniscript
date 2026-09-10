@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install cargo-rbmt
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt --locked
+        run: cargo install --locked "cargo-rbmt@$(grep '^rbmt\.version' Cargo.toml | cut -d'"' -f2)"
       - name: Update nightly toolchain in Cargo.toml
         run: |
           cargo rbmt toolchains --update-nightly
