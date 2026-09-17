@@ -15,11 +15,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether the miniscript is malleable
     pub fn is_non_malleable(&self) -> bool { self.ty.mall.non_malleable }
 
-    /// Whether the miniscript can exceed the resource limits(Opcodes, Stack limit etc)
-    // It maybe possible to return a detail error type containing why the miniscript
-    // failed. But doing so may require returning a collection of errors
-    pub fn within_resource_limits(&self) -> bool { Ctx::check_local_validity(self).is_ok() }
-
     /// Whether the miniscript contains a combination of timelocks
     pub fn has_mixed_timelocks(&self) -> bool { self.ext.timelock_info.contains_unspendable_path() }
 

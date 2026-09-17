@@ -176,7 +176,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(InputError::from),
+            Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(InputError::Validation),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_p2wpkh() {
@@ -193,7 +193,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             }
         });
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
+            Some((pk, _sig)) => Descriptor::new_wpkh(*pk).map_err(InputError::Validation),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_p2wsh() {
@@ -209,7 +209,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 });
             }
             let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(witness_script)?;
-            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
+            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map)).map_err(InputError::Validation)?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
@@ -235,7 +235,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
                             witness_script,
                         )?;
-                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
+                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))
+                            .map_err(InputError::Validation)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -254,7 +255,9 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         }
                     });
                     match partial_sig_contains_pk {
-                        Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),
+                        Some((pk, _sig)) => {
+                            Descriptor::new_sh_wpkh(*pk).map_err(InputError::Validation)
+                        }
                         None => Err(InputError::MissingPubkey),
                     }
                 } else {
@@ -266,7 +269,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         let ms = Miniscript::<bitcoin::PublicKey, Legacy>::decode_consensus(
                             redeem_script,
                         )?;
-                        Ok(Descriptor::new_sh(ms)?)
+                        Ok(Descriptor::new_sh(ms).map_err(InputError::Validation)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -282,7 +285,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::decode_consensus(&script_pubkey)?;
-        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map))?)
+        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map)).map_err(InputError::Validation)?)
     }
 }
 
