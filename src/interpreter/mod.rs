@@ -1065,13 +1065,13 @@ mod tests {
         n: usize,
     ) -> (
         Vec<bitcoin::PublicKey>,
-        Vec<Vec<u8>>,
+        Vec<bitcoin::ecdsa::SerializedSignature>,
         Vec<bitcoin::ecdsa::Signature>,
         secp256k1::Message,
         Secp256k1<secp256k1::All>,
         Vec<bitcoin::key::XOnlyPublicKey>,
         Vec<bitcoin::taproot::Signature>,
-        Vec<Vec<u8>>,
+        Vec<bitcoin::taproot::serialized_signature::SerializedSignature>,
     ) {
         let secp = secp256k1::Secp256k1::new();
         let msg = secp256k1::Message::from_digest(*b"Yoda: btc, I trust. HODL I must!");
@@ -1094,14 +1094,13 @@ mod tests {
                 compressed: true,
             };
             let signature = secp.sign_ecdsa(&msg, &sk);
-            ecdsa_sigs.push(bitcoin::ecdsa::Signature {
+            let bitcoin_sig = bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,
-            });
-            let mut sigser = signature.serialize_der().to_vec();
-            sigser.push(0x01); // sighash_all
+            };
+            ecdsa_sigs.push(bitcoin_sig);
+            der_sigs.push(bitcoin_sig.serialize());
             pks.push(pk);
-            der_sigs.push(sigser);
 
             let keypair = bitcoin::key::Keypair::from_secret_key(&secp, &sk);
             let (x_only_pk, _parity) = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair);
@@ -1111,7 +1110,7 @@ mod tests {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,
             };
-            ser_schnorr_sigs.push(schnorr_sig.to_vec());
+            ser_schnorr_sigs.push(schnorr_sig.serialize());
             schnorr_sigs.push(schnorr_sig);
         }
         (pks, der_sigs, ecdsa_sigs, msg, secp, x_only_pks, schnorr_sigs, ser_schnorr_sigs)
