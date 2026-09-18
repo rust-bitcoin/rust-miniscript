@@ -38,26 +38,20 @@ fn construct_tap_witness(
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
     let mut map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
-    let psbt_inputs = &sat.psbt.inputs;
-    for psbt_input in psbt_inputs {
+    sat.psbt.inputs.iter().for_each(|input| {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
         // all the keys added on a descriptor and thus we get keys from it.
-        let public_keys = psbt_input.tap_key_origins.keys();
-        for key in public_keys {
-            let bitcoin_key = *key;
-            let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
-            map.insert(hash, bitcoin_key);
-        }
-    }
+        input.tap_key_origins.keys().for_each(|key| {
+            map.insert(key.to_pubkeyhash(SigType::Schnorr), *key);
+        })
+    });
     assert!(spk.is_p2tr());
 
     // try the key spend path firsti
-    if let Some(ref key) = sat.psbt_input().tap_internal_key {
-        if let Some(sig) =
-            <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat, key)
-        {
-            return Ok(vec![sig.to_vec()]);
-        }
+    if let Some(sig) = sat.psbt_input().tap_internal_key.as_ref().and_then(|key| {
+        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat, key)
+    }) {
+        return Ok(vec![sig.to_vec()]);
     }
     // Next script spends
     let (mut min_wit, mut min_wit_len) = (None, None);
@@ -165,37 +159,26 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         }
     } else if script_pubkey.is_p2pkh() {
         // 2. `Pkh`: creates a `PkH` descriptor if partial_sigs has the corresponding pk
-        let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-            // Indirect way to check the equivalence of pubkey-hashes.
-            // Create a pubkey hash and check if they are the same.
-            // THIS IS A BUG AND *WILL* PRODUCE WRONG SATISFACTIONS FOR UNCOMPRESSED KEYS
-            // Partial sigs loses the compressed flag that is necessary
-            // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
-            // The type checker will fail again after we update to 0.28 and this can be removed
-            let addr = bitcoin::Address::p2pkh(pk, bitcoin::Network::Bitcoin);
-            *script_pubkey == addr.script_pubkey()
-        });
-        match partial_sig_contains_pk {
-            Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(InputError::from),
-            None => Err(InputError::MissingPubkey),
-        }
+        let (pk, _) = inp
+            .partial_sigs
+            .iter()
+            .find(|&(pk, _sig)| script_pubkey.as_bytes()[3..23] == pk.pubkey_hash()[..])
+            .ok_or(InputError::MissingPubkey)?;
+        Descriptor::new_pkh(*pk).map_err(InputError::from)
     } else if script_pubkey.is_p2wpkh() {
         // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
-        let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-            match bitcoin::key::CompressedPublicKey::try_from(pk) {
-                Ok(compressed) => {
-                    // Indirect way to check the equivalence of pubkey-hashes.
-                    // Create a pubkey hash and check if they are the same.
-                    let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
-                    *script_pubkey == addr.script_pubkey()
-                }
-                Err(_) => false,
-            }
-        });
-        match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
-            None => Err(InputError::MissingPubkey),
-        }
+        let (pk, _) = inp
+            .partial_sigs
+            .iter()
+            .find(|&(pk, _)| {
+                bitcoin::key::CompressedPublicKey::try_from(*pk)
+                    .map(|compressed| {
+                        compressed.pubkey_hash()[..] == script_pubkey.as_bytes()[2..22]
+                    })
+                    .unwrap_or(false)
+            })
+            .ok_or(InputError::MissingPubkey)?;
+        Descriptor::new_wpkh(*pk).map_err(InputError::from)
     } else if script_pubkey.is_p2wsh() {
         // 4. `Wsh`: creates a `Wsh` descriptor
         if inp.redeem_script.is_some() {
@@ -241,22 +224,18 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     }
                 } else if redeem_script.is_p2wpkh() {
                     // 6. `ShWpkh` case
-                    let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-                        match bitcoin::key::CompressedPublicKey::try_from(pk) {
-                            Ok(compressed) => {
-                                let addr = bitcoin::Address::p2wpkh(
-                                    &compressed,
-                                    bitcoin::Network::Bitcoin,
-                                );
-                                *redeem_script == addr.script_pubkey()
-                            }
-                            Err(_) => false,
-                        }
-                    });
-                    match partial_sig_contains_pk {
-                        Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),
-                        None => Err(InputError::MissingPubkey),
-                    }
+                    let (pk, _) = inp
+                        .partial_sigs
+                        .iter()
+                        .find(|&(&pk, _sig)| {
+                            bitcoin::key::CompressedPublicKey::try_from(pk)
+                                .map(|compressed| {
+                                    compressed.pubkey_hash()[..] == redeem_script.as_bytes()[2..22]
+                                })
+                                .unwrap_or(false)
+                        })
+                        .ok_or(InputError::MissingPubkey)?;
+                    Ok(Descriptor::new_sh_wpkh(*pk)?)
                 } else {
                     //7. regular p2sh
                     if inp.witness_script.is_some() {
@@ -298,17 +277,16 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 ) -> Result<(), Error> {
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
+    let empty_script_sig = ScriptBuf::new();
+    let empty_witness = Witness::default();
     for (index, input) in psbt.inputs.iter().enumerate() {
-        let empty_script_sig = ScriptBuf::new();
-        let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
         let witness = input
             .final_script_witness
             .as_ref()
-            .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-            .unwrap_or(empty_witness);
+            .unwrap_or(&empty_witness);
 
-        interpreter_inp_check(psbt, secp, index, utxos, &witness, script_sig)?;
+        interpreter_inp_check(psbt, secp, index, utxos, witness, script_sig)?;
     }
     Ok(())
 }
@@ -445,16 +423,8 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         let input = &mut psbt.inputs[index];
         input.non_witness_utxo = original.non_witness_utxo;
         input.witness_utxo = original.witness_utxo;
-        input.final_script_sig = if script_sig.is_empty() {
-            None
-        } else {
-            Some(script_sig)
-        };
-        input.final_script_witness = if witness.is_empty() {
-            None
-        } else {
-            Some(witness)
-        };
+        input.final_script_sig = (!script_sig.is_empty()).then_some(script_sig);
+        input.final_script_witness = (!witness.is_empty()).then_some(witness);
     }
 
     Ok(())

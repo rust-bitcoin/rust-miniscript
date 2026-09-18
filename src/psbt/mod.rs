@@ -233,7 +233,7 @@ impl From<bitcoin::key::FromSliceError> for InputError {
     fn from(e: bitcoin::key::FromSliceError) -> Self { Self::KeyErr(e) }
 }
 
-/// Psbt satisfier for at inputs at a particular index.
+/// Psbt satisfier for inputs at a particular index.
 ///
 /// Holds a `&psbt` because multiple inputs may share
 /// the same psbt structure
@@ -283,8 +283,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         self.psbt_input()
             .bip32_derivation
             .iter()
-            .find(|&(pubkey, _)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
-            .map(|(pubkey, _)| bitcoin::PublicKey::new(*pubkey))
+            .find_map(|(&pk, _)| {
+                (pk.to_pubkeyhash(SigType::Ecdsa) == *pkh).then_some(bitcoin::PublicKey::new(pk))
+            })
     }
 
     fn lookup_tap_control_block_map(
@@ -300,10 +301,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         self.psbt_input()
             .tap_script_sigs
             .iter()
-            .find(|&((pubkey, lh), _sig)| {
-                pubkey.to_pubkeyhash(SigType::Schnorr) == pkh.0 && *lh == pkh.1
+            .find_map(|(&(pk, lh), &sig)| {
+                (pk.to_pubkeyhash(SigType::Schnorr) == pkh.0 && lh == pkh.1).then_some((pk, sig))
             })
-            .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::ecdsa::Signature> {
@@ -320,8 +320,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         self.psbt_input()
             .partial_sigs
             .iter()
-            .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
-            .map(|(pk, sig)| (*pk, *sig))
+            .find_map(|(&pk, &sig)| (pk.to_pubkeyhash(SigType::Ecdsa) == *pkh).then_some((pk, sig)))
     }
 
     fn check_after(&self, n: absolute::LockTime) -> bool {
@@ -387,13 +386,9 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
 
     // Check well-formedness of input data
     for (index, input) in psbt.inputs.iter().enumerate() {
-        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
-        let target_ecdsa_sighash_ty = match input.sighash_type {
-            Some(psbt_hash_ty) => psbt_hash_ty
-                .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
-            None => sighash::EcdsaSighashType::All,
-        };
+        let target_ecdsa_sighash_ty = input
+            .ecdsa_hash_ty()
+            .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?;
         for (key, ecdsa_sig) in &input.partial_sigs {
             let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32)
                 .map_err(|_| {
@@ -599,20 +594,10 @@ impl PsbtExt for Psbt {
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
         // Actually construct the witnesses
-        let mut errors = vec![];
-        for index in 0..self.inputs.len() {
-            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ false) {
-                Ok(..) => {}
-                Err(e) => {
-                    errors.push(e);
-                }
-            }
-        }
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        let errors = (0..self.inputs.len())
+            .filter_map(|i| finalizer::finalize_input(self, i, secp, /*allow_mall*/ false).err())
+            .collect::<Vec<Error>>();
+        errors.is_empty().then_some(()).ok_or(errors)
     }
 
     fn finalize<C: secp256k1::Verification>(
@@ -629,20 +614,10 @@ impl PsbtExt for Psbt {
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
-        let mut errors = vec![];
-        for index in 0..self.inputs.len() {
-            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ true) {
-                Ok(..) => {}
-                Err(e) => {
-                    errors.push(e);
-                }
-            }
-        }
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        let errors = (0..self.inputs.len())
+            .filter_map(|i| finalizer::finalize_input(self, i, secp, /*allow_mall*/ true).err())
+            .collect::<Vec<Error>>();
+        errors.is_empty().then_some(()).ok_or(errors)
     }
 
     fn finalize_mall<C: secp256k1::Verification>(
