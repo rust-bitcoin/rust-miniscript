@@ -148,7 +148,7 @@ where
     }
 
     fn provider_lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<usize> {
-        Satisfier::lookup_tap_key_spend_sig(self, pk).map(|s| s.to_vec().len())
+        Satisfier::lookup_tap_key_spend_sig(self, pk).map(|s| s.serialize().len())
     }
 
     fn provider_lookup_tap_leaf_script_sig(
@@ -156,7 +156,7 @@ where
         pk: &Pk,
         leaf_hash: &TapLeafHash,
     ) -> Option<usize> {
-        Satisfier::lookup_tap_leaf_script_sig(self, pk, leaf_hash).map(|s| s.to_vec().len())
+        Satisfier::lookup_tap_leaf_script_sig(self, pk, leaf_hash).map(|s| s.serialize().len())
     }
 
     fn provider_lookup_raw_pkh_pk(&self, hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
@@ -179,7 +179,7 @@ where
         hash: &(hash160::Hash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, usize)> {
         Satisfier::lookup_raw_pkh_tap_leaf_script_sig(self, hash)
-            .map(|(pk, sig)| (pk, sig.to_vec().len()))
+            .map(|(pk, sig)| (pk, sig.serialize().len()))
     }
 
     fn provider_lookup_sha256(&self, hash: &Pk::Sha256) -> bool {
