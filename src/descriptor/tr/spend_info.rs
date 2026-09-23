@@ -59,13 +59,10 @@ impl ParentStack {
     fn new() -> Self { Self { data: [(false, 0); 128], len: 0 } }
 
     fn push(&mut self, val: (bool, usize)) {
-        // We know that the depth is limited to 128 by the bounds check in `TapTree::combine`
-        // and other places, so this strictly shouldn't happen with valid trees.
-        debug_assert!(self.len < 128, "ParentStack overflow");
-        if self.len < 128 {
-            self.data[self.len] = val;
-            self.len += 1;
-        }
+        // The stack never grows past the depth of a leaf, and a `TapTree` cannot be built with
+        // leaves deeper than `TAPROOT_CONTROL_MAX_NODE_COUNT`, so `len` stays in bounds.
+        self.data[self.len] = val;
+        self.len += 1;
     }
 
     fn pop(&mut self) -> Option<(bool, usize)> {
