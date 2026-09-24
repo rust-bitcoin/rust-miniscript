@@ -810,7 +810,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     // We check before compiling that non-malleable satisfactions exist, and it appears that
     // there are no cases when malleable satisfactions beat non-malleable ones (and if there
     // are, we don't want to use them). Anyway, detect these and early return.
-    if !elem.ms.ty.mall.non_malleable {
+    if !elem.ms.ty.mall.is_non_malleable() {
         return false;
     }
 
@@ -1122,12 +1122,14 @@ pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
 ) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
     let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
     let x = &*best_t(&mut policy_cache, policy, PositiveF64::ONE, None)?.ms;
-    if !x.ty.mall.signed {
-        Err(CompilerError::TopLevelSigless)
-    } else if !x.ty.mall.non_malleable {
-        Err(CompilerError::ImpossibleNonMalleableCompilation)
-    } else {
-        Ok(x.clone())
+    match x.ty.mall {
+        // Malleable candidates are never inserted into the compilation map, so
+        // reaching this is a bug rather than a property of the policy.
+        types::Malleability::Malleable => Err(CompilerError::ImpossibleNonMalleableCompilation),
+        types::Malleability::NonMalleable { signed: false, .. } => {
+            Err(CompilerError::TopLevelSigless)
+        }
+        types::Malleability::NonMalleable { .. } => Ok(x.clone()),
     }
 }
 
@@ -1167,7 +1169,7 @@ where
         .filter(|(key, val)| {
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
-                && val.ms.ty.mall.dissat == types::Dissat::Unique
+                && val.ms.ty.mall.dissat() == Some(types::Dissat::Unique)
                 && key.dissat_prob == dissat_prob
         })
         .map(|(_, val)| val)
