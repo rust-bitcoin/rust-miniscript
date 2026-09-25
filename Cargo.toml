@@ -142,6 +142,9 @@ workspace = true
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
 
+[workspace.metadata]
+rbmt.version = "0.5.3"
+
 [workspace.metadata.rbmt.toolchains]
 nightly = "nightly-2026-09-19"
 stable = "1.95.0"

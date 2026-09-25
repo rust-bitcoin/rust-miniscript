@@ -15,19 +15,19 @@ lint:
 
 # Run the formatter.
 fmt:
-  cargo +nightly fmt
+  cargo rbmt fmt
 
 # Check the formatting.
 fmt-check:
-  cargo +nightly fmt --check
+  cargo rbmt fmt --check
 
 # Run the benchmark suite.
 bench:
-  RUSTFLAGS='--cfg=bench' cargo +nightly bench benchmarks
+  RUSTFLAGS='--cfg=bench' cargo rbmt run --toolchain nightly -- bench benchmarks
 
 # Build the docs (same as for docs.rs).
 docsrs:
-  RUSTDOCFLAGS="--cfg docsrs" cargo +nightly rustdoc --all-features -- -D rustdoc::broken-intra-doc-links
+  cargo rbmt docs
 
 # Quick and dirty CI useful for pre-push checks.
 sane: fmt-check lint
