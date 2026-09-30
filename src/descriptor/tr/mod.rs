@@ -239,6 +239,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Converts keys from one type of public key to another.
+    ///
+    /// Translates the internal key before the script tree, preserving textual key order.
     pub fn translate_pk<T>(
         &self,
         translate: &mut T,
@@ -246,12 +248,12 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     where
         T: Translator<Pk>,
     {
+        let internal_key = translate.pk(&self.internal_key)?;
         let tree = match &self.tree {
             Some(tree) => Some(tree.translate_pk(translate)?),
             None => None,
         };
-        let translate_desc =
-            Tr::new(translate.pk(&self.internal_key)?, tree).map_err(TranslateErr::OuterError)?;
+        let translate_desc = Tr::new(internal_key, tree).map_err(TranslateErr::OuterError)?;
         Ok(translate_desc)
     }
 }
