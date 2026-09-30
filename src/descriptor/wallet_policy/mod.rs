@@ -142,6 +142,7 @@ impl FromStr for WalletPolicy {
 
 /// WalletPolicy errors
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
 pub enum WalletPolicyError {
     /// A derivation path must be present when parsing a KeyExpression
     KeyExpressionParseMustHaveDerivPath,
