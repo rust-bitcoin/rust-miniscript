@@ -8,7 +8,10 @@
 
 use bitcoin::key::{Parity, TapTweak as _, TweakedPublicKey, UntweakedPublicKey};
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TaprootMerkleBranch};
+use bitcoin::taproot::{
+    ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TaprootMerkleBranch,
+    TAPROOT_CONTROL_MAX_NODE_COUNT,
+};
 use bitcoin::{Script, ScriptBuf};
 
 use crate::miniscript::context::Tap;
@@ -47,6 +50,39 @@ impl BitStack128 {
     }
 }
 
+/// Stack of `(bool, usize)` elements, with a maximum capacity of `TAPROOT_CONTROL_MAX_NODE_COUNT`.
+///
+/// Avoids heap allocation. Flags and indices are kept apart because a pair would be
+/// padded to 16 bytes, twice what an index needs.
+struct ParentStack {
+    done_left: BitStack128,
+    indices: [usize; TAPROOT_CONTROL_MAX_NODE_COUNT],
+}
+
+impl ParentStack {
+    fn new() -> Self {
+        Self { done_left: BitStack128::default(), indices: [0; TAPROOT_CONTROL_MAX_NODE_COUNT] }
+    }
+
+    fn push(&mut self, val: (bool, usize)) {
+        // The stack never grows past the depth of a leaf, and a `TapTree` cannot be built with
+        // leaves deeper than `TAPROOT_CONTROL_MAX_NODE_COUNT`, so the last index written is
+        // `TAPROOT_CONTROL_MAX_NODE_COUNT - 1` and `indices` is exactly big enough.
+        let (done_left_child, index) = val;
+
+        // Written first: the bounds check is active in release, the shift in `BitStack128` is not.
+        self.indices[self.len()] = index;
+        self.done_left.push(done_left_child);
+    }
+
+    fn pop(&mut self) -> Option<(bool, usize)> {
+        let done_left_child = self.done_left.pop()?;
+        Some((done_left_child, self.indices[self.len()]))
+    }
+
+    fn len(&self) -> usize { usize::from(self.done_left.height) }
+}
+
 /// A structure which can be used to obtain control blocks and other information
 /// needed for Taproot spends.
 ///
@@ -63,7 +99,7 @@ pub struct TrSpendInfo<Pk: MiniscriptKey> {
 impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
     fn nodes_from_tap_tree(tree: &super::TapTree<Pk>) -> Vec<TrSpendInfoNode<Pk>> {
         let mut nodes = vec![];
-        let mut parent_stack = Vec::with_capacity(128); // FIXME use ArrayVec here
+        let mut parent_stack = ParentStack::new();
         for leaf in tree.leaves() {
             let depth = usize::from(leaf.depth());
             let script = leaf.miniscript().encode();
@@ -185,7 +221,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
         TrSpendInfoIter {
             spend_info: self,
             index: 0,
-            merkle_stack: Vec::with_capacity(128),
+            merkle_stack: Vec::with_capacity(TAPROOT_CONTROL_MAX_NODE_COUNT),
             done_left_stack: BitStack128::default(),
         }
     }
