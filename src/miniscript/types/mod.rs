@@ -180,15 +180,17 @@ impl fmt::Display for Type {
         if self.corr.unit {
             f.write_str("u")?;
         }
-        f.write_str(match self.mall.dissat {
-            Dissat::None => "f",
-            Dissat::Unique => "e",
-            Dissat::Unknown => "",
-        })?;
-        if self.mall.signed {
-            f.write_str("s")?;
-        }
-        if self.mall.non_malleable {
+        // The malleability properties of a malleable fragment say nothing
+        // about it, so they are not displayed for one.
+        if let Malleability::NonMalleable { dissat, signed } = self.mall {
+            f.write_str(match dissat {
+                Dissat::None => "f",
+                Dissat::Unique => "e",
+                Dissat::Unknown => "",
+            })?;
+            if signed {
+                f.write_str("s")?;
+            }
             f.write_str("m")?;
         }
         Ok(())
@@ -212,10 +214,12 @@ impl Type {
 
     /// Confirm invariants of the type checker.
     fn sanity_checks(&self) {
-        debug_assert!(!self.corr.dissatisfiable || self.mall.dissat != Dissat::None);
-        debug_assert!(self.mall.dissat == Dissat::None || self.corr.base != Base::V);
-        debug_assert!(self.mall.signed || self.corr.base != Base::K);
-        debug_assert!(self.mall.non_malleable || self.corr.input != Input::Zero);
+        if let Malleability::NonMalleable { dissat, signed } = self.mall {
+            debug_assert!(!self.corr.dissatisfiable || dissat != Dissat::None);
+            debug_assert!(dissat == Dissat::None || self.corr.base != Base::V);
+            debug_assert!(signed || self.corr.base != Base::K);
+        }
+        debug_assert!(self.mall.is_non_malleable() || self.corr.input != Input::Zero);
         self.corr.sanity_checks();
     }
 
