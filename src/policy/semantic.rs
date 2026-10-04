@@ -10,7 +10,7 @@ use core::{fmt, str};
 use bitcoin::{absolute, relative};
 
 use super::ENTAILMENT_MAX_TERMINALS;
-use crate::iter::{Tree, TreeLike};
+use crate::iter::{StackExt as _, Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
 use crate::{
@@ -109,7 +109,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut translated = vec![];
-        for data in self.rtl_post_order_iter() {
+        for data in self.post_order_iter() {
             let new_policy = match data.node {
                 Unsatisfiable => Unsatisfiable,
                 Trivial => Trivial,
@@ -120,7 +120,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Hash160(ref h) => t.hash160(h).map(Hash160)?,
                 Older(ref n) => Older(*n),
                 After(ref n) => After(*n),
-                Thresh(ref thresh) => Thresh(thresh.map_ref(|_| translated.pop().unwrap())),
+                Thresh(ref thresh) => Thresh(translated.pop_thresh(thresh)),
             };
             translated.push(Arc::new(new_policy));
         }
@@ -171,9 +171,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut n_terminals = vec![];
-        for data in self.rtl_post_order_iter() {
+        for data in self.post_order_iter() {
             let num = match data.node {
-                Thresh(thresh) => (0..thresh.n()).map(|_| n_terminals.pop().unwrap()).sum(),
+                Thresh(thresh) => n_terminals.pop_n(thresh.n()).sum(),
                 Trivial | Unsatisfiable => 0,
                 _leaf => 1,
             };
@@ -515,7 +515,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut at_age = vec![];
-        for data in Arc::new(self).rtl_post_order_iter() {
+        for data in Arc::new(self).post_order_iter() {
             let new_policy = match data.node.as_ref() {
                 Older(ref t) => {
                     if relative::LockTime::from(*t).is_implied_by(age) {
@@ -524,7 +524,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         Some(Unsatisfiable)
                     }
                 }
-                Thresh(ref thresh) => Some(Thresh(thresh.map_ref(|_| at_age.pop().unwrap()))),
+                Thresh(ref thresh) => Some(Thresh(at_age.pop_thresh(thresh))),
                 _ => None,
             };
             match new_policy {
@@ -545,7 +545,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut at_age = vec![];
-        for data in Arc::new(self).rtl_post_order_iter() {
+        for data in Arc::new(self).post_order_iter() {
             let new_policy = match data.node.as_ref() {
                 After(t) => {
                     if absolute::LockTime::from(*t).is_implied_by(n) {
@@ -554,7 +554,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         Some(Unsatisfiable)
                     }
                 }
-                Thresh(ref thresh) => Some(Thresh(thresh.map_ref(|_| at_age.pop().unwrap()))),
+                Thresh(ref thresh) => Some(Thresh(at_age.pop_thresh(thresh))),
                 _ => None,
             };
             match new_policy {
@@ -587,15 +587,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut minimum_n_keys = vec![];
-        for data in self.rtl_post_order_iter() {
+        for data in self.post_order_iter() {
             let minimum_n_key = match data.node {
                 Unsatisfiable => None,
                 Trivial | After(..) | Older(..) | Sha256(..) | Hash256(..) | Ripemd160(..)
                 | Hash160(..) => Some(0),
                 Key(..) => Some(1),
                 Thresh(ref thresh) => {
-                    let mut sublens = (0..thresh.n())
-                        .filter_map(|_| minimum_n_keys.pop().unwrap())
+                    let mut sublens = minimum_n_keys
+                        .pop_n(thresh.n())
+                        .flatten()
                         .collect::<Vec<usize>>();
                     if sublens.len() < thresh.k() {
                         // Not enough branches are satisfiable
@@ -623,10 +624,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         use Policy::*;
 
         let mut sorted = vec![];
-        for data in Arc::new(self).rtl_post_order_iter() {
+        for data in Arc::new(self).post_order_iter() {
             let new_policy = match data.node.as_ref() {
                 Thresh(ref thresh) => {
-                    let mut new_thresh = thresh.map_ref(|_| sorted.pop().unwrap());
+                    let mut new_thresh = sorted.pop_thresh(thresh);
                     new_thresh.data_mut().sort();
                     Some(Thresh(new_thresh))
                 }
