@@ -12,6 +12,7 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::compat::{absolute, relative};
 use bitcoin::hashes::{hash160, sha256d, Hash};
 use bitcoin::psbt::{self, Psbt};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
@@ -19,7 +20,7 @@ use bitcoin::secp256k1;
 use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
 use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, relative, transaction, Script, ScriptBuf};
+use bitcoin::{bip32, transaction, Script, ScriptBuf};
 
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
@@ -331,7 +332,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
             return false;
         }
 
-        let lock_time = self.psbt.unsigned_tx.lock_time;
+        let lock_time = self.psbt.unsigned_tx.lock_time.to_stable();
 
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
@@ -344,7 +345,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
             return false;
         }
 
-        <dyn Satisfier<Pk>>::check_older(&seq, n)
+        <dyn Satisfier<Pk>>::check_older(&seq.to_stable(), n)
     }
 
     fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
@@ -1364,6 +1365,7 @@ impl PsbtSighashMsg {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_types)]
 mod tests {
     use std::str::FromStr;
 
@@ -1563,7 +1565,7 @@ mod tests {
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: transaction::Version::ONE,
-            lock_time: absolute::LockTime::ZERO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: Amount::from_sat(1_000),
@@ -1576,7 +1578,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: transaction::Version::ONE,
-            lock_time: absolute::LockTime::ZERO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
             input: vec![TxIn {
                 previous_output: OutPoint { txid: non_witness_utxo.compute_txid(), vout: 0 },
                 ..Default::default()
@@ -1625,7 +1627,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: transaction::Version::ONE,
-            lock_time: absolute::LockTime::ZERO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: Amount::from_sat(1_000),

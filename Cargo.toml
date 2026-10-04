@@ -9,7 +9,7 @@ description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 keywords = [ "crypto", "bitcoin", "miniscript", "script" ]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.63.0"
+rust-version = "1.74.0"
 
 [features]
 default = ["std"]
@@ -23,7 +23,7 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.11.0", default-features = false, features = ["alloc"] }
-bitcoin = { version = "0.32.6", default-features = false }
+bitcoin = { version = "0.32.101", default-features = false, features = ["compat"] }
 hex = { package = "hex-conservative", default-features = false, features = ["alloc"], version = "1.0.0" }
 
 serde = { version = "1.0.103", optional = true }
@@ -73,3 +73,7 @@ required-features = ["compiler"]
 [workspace]
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
+
+[patch.crates-io]
+# The compat layer branch: https://github.com/satsfy/rust-bitcoin/pull/38
+bitcoin = { git = "https://github.com/satsfy/rust-bitcoin", branch = "units-compat-demo2" }

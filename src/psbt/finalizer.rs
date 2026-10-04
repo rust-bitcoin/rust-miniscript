@@ -330,8 +330,8 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     // corrected, there should be no errors
     // Interpreter check
     {
-        let cltv = psbt.unsigned_tx.lock_time;
-        let csv = psbt.unsigned_tx.input[index].sequence;
+        let cltv = psbt.unsigned_tx.lock_time.to_stable();
+        let csv = psbt.unsigned_tx.input[index].sequence.to_stable();
         let interpreter =
             interpreter::Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
                 .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
@@ -463,8 +463,9 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_types)]
 mod tests {
-    use bitcoin::{absolute, transaction, Transaction, TxIn};
+    use bitcoin::{transaction, Transaction, TxIn};
     use hex;
 
     use super::*;
@@ -485,7 +486,7 @@ mod tests {
     fn finalize_skips_already_finalized_input() {
         let tx = Transaction {
             version: transaction::Version::ONE,
-            lock_time: absolute::LockTime::ZERO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
             input: vec![TxIn::default()],
             output: vec![],
         };

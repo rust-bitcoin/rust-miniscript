@@ -10,8 +10,9 @@
 use core::convert::TryFrom;
 use core::fmt;
 
+use bitcoin::compat::Weight;
 use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf, Weight};
+use bitcoin::{script, Address, Network, ScriptBuf};
 
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
