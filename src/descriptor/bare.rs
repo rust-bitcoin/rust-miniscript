@@ -59,7 +59,7 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     /// sighash suffix.
     ///
     /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let scriptsig_size = self.ms.max_satisfaction_size()?;
         // scriptSig varint difference between non-satisfied (0) and satisfied
@@ -76,7 +76,7 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     /// scriptSig and witness stack length.
     ///
     /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     #[deprecated(
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
@@ -219,7 +219,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// sighash suffix.
     ///
     /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Weight {
         // OP_72 + <sig(71)+sigHash(1)> + OP_33 + <pubkey>
         let scriptsig_size = 73 + BareCtx::pk_len(&self.pk);

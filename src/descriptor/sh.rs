@@ -162,7 +162,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// sighash suffix.
     ///
     /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let (scriptsig_size, witness_size) = match self.inner {
             // add weighted script sig, len byte stays the same
@@ -205,7 +205,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// scriptSig and witness stack length.
     ///
     /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     #[deprecated(
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
