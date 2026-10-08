@@ -60,6 +60,8 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
+    ///
+    /// Use `.unwrap_or(Weight::MAX)` if you want to avoid the error path here.
     pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let scriptsig_size = self.ms.max_satisfaction_size()?;
         // scriptSig varint difference between non-satisfied (0) and satisfied

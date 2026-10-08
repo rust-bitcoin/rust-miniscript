@@ -341,6 +341,8 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
+    ///
+    /// Use `.unwrap_or(Weight::MAX)` if you want to avoid the error path here.
     pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let weight = match *self {
             Self::Bare(ref bare) => bare.max_weight_to_satisfy()?,

@@ -163,6 +163,8 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
+    ///
+    /// Use `.unwrap_or(Weight::MAX)` if you want to avoid the error path here.
     pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let (scriptsig_size, witness_size) = match self.inner {
             // add weighted script sig, len byte stays the same
