@@ -218,8 +218,6 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Assumes all ECDSA signatures are 73 bytes, including push opcode and
     /// sighash suffix.
     ///
-    /// # Errors
-    /// When the descriptor is impossible to satisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Weight {
         // OP_72 + <sig(71)+sigHash(1)> + OP_33 + <pubkey>
         let scriptsig_size = 73 + BareCtx::pk_len(&self.pk);
