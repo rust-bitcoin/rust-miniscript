@@ -17,7 +17,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptContext, Tap,
-    Threshold, ToPublicKey, TranslateErr, Translator,
+    Threshold, ToPublicKey, TranslateErr, Translator, ValidationParams,
 };
 
 mod spend_info;
@@ -378,7 +378,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 let script = Miniscript::from_tree(node)?;
                 // FIXME hack for https://github.com/rust-bitcoin/rust-miniscript/issues/734
                 script
-                    .validate(&Tap::CONSENSUS)
+                    .validate(&ValidationParams { allow_raw_pkh: false, ..Tap::CONSENSUS })
                     .map_err(Error::Validation)?;
 
                 tree_builder.push_leaf(script);
@@ -552,6 +552,24 @@ mod tests {
         assert_display_roundtrip(&descriptor());
         assert_display_roundtrip("tr(acc0,{pk(acc1),{pk(acc2),pk(acc3)}})");
         assert_display_roundtrip("tr(acc0,{{pk(acc1),pk(acc2)},{pk(acc3),pk(acc4)}})");
+    }
+
+    #[test]
+    fn tr_rejects_raw_pkh_leaf() {
+        let hash = "1111111111111111111111111111111111111111";
+        for desc in [
+            format!("tr(acc0,c:expr_raw_pkh({hash}))"),
+            format!("tr(acc0,{{pk(acc1),c:expr_raw_pkh({hash})}})"),
+            format!("tr(acc0,{{pk(acc1),and_v(v:pk(acc2),c:expr_raw_pkh({hash}))}})"),
+        ] {
+            assert!(
+                matches!(
+                    Tr::<String>::from_str(&desc),
+                    Err(Error::Validation(crate::ValidationError::IllegalRawPkh))
+                ),
+                "{desc}"
+            );
+        }
     }
 
     #[test]
