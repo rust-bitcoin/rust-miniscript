@@ -1,6 +1,6 @@
 ### Security Advisory on Miniscript MinimalIF bug (`d:` wrapper is not `u` )
 
-_ALl of the affected versions have been yanked_. Users should upgrade to `1.1.0`,
+_All of the affected versions have been yanked_. Users should upgrade to `1.1.0`,
 `2.1.0`, `3.1.0`, `4.1.0`, `5.2.0`, `6.1.0` or `7.0.0`.
 
 Andrew Poelstra recently discovered a vulnerability in miniscript spec that could
