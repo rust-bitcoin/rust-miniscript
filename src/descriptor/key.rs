@@ -1018,6 +1018,9 @@ impl DescriptorPublicKey {
     /// four bytes of the HASH160 of its serialization (33 bytes for a full key, 32 bytes for an
     /// x-only key). This matches the key origin Bitcoin Core reports for keys without origin
     /// information, and is never `0x00000000` for a key without origin.
+    ///
+    /// The exception is a `musig()` key, which has no single master key: its fingerprint is
+    /// `0x00000000`.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
             Self::XPub(ref xpub) => {
@@ -1062,7 +1065,8 @@ impl DescriptorPublicKey {
     /// can get full paths by appending one additional derivation step, according
     /// to the wildcard type (hardened or normal).
     ///
-    /// For multipath extended keys, this returns `None`.
+    /// For multipath extended keys, this returns `None`. It also returns `None` for `musig()`
+    /// keys, which have no single key source.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         match *self {
             Self::XPub(ref xpub) => {
@@ -1089,6 +1093,9 @@ impl DescriptorPublicKey {
     /// For wildcard keys this will return the path up to the wildcard, so you
     /// can get full paths by appending one additional derivation step, according
     /// to the wildcard type (hardened or normal).
+    ///
+    /// For `musig()` keys these are the aggregate-level paths, relative to the BIP328 synthetic
+    /// xpub rather than to a master key.
     pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
         match self {
             Self::MultiXPub(xpub) => {
@@ -2070,16 +2077,21 @@ impl DefiniteDescriptorKey {
     /// The fingerprint of the master key associated with this key.
     ///
     /// See [`DescriptorPublicKey::master_fingerprint`] for how this is computed for keys without
-    /// origin information.
+    /// origin information, including `musig()` keys.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint { self.0.master_fingerprint() }
 
     /// Full path from the master key if not a multipath extended key.
+    ///
+    /// `None` for `musig()` keys, which have no single key source.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         self.0.full_derivation_path()
     }
 
     /// Full paths from the master key. The vector will contain just one path for single
     /// keys, and multiple ones for multipath extended keys
+    ///
+    /// For `musig()` keys these are the aggregate-level paths, relative to the BIP328 synthetic
+    /// xpub rather than to a master key.
     pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
         self.0.full_derivation_paths()
     }

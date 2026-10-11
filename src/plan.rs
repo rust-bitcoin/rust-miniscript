@@ -323,6 +323,9 @@ impl Plan<DefiniteDescriptorKey> {
     /// This will only add the metadata for items required to complete this plan. For example, if
     /// there are multiple keys present in the descriptor, only the few used by this plan will be
     /// added to the PSBT.
+    ///
+    /// `musig()` keys get no `tap_key_origins` entry: they have no single key source, and PSBT
+    /// MuSig2 fields (BIP373) are not supported yet.
     pub fn update_psbt_input(&self, input: &mut psbt::Input) {
         if let Descriptor::Tr(tr) = &self.descriptor {
             enum SpendType {
@@ -363,8 +366,12 @@ impl Plan<DefiniteDescriptorKey> {
                                 _ => {},
                             }
 
-                            for path in pk.full_derivation_paths() {
-                                data.key_origins.insert(raw_pk, (pk.master_fingerprint(), path));
+                            // A `musig()` key would get a fabricated `00000000` origin here.
+                            if !is_musig(pk) {
+                                for path in pk.full_derivation_paths() {
+                                    data.key_origins
+                                        .insert(raw_pk, (pk.master_fingerprint(), path));
+                                }
                             }
                         }
                         Placeholder::SchnorrSigPkHash(_, tap_leaf_hash, _) => {
@@ -555,16 +562,27 @@ fn is_key_direct_child_of(
     false
 }
 
+// A `musig()` key has no single key source: its `master_fingerprint()` is `00000000` for every
+// aggregate. `Assets` identify keys by key source, so they must never match it, or all
+// aggregates would look like the same key.
+fn is_musig(pk: &DefiniteDescriptorKey) -> bool {
+    matches!(pk.as_descriptor_public_key(), DescriptorPublicKey::Musig(_))
+}
+
 impl Assets {
     pub(crate) fn has_ecdsa_key(&self, pk: &DefiniteDescriptorKey) -> bool {
-        self.keys.iter().any(|(keysource, can_sign)| {
-            can_sign.ecdsa
-                && pk.master_fingerprint() == keysource.0
-                && is_key_direct_child_of(pk, &keysource.1)
-        })
+        !is_musig(pk)
+            && self.keys.iter().any(|(keysource, can_sign)| {
+                can_sign.ecdsa
+                    && pk.master_fingerprint() == keysource.0
+                    && is_key_direct_child_of(pk, &keysource.1)
+            })
     }
 
     pub(crate) fn has_taproot_internal_key(&self, pk: &DefiniteDescriptorKey) -> Option<usize> {
+        if is_musig(pk) {
+            return None;
+        }
         self.keys.iter().find_map(|(keysource, can_sign)| {
             if !can_sign.taproot.key_spend
                 || pk.master_fingerprint() != keysource.0
@@ -582,6 +600,9 @@ impl Assets {
         pk: &DefiniteDescriptorKey,
         tap_leaf_hash: &TapLeafHash,
     ) -> Option<usize> {
+        if is_musig(pk) {
+            return None;
+        }
         self.keys.iter().find_map(|(keysource, can_sign)| {
             if !can_sign.taproot.script_spend.is_available(tap_leaf_hash)
                 || pk.master_fingerprint() != keysource.0
@@ -648,7 +669,11 @@ impl AssetProvider<DefiniteDescriptorKey> for Assets {
 impl FromIterator<DescriptorPublicKey> for Assets {
     fn from_iter<I: IntoIterator<Item = DescriptorPublicKey>>(iter: I) -> Self {
         let mut keys = BTreeSet::new();
-        for pk in iter {
+        // `musig()` keys have no key source to record; see `is_musig`.
+        for pk in iter
+            .into_iter()
+            .filter(|pk| !matches!(pk, DescriptorPublicKey::Musig(_)))
+        {
             for deriv_path in pk.full_derivation_paths() {
                 keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
             }
@@ -1260,6 +1285,150 @@ mod test {
             .update_psbt_input(&mut psbt.inputs[0]);
         psbt.sign(&root_xpriv, &secp).unwrap();
         assert_eq!(psbt.inputs[0].tap_script_sigs.len(), 1, "Script path was not signed");
+    }
+
+    // Keys for the `musig()` tests below. `XPUB_*` are the BIP390 test vector xpubs.
+    const MUSIG_K1: &str = "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+    const MUSIG_K2: &str = "03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
+    const MUSIG_K3: &str = "023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66";
+    const PLAIN_KEY: &str = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+    const XPUB_A: &str = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+    const XPUB_B: &str = "xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y";
+
+    fn dummy_taproot_sig() -> bitcoin::taproot::Signature {
+        bitcoin::taproot::Signature {
+            signature: bitcoin::secp256k1::schnorr::Signature::from_slice(&[1; 64]).unwrap(),
+            sighash_type: bitcoin::TapSighashType::Default,
+        }
+    }
+
+    #[test]
+    fn test_plan_assets_never_match_musig() {
+        // A `musig()` key reports fingerprint 00000000 and its aggregate-level path, so even
+        // assets holding exactly those key sources must not match it.
+        let mut assets = Assets::new();
+        for path in ["m", "m/0"] {
+            assets.keys.insert((
+                (bip32::Fingerprint::default(), bip32::DerivationPath::from_str(path).unwrap()),
+                CanSign::default(),
+            ));
+        }
+        let leaf_hash = TapLeafHash::from_script(&ScriptBuf::new(), LeafVersion::TapScript);
+        for key in [
+            format!("musig({},{})", MUSIG_K1, MUSIG_K2),
+            format!("musig({},{})/0/7", XPUB_A, XPUB_B),
+        ] {
+            let pk = DefiniteDescriptorKey::from_str(&key).unwrap();
+            assert_eq!(pk.master_fingerprint(), bip32::Fingerprint::default());
+            assert!(!assets.has_ecdsa_key(&pk), "{}", key);
+            assert_eq!(assets.has_taproot_internal_key(&pk), None, "{}", key);
+            assert_eq!(assets.has_taproot_script_key(&pk, &leaf_hash), None, "{}", key);
+        }
+        for desc in [
+            format!("tr(musig({},{}))", MUSIG_K1, MUSIG_K2),
+            format!("tr(musig({},{})/0/7)", XPUB_A, XPUB_B),
+            format!("tr({},pk(musig({},{})))", MUSIG_K3, MUSIG_K1, MUSIG_K2),
+        ] {
+            let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+            assert!(desc.clone().into_plan(&assets).is_err(), "{}", desc);
+        }
+
+        // Assets built from one aggregate don't record it, so they can't plan another.
+        let ours = DescriptorPublicKey::from_str(&format!("musig({},{})", MUSIG_K1, MUSIG_K2));
+        let assets = Assets::new().add(ours.unwrap());
+        assert!(assets.keys.is_empty());
+        let theirs = format!("tr(musig({},{}))", MUSIG_K2, MUSIG_K3);
+        let theirs = Descriptor::<DefiniteDescriptorKey>::from_str(&theirs).unwrap();
+        assert!(theirs.into_plan(&assets).is_err());
+    }
+
+    #[test]
+    fn test_plan_musig_fallbacks() {
+        let assets = Assets::new().add(DescriptorPublicKey::from_str(PLAIN_KEY).unwrap());
+        let plain_key = DefiniteDescriptorKey::from_str(PLAIN_KEY)
+            .unwrap()
+            .to_x_only_pubkey();
+
+        // Key path: a musig() key in a leaf doesn't get in the way.
+        let desc = format!("tr({},pk(musig({},{})))", PLAIN_KEY, MUSIG_K1, MUSIG_K2);
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let mut psbt_input = bitcoin::psbt::Input::default();
+        desc.into_plan(&assets)
+            .unwrap()
+            .update_psbt_input(&mut psbt_input);
+        assert_eq!(psbt_input.tap_internal_key, Some(plain_key));
+        assert!(psbt_input.tap_scripts.is_empty(), "Unexpected tap_scripts");
+        assert_leaf_hashes(&psbt_input, &[]);
+
+        // Script path: a musig() internal key falls back to the plain key's leaf.
+        let desc = format!("tr(musig({},{}),pk({}))", MUSIG_K1, MUSIG_K2, PLAIN_KEY);
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let mut psbt_input = bitcoin::psbt::Input::default();
+        desc.into_plan(&assets)
+            .unwrap()
+            .update_psbt_input(&mut psbt_input);
+        assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
+        assert_eq!(
+            psbt_input.tap_key_origins.keys().collect::<Vec<_>>(),
+            vec![&plain_key],
+            "Only the plain key has an origin"
+        );
+        assert_leaf_hashes(&psbt_input, &[tap_script_leaf_hash(&psbt_input)]);
+    }
+
+    #[test]
+    fn test_plan_update_psbt_musig_no_origins() {
+        use bitcoin::{transaction, Psbt, Transaction, TxIn};
+
+        // Providers other than `Assets` can legitimately hold a signature for a musig() key,
+        // e.g. once a MuSig2 session has finished. Such plans still update the PSBT, but
+        // without a fabricated origin for the aggregate.
+        let musig = format!("musig({},{})", MUSIG_K2, MUSIG_K3);
+
+        // Script path, planned from a signature map.
+        let desc = format!("tr({},pk({}))", MUSIG_K1, musig);
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let leaf_hash = match desc {
+            Descriptor::Tr(ref tr) => tr.spend_info().leaves().next().unwrap().leaf_hash(),
+            _ => unreachable!(),
+        };
+        let mut sigs = BTreeMap::new();
+        sigs.insert(
+            (DefiniteDescriptorKey::from_str(&musig).unwrap(), leaf_hash),
+            dummy_taproot_sig(),
+        );
+        let mut psbt_input = bitcoin::psbt::Input::default();
+        desc.into_plan(&sigs)
+            .unwrap()
+            .update_psbt_input(&mut psbt_input);
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
+        assert!(psbt_input.tap_key_origins.is_empty(), "Unexpected tap_key_origins");
+
+        // Key path, planned from a PSBT that holds the final MuSig2 signature.
+        let desc = format!("tr({})", musig);
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let aggregate = match desc {
+            Descriptor::Tr(ref tr) => tr.internal_key().to_x_only_pubkey(),
+            _ => unreachable!(),
+        };
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn::default()],
+            output: vec![],
+        };
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+        psbt.inputs[0].tap_internal_key = Some(aggregate);
+        psbt.inputs[0].tap_key_sig = Some(dummy_taproot_sig());
+        let satisfier = crate::psbt::PsbtInputSatisfier::new(&psbt, 0);
+        let mut psbt_input = bitcoin::psbt::Input::default();
+        desc.into_plan(&satisfier)
+            .unwrap()
+            .update_psbt_input(&mut psbt_input);
+        assert_eq!(psbt_input.tap_internal_key, Some(aggregate));
+        assert!(psbt_input.tap_key_origins.is_empty(), "Unexpected tap_key_origins");
     }
 
     #[test]
