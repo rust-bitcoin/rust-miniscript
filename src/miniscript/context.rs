@@ -405,7 +405,7 @@ impl ScriptContext for Legacy {
     ) -> Result<(), ScriptContextError> {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
-            Terminal::PkK(ref pk) => Self::check_pk(pk),
+            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Self::check_pk(pk),
             Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
@@ -527,7 +527,7 @@ impl ScriptContext for Segwitv0 {
     ) -> Result<(), ScriptContextError> {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
-            Terminal::PkK(ref pk) => Self::check_pk(pk),
+            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Self::check_pk(pk),
             Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
@@ -656,7 +656,7 @@ impl ScriptContext for Tap {
     ) -> Result<(), ScriptContextError> {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
-            Terminal::PkK(ref pk) => Self::check_pk(pk),
+            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Self::check_pk(pk),
             Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
@@ -783,7 +783,7 @@ impl ScriptContext for BareCtx {
     ) -> Result<(), ScriptContextError> {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
-            Terminal::PkK(ref key) => Self::check_pk(key),
+            Terminal::PkK(ref key) | Terminal::PkH(ref key) => Self::check_pk(key),
             Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
