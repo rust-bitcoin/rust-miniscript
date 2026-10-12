@@ -806,7 +806,14 @@ impl From<PublicKey> for DescriptorPublicKey {
 }
 
 impl DescriptorPublicKey {
-    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
+    /// The fingerprint of the master key associated with this key.
+    ///
+    /// If the key has origin information, this is the fingerprint from the origin. Otherwise
+    /// the key is treated as its own master key and its own fingerprint is returned: for an
+    /// extended key this is [`bip32::Xpub::fingerprint`], and for a single key it is the first
+    /// four bytes of the HASH160 of its serialization (33 bytes for a full key, 32 bytes for an
+    /// x-only key). This matches the key origin Bitcoin Core reports for keys without origin
+    /// information, and is never `0x00000000` for a key without origin.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
             Self::XPub(ref xpub) => {
@@ -1426,7 +1433,10 @@ impl DefiniteDescriptorKey {
         }
     }
 
-    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
+    /// The fingerprint of the master key associated with this key.
+    ///
+    /// See [`DescriptorPublicKey::master_fingerprint`] for how this is computed for keys without
+    /// origin information.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint { self.0.master_fingerprint() }
 
     /// Full path from the master key if not a multipath extended key.
@@ -1680,6 +1690,14 @@ mod test {
             .as_bytes(),
             b"\xb0\x59\x11\x6a"
         );
+        // Keys without origin are their own master key, so the fingerprint is never zero.
+        let xonly = DescriptorPublicKey::from_str(
+            "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+        assert_eq!(xonly.master_fingerprint().to_string(), "f678d9b7");
+        let definite = DefiniteDescriptorKey::new(xonly).unwrap();
+        assert_eq!(definite.master_fingerprint().to_string(), "f678d9b7");
     }
 
     fn get_multipath_xpub(key_str: &str, num_paths: usize) -> DescriptorMultiXKey<bip32::Xpub> {
