@@ -423,14 +423,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match policy {
                         Self::Trivial => None,
                         policy => {
-                            let leaf_compilations: Vec<_> = policy
+                            let leaf_compilations = policy
                                 .enumerate_policy_tree(PositiveF64::ONE)
                                 .into_iter()
                                 .filter(|x| x.1 != Arc::new(Self::Unsatisfiable))
                                 .map(|(prob, pol)| {
-                                    (prob, compiler::best_compilation(pol.as_ref()).unwrap())
+                                    Ok((prob, compiler::best_compilation(pol.as_ref())?))
                                 })
-                                .collect();
+                                .collect::<Result<Vec<_>, CompilerError>>()?;
 
                             if !leaf_compilations.is_empty() {
                                 let tap_tree = with_huffman_tree::<Pk>(leaf_compilations)?;
