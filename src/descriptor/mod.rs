@@ -660,6 +660,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// # Errors
     /// - If index ≥ 2^31
     /// - If the descriptor contains multi-path derivations
+    /// - If deriving a key would go deeper than BIP32's maximum depth of 255
     pub fn at_derivation_index(
         &self,
         index: u32,
@@ -705,8 +706,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// # Errors
     ///
-    /// This function will return an error for multi-path descriptors
-    /// or if hardened derivation is attempted,
+    /// This function will return an error for multi-path descriptors, if hardened derivation is
+    /// attempted, or if deriving a key would go deeper than BIP32's maximum depth of 255.
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
