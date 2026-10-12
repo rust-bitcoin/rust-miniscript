@@ -699,6 +699,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// # Errors
     /// - If the descriptor contains wildcards
     /// - If the descriptor contains multi-path derivations
+    /// - If deriving a key would go deeper than BIP32's maximum depth of 255
     pub fn into_definite(&self) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
         if self.has_wildcard() {
             return Err(NonDefiniteKeyError::Wildcard);
@@ -727,6 +728,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// - If the descriptor contains no wildcards
     /// - If index >= 2^31
     /// - If the descriptor contains multi-path derivations
+    /// - If deriving a key would go deeper than BIP32's maximum depth of 255
     #[allow(deprecated)]
     pub fn derive_at_index(&self, index: u32) -> DerivationResult {
         if !self.has_wildcard() {
@@ -796,8 +798,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// # Errors
     ///
-    /// This function will return an error for multi-path descriptors
-    /// or if hardened derivation is attempted,
+    /// This function will return an error for multi-path descriptors, if hardened derivation is
+    /// attempted, or if deriving a key would go deeper than BIP32's maximum depth of 255.
     #[allow(deprecated)]
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
