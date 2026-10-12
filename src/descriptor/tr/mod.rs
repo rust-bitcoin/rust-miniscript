@@ -94,6 +94,12 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         Tap::check_pk(&internal_key)?;
+        // check every node of every leaf, as parsing does
+        if let Some(ref tree) = tree {
+            for leaf in tree.leaves() {
+                leaf.miniscript().check_global_validity_recursive()?;
+            }
+        }
         Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
     }
 

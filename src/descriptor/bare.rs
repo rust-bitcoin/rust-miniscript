@@ -36,7 +36,8 @@ pub struct Bare<Pk: MiniscriptKey> {
 impl<Pk: MiniscriptKey> Bare<Pk> {
     /// Create a new raw descriptor
     pub fn new(ms: Miniscript<Pk, BareCtx>) -> Result<Self, Error> {
-        // do the top-level checks
+        // check every node, as parsing does, then do the top-level checks
+        ms.check_global_validity_recursive()?;
         BareCtx::top_level_checks(&ms)?;
         Ok(Self { ms })
     }
