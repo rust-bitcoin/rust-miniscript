@@ -16,6 +16,7 @@ default = ["std"]
 std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std", "serde?/std"]
 compiler = []
 trace = []
+compact-errors = []
 
 serde = ["dep:serde", "bitcoin/serde"]
 rand = ["bitcoin/rand"]
@@ -87,6 +88,8 @@ examples = [
     "taptree_of_horror:std compiler",
 ]
 exact_features = [
+    ["compact-errors"],
+    ["std", "compact-errors"],
     ["compiler", "trace"],
     ["compiler", "serde"],
     ["compiler", "rand"],
