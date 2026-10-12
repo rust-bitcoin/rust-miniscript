@@ -2404,6 +2404,139 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn test_context_constructors() {
+        let comp_key = bitcoin::PublicKey::from_str(
+            "02015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
+        )
+        .unwrap();
+        let x_only_key = bitcoin::key::XOnlyPublicKey::from_str(
+            "015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
+        )
+        .unwrap();
+        let uncomp_key = bitcoin::PublicKey::from_str("04015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab0d46021e9e69ef061eb25eab41ae206187b2b05e829559df59d78319bd9267b4").unwrap();
+
+        // The constructors reject the keys that parsing rejects.
+        let x_only = || Threshold::new(1, vec![x_only_key]).unwrap();
+        let uncomp = || Threshold::new(1, vec![uncomp_key]).unwrap();
+        for result in [
+            Descriptor::new_sh_sortedmulti(x_only()),
+            Descriptor::new_wsh_sortedmulti(x_only()),
+            Descriptor::new_sh_wsh_sortedmulti(x_only()),
+            Descriptor::new_sh(Miniscript::multi(x_only())),
+            Descriptor::new_wsh(Miniscript::multi(x_only())),
+            Descriptor::new_bare(Miniscript::multi(x_only())),
+            Descriptor::new_sh(Miniscript::pk(x_only_key)),
+            Descriptor::new_wsh(Miniscript::pk(x_only_key)),
+            Descriptor::new_bare(Miniscript::pk(x_only_key)),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
+            ));
+        }
+        for result in [
+            Descriptor::new_wsh_sortedmulti(uncomp()),
+            Descriptor::new_sh_wsh_sortedmulti(uncomp()),
+            Descriptor::new_wsh(Miniscript::multi(uncomp())),
+            Descriptor::new_sh_wsh(Miniscript::pk(uncomp_key)),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+            ));
+        }
+        Descriptor::new_sh_sortedmulti(uncomp()).unwrap();
+        Descriptor::new_bare(Miniscript::pk(uncomp_key)).unwrap();
+
+        // A key below the root is checked too.
+        let ms = Miniscript::from_ast(Terminal::OrD(
+            Arc::new(Miniscript::pk(comp_key)),
+            Arc::new(Miniscript::pk(uncomp_key)),
+        ))
+        .unwrap();
+        assert!(matches!(
+            Descriptor::new_wsh(ms),
+            Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+        ));
+
+        // So is every node of every Taproot leaf.
+        for leaf in [
+            Miniscript::<_, Tap>::pk(uncomp_key),
+            Miniscript::from_ast(Terminal::OrD(
+                Arc::new(Miniscript::pk(comp_key)),
+                Arc::new(Miniscript::pk(uncomp_key)),
+            ))
+            .unwrap(),
+        ] {
+            let tree =
+                TapTree::combine(TapTree::leaf(Miniscript::pk(comp_key)), TapTree::leaf(leaf))
+                    .unwrap();
+            assert!(matches!(
+                Descriptor::new_tr(comp_key, Some(tree)),
+                Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+            ));
+        }
+        let multi = Miniscript::<_, Tap>::multi(Threshold::new(1, vec![comp_key]).unwrap());
+        assert!(matches!(
+            Descriptor::new_tr(comp_key, Some(TapTree::leaf(multi))),
+            Err(Error::ContextError(ScriptContextError::TaprootMultiDisabled))
+        ));
+        let leaf = TapTree::leaf(Miniscript::<_, Tap>::pkh(comp_key));
+        assert_eq!(
+            Descriptor::new_tr(comp_key, Some(leaf)).unwrap(),
+            Descriptor::from_str(&format!("tr({},pkh({}))", comp_key, comp_key)).unwrap()
+        );
+
+        // The sortedmulti constructors build what parsing builds. The keys are out of order,
+        // so the script must sort them.
+        let g_key = bitcoin::PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+        let thresh = || Threshold::new(2, vec![g_key, comp_key]).unwrap();
+        for (result, sortedmulti, multi) in [
+            (
+                Descriptor::new_sh_sortedmulti(thresh()),
+                format!("sh(sortedmulti(2,{},{}))", g_key, comp_key),
+                format!("sh(multi(2,{},{}))", comp_key, g_key),
+            ),
+            (
+                Descriptor::new_wsh_sortedmulti(thresh()),
+                format!("wsh(sortedmulti(2,{},{}))", g_key, comp_key),
+                format!("wsh(multi(2,{},{}))", comp_key, g_key),
+            ),
+            (
+                Descriptor::new_sh_wsh_sortedmulti(thresh()),
+                format!("sh(wsh(sortedmulti(2,{},{})))", g_key, comp_key),
+                format!("sh(wsh(multi(2,{},{})))", comp_key, g_key),
+            ),
+        ] {
+            let desc = result.unwrap();
+            assert_eq!(desc, Descriptor::from_str(&sortedmulti).unwrap());
+            let multi = Descriptor::<PublicKey>::from_str(&multi).unwrap();
+            assert_eq!(desc.explicit_script().unwrap(), multi.explicit_script().unwrap());
+        }
+
+        // A P2SH redeem script can't be larger than 520 bytes, which is 15 compressed keys
+        // in a multisig.
+        let secp = secp256k1::Secp256k1::signing_only();
+        let keys: Vec<PublicKey> = (1..=16u8)
+            .map(|i| {
+                PublicKey::new(
+                    secp256k1::SecretKey::from_slice(&[i; 32])
+                        .unwrap()
+                        .public_key(&secp),
+                )
+            })
+            .collect();
+        Descriptor::new_sh_sortedmulti(Threshold::new(1, keys[..15].to_vec()).unwrap()).unwrap();
+        assert!(matches!(
+            Descriptor::new_sh_sortedmulti(Threshold::new(1, keys).unwrap()),
+            Err(Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }))
+        ));
+    }
+
+    #[test]
     fn regression_806() {
         let secp = secp256k1::Secp256k1::signing_only();
         type Desc = Descriptor<DescriptorPublicKey>;
