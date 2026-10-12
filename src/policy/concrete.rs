@@ -1276,6 +1276,7 @@ mod compiler_tests {
 
     use super::*;
     use crate::policy::Concrete;
+    use crate::{BareCtx, Legacy, Segwitv0};
 
     fn nested_equal_odds_policy(n_keys: usize) -> Policy<String> {
         assert!(n_keys >= 2);
@@ -1354,6 +1355,61 @@ mod compiler_tests {
         assert!(matches!(
             policy.compile_tr_native(Some(uncompressed), 128),
             Err(CompilerError::UncompressedTaprootInternalKey)
+        ));
+    }
+
+    #[test]
+    fn invalid_context_key_error() {
+        // A key that the context doesn't allow in pk_k() must not compile to pk_h() instead.
+        let comp_key = bitcoin::PublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+        let uncomp_key = bitcoin::PublicKey::from_str(
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\
+             483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        )
+        .unwrap();
+        let x_only_key = bitcoin::key::XOnlyPublicKey::from_str(
+            "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+
+        let x_only = Policy::Key(x_only_key);
+        assert!(matches!(
+            x_only.compile_to_descriptor::<Legacy>(DescriptorCtx::Sh),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
+        ));
+        assert!(matches!(
+            x_only.compile_to_descriptor::<Segwitv0>(DescriptorCtx::Wsh),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
+        ));
+        assert!(matches!(
+            x_only.compile_to_descriptor::<BareCtx>(DescriptorCtx::Bare),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
+        ));
+
+        let uncomp = Policy::Key(uncomp_key);
+        uncomp
+            .compile_to_descriptor::<Legacy>(DescriptorCtx::Sh)
+            .unwrap();
+        assert!(matches!(
+            uncomp.compile_to_descriptor::<Segwitv0>(DescriptorCtx::Wsh),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
+        ));
+        assert!(matches!(
+            uncomp.compile_to_descriptor::<Segwitv0>(DescriptorCtx::ShWsh),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
+        ));
+
+        // In Taproot, the uncompressed key can't be a leaf key either.
+        let tap: Policy<bitcoin::PublicKey> =
+            Policy::from_str(&format!("or(99@pk({}),1@pk({}))", comp_key, uncomp_key)).unwrap();
+        assert!(matches!(tap.compile_tr(None), Err(CompilerError::LimitsExceeded)));
+        assert!(matches!(tap.compile_tr_native(None, 128), Err(CompilerError::LimitsExceeded)));
+        assert!(matches!(
+            tap.compile_tr_private_experimental(None),
+            Err(Error::CompilerError(CompilerError::LimitsExceeded))
         ));
     }
 
