@@ -555,207 +555,6 @@ impl_tuple_satisfier!(A, B, C, D, E, F);
 impl_tuple_satisfier!(A, B, C, D, E, F, G);
 impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 
-#[cfg(test)]
-mod tests {
-    use core::str::FromStr;
-
-    use bitcoin::{absolute, relative, PublicKey};
-
-    use super::{Satisfaction, Witness};
-    use crate::descriptor::Descriptor;
-    use crate::{Miniscript, Segwitv0};
-
-    #[test]
-    fn regression_1037() {
-        let key = PublicKey::from_str(
-            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad1",
-        )
-        .unwrap();
-        let sig = bitcoin::ecdsa::Signature::sighash_all(
-            secp256k1::ecdsa::Signature::from_compact(&[1; 64]).unwrap(),
-        );
-        let mut signatures = std::collections::BTreeMap::new();
-        signatures.insert(key, sig);
-        let satisfier = (
-            signatures,
-            absolute::LockTime::from_height(100).unwrap(),
-            relative::LockTime::from_height(100),
-        );
-
-        for timelock in ["after", "older"] {
-            let ms = Miniscript::<PublicKey, Segwitv0>::from_str_insane(&format!(
-                "and_v(v:pk({key}),or_i({timelock}(100),{timelock}(200)))",
-            ))
-            .unwrap();
-
-            // Every spend requires the signature, but the unsigned or_i makes
-            // the expression malleable, erasing its type-level signature property.
-            assert!(!ms.is_non_malleable());
-
-            // Only the first timelock is met. The mandatory signature prevents
-            // a third party from changing the transaction's timelock to select
-            // the other branch, so this witness is actually non-malleable.
-            let expected = vec![vec![1], sig.to_vec()];
-            assert_eq!(ms.satisfy_malleable(&satisfier).unwrap(), expected);
-
-            // FIXME: The root's erased signature property makes the unmet
-            // timelock Unavailable rather than Impossible. Both or_i branches
-            // then appear possible and unsigned, so satisfy rejects the witness.
-            // Track signatures that a third party cannot remove in the
-            // satisfaction algorithm instead of relying on root_has_sig.
-            assert!(matches!(ms.satisfy(&satisfier), Err(crate::Error::CouldNotSatisfy)));
-            assert_eq!(
-                Satisfaction::satisfy(&ms, &satisfier, false, None).stack,
-                Witness::Unavailable,
-            );
-
-            // Supplying the signature property explicitly demonstrates that
-            // root_has_sig is the reason the non-malleable witness is rejected.
-            assert_eq!(
-                Satisfaction::satisfy(&ms, &satisfier, true, None).stack,
-                Witness::Stack(expected),
-            );
-        }
-    }
-
-    #[test]
-    fn regression_895() {
-        // Tests a pathological descriptor whose cheapest satisfaction involves computing a
-        // dissatisfaction containing a timelock. Such dissatisfactions exist because the
-        // `and_v` fragment, uniquely, has a dissatisfaction that includes the satisfaction
-        // of its left child. (Check sat_dissat.rs and search 'dissat: ' to see how the
-        // dissatisfactions of every fragment are computed. You will see that exactly one,
-        // and_v, uses the satisfaction of a child.)
-        //
-        // Prior to PR #895, the satisfier did not keep track of timelocks that were used
-        // for dissatisfactions. This can lead to incorrect plans, as demonstrated in the
-        // below test vectors.
-
-        // Setup: unavailable keys, used to make some branches unsatisfiable from the POV
-        // of the satisfier (but not the typechecker).
-        let available_keys: [PublicKey; 2] = [
-            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad1"
-                .parse()
-                .unwrap(),
-            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad3"
-                .parse()
-                .unwrap(),
-        ];
-        let available_key_map = {
-            let dummy_sig = bitcoin::ecdsa::Signature::sighash_all(
-                secp256k1::ecdsa::Signature::from_compact(&[1; 64]).unwrap(),
-            );
-            let mut map = std::collections::BTreeMap::new();
-            map.insert(
-                crate::DefiniteDescriptorKey::new(available_keys[0].into()).unwrap(),
-                dummy_sig,
-            );
-            map.insert(
-                crate::DefiniteDescriptorKey::new(available_keys[1].into()).unwrap(),
-                dummy_sig,
-            );
-            map
-        };
-
-        // Generate a large pile of distinct unavailable keys.
-        let secp = secp256k1::Secp256k1::new();
-        let unavailable_keys: Vec<PublicKey> =
-            core::iter::successors(Some(available_keys[0]), |prev| {
-                prev.inner
-                    .add_exp_tweak(&secp, &secp256k1::Scalar::ONE)
-                    .ok()
-                    .map(PublicKey::new)
-            })
-            .skip(1)
-            .take(20)
-            .collect();
-        assert_eq!(unavailable_keys.len(), 20); // sanity-check the above loop
-
-        // Create a fragment which is very expensive to dissatisfy.
-        let expensive_threshold = format!(
-            "thresh(10,pk({}),{})",
-            unavailable_keys[1], // we need key[0] below
-            unavailable_keys
-                .iter()
-                .skip(2)
-                .map(|k| format!("a:pkh({k})"))
-                .collect::<Vec<_>>()
-                .join(","),
-        );
-
-        // Setup: a satisfier that thinks that both a height-based and time-based timelock
-        // are available. This is needed for the second test.
-        let satisfier = (
-            available_key_map,
-            absolute::LockTime::from_height(1000).unwrap(),
-            absolute::LockTime::from_time(2000000000).unwrap(),
-        );
-
-        // Construct a script that would mix timelocks:
-        // or_b(
-        //    n:or_i(
-        //        and_v(v:after(144),and_v(v:pk(),pk())), // dissatisfied by a height-based timelock, a sig, and 0
-        //        expensive_threshold                     // dissatisfied by a giant pile of pubkeyhash preimages
-        //    ),
-        //    ajt:and_v(v:after(50),v:pk({}))))           // satisfied by a lower height-based timelock and a sig
-        // )
-        //
-        // Here the or_i cannot be satisfied due to missing keys on both branches, so it
-        // must be dissatisfied (and the after(50) branch must be satisfied). However, there
-        // are two dissatisfactions for the or_i: one which dissatisfies the first branch,
-        // by using the height-based timelock, and one which dissatisfies the second branch,
-        // which is ignored since it's the more expensive of the two possibilities.
-        //
-        // Since the first branch's dissatisfaction is HASSIG but the second branch's is not,
-        // the satisfier is required to dissatisfy the second branch to avoid malleability.
-        // But if we use `into_plan_mall` we can see the bug.
-        //
-        // Itstead, it takes both the after(144) and after(50) branches, and the resulting
-        // plan should show after(144) since it's the higher one. However, prior to #895,
-        // we "did not notice" the after(144) since it appears as part of a dissatisfaction,
-        // leading to a plan that did not match the actual timelock requirement.
-        let descriptor_str = format!(
-            "wsh(or_b(n:or_i(and_v(v:after(144),and_v(v:pk({}),pk({}))),{expensive_threshold}),ajt:and_v(v:after(50),v:pk({}))))",
-            available_keys[0], unavailable_keys[0], available_keys[1],
-        );
-        // Need DefiniteDescriptorKey https://github.com/rust-bitcoin/rust-miniscript/issues/927
-        let descriptor =
-            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
-        // Compute plan and confirm the timelock is correct -- 144 for a malleable transaction
-        let plan = descriptor.clone().into_plan_mall(&satisfier).unwrap();
-        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(144).unwrap()),);
-        // ...and 50 for a non-malleable one (since take the expensive_threshold alternate)
-        let plan = descriptor.into_plan(&satisfier).unwrap();
-        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(50).unwrap()),);
-
-        // Same descriptor as above, except that now we use a time-based timelock rather than a
-        // lower height-based one.
-        //
-        // Again, both timelock branches are considered. When `concatenate_rev` must merge a
-        // height-based and a time-based absolute locktime on the same path, that satisfaction
-        // becomes `Witness::Impossible`. Plan building then fails or selects an alternate path.
-        // Parallel per-kind tracking remains future work (see #979 discussion).
-        let descriptor_str = format!(
-            "wsh(or_b(n:or_i(and_v(v:after(144),and_v(v:pk({}),pk({}))),{expensive_threshold}),ajt:and_v(v:after(1000000000),v:pk({}))))",
-            available_keys[0], unavailable_keys[0], available_keys[1],
-        );
-        let descriptor =
-            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
-
-        // Both `or_b` arms hit a height/time conflict in `concatenate_rev`, so no malleable
-        // plan exists.
-        assert!(descriptor.clone().into_plan_mall(&satisfier).is_err());
-        // Non-malleable plan still succeeds: `into_plan` dissatisfies the expensive threshold
-        // branch and satisfies the time-based `after(1000000000)` branch without merging
-        // incompatible locktimes on one path.
-        let plan = descriptor.into_plan(&satisfier).unwrap();
-        assert_eq!(
-            plan.absolute_timelock,
-            Some(absolute::LockTime::from_time(1_000_000_000).unwrap()),
-        );
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Type of schnorr signature to produce
 pub enum SchnorrSigType {
@@ -1404,5 +1203,206 @@ impl Satisfaction<Vec<u8>> {
         Satisfaction::<Placeholder<Pk>>::build_template_mall(node, &stfr, root_has_sig, leaf_hash)
             .try_completing(stfr)
             .expect("the same satisfier should manage to complete the template")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use bitcoin::{absolute, relative, PublicKey};
+
+    use super::{Satisfaction, Witness};
+    use crate::descriptor::Descriptor;
+    use crate::{Miniscript, Segwitv0};
+
+    #[test]
+    fn regression_1037() {
+        let key = PublicKey::from_str(
+            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad1",
+        )
+        .unwrap();
+        let sig = bitcoin::ecdsa::Signature::sighash_all(
+            secp256k1::ecdsa::Signature::from_compact(&[1; 64]).unwrap(),
+        );
+        let mut signatures = std::collections::BTreeMap::new();
+        signatures.insert(key, sig);
+        let satisfier = (
+            signatures,
+            absolute::LockTime::from_height(100).unwrap(),
+            relative::LockTime::from_height(100),
+        );
+
+        for timelock in ["after", "older"] {
+            let ms = Miniscript::<PublicKey, Segwitv0>::from_str_insane(&format!(
+                "and_v(v:pk({key}),or_i({timelock}(100),{timelock}(200)))",
+            ))
+            .unwrap();
+
+            // Every spend requires the signature, but the unsigned or_i makes
+            // the expression malleable, erasing its type-level signature property.
+            assert!(!ms.is_non_malleable());
+
+            // Only the first timelock is met. The mandatory signature prevents
+            // a third party from changing the transaction's timelock to select
+            // the other branch, so this witness is actually non-malleable.
+            let expected = vec![vec![1], sig.to_vec()];
+            assert_eq!(ms.satisfy_malleable(&satisfier).unwrap(), expected);
+
+            // FIXME: The root's erased signature property makes the unmet
+            // timelock Unavailable rather than Impossible. Both or_i branches
+            // then appear possible and unsigned, so satisfy rejects the witness.
+            // Track signatures that a third party cannot remove in the
+            // satisfaction algorithm instead of relying on root_has_sig.
+            assert!(matches!(ms.satisfy(&satisfier), Err(crate::Error::CouldNotSatisfy)));
+            assert_eq!(
+                Satisfaction::satisfy(&ms, &satisfier, false, None).stack,
+                Witness::Unavailable,
+            );
+
+            // Supplying the signature property explicitly demonstrates that
+            // root_has_sig is the reason the non-malleable witness is rejected.
+            assert_eq!(
+                Satisfaction::satisfy(&ms, &satisfier, true, None).stack,
+                Witness::Stack(expected),
+            );
+        }
+    }
+
+    #[test]
+    fn regression_895() {
+        // Tests a pathological descriptor whose cheapest satisfaction involves computing a
+        // dissatisfaction containing a timelock. Such dissatisfactions exist because the
+        // `and_v` fragment, uniquely, has a dissatisfaction that includes the satisfaction
+        // of its left child. (Check sat_dissat.rs and search 'dissat: ' to see how the
+        // dissatisfactions of every fragment are computed. You will see that exactly one,
+        // and_v, uses the satisfaction of a child.)
+        //
+        // Prior to PR #895, the satisfier did not keep track of timelocks that were used
+        // for dissatisfactions. This can lead to incorrect plans, as demonstrated in the
+        // below test vectors.
+
+        // Setup: unavailable keys, used to make some branches unsatisfiable from the POV
+        // of the satisfier (but not the typechecker).
+        let available_keys: [PublicKey; 2] = [
+            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad1"
+                .parse()
+                .unwrap(),
+            "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad3"
+                .parse()
+                .unwrap(),
+        ];
+        let available_key_map = {
+            let dummy_sig = bitcoin::ecdsa::Signature::sighash_all(
+                secp256k1::ecdsa::Signature::from_compact(&[1; 64]).unwrap(),
+            );
+            let mut map = std::collections::BTreeMap::new();
+            map.insert(
+                crate::DefiniteDescriptorKey::new(available_keys[0].into()).unwrap(),
+                dummy_sig,
+            );
+            map.insert(
+                crate::DefiniteDescriptorKey::new(available_keys[1].into()).unwrap(),
+                dummy_sig,
+            );
+            map
+        };
+
+        // Generate a large pile of distinct unavailable keys.
+        let secp = secp256k1::Secp256k1::new();
+        let unavailable_keys: Vec<PublicKey> =
+            core::iter::successors(Some(available_keys[0]), |prev| {
+                prev.inner
+                    .add_exp_tweak(&secp, &secp256k1::Scalar::ONE)
+                    .ok()
+                    .map(PublicKey::new)
+            })
+            .skip(1)
+            .take(20)
+            .collect();
+        assert_eq!(unavailable_keys.len(), 20); // sanity-check the above loop
+
+        // Create a fragment which is very expensive to dissatisfy.
+        let expensive_threshold = format!(
+            "thresh(10,pk({}),{})",
+            unavailable_keys[1], // we need key[0] below
+            unavailable_keys
+                .iter()
+                .skip(2)
+                .map(|k| format!("a:pkh({k})"))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+
+        // Setup: a satisfier that thinks that both a height-based and time-based timelock
+        // are available. This is needed for the second test.
+        let satisfier = (
+            available_key_map,
+            absolute::LockTime::from_height(1000).unwrap(),
+            absolute::LockTime::from_time(2000000000).unwrap(),
+        );
+
+        // Construct a script that would mix timelocks:
+        // or_b(
+        //    n:or_i(
+        //        and_v(v:after(144),and_v(v:pk(),pk())), // dissatisfied by a height-based timelock, a sig, and 0
+        //        expensive_threshold                     // dissatisfied by a giant pile of pubkeyhash preimages
+        //    ),
+        //    ajt:and_v(v:after(50),v:pk({}))))           // satisfied by a lower height-based timelock and a sig
+        // )
+        //
+        // Here the or_i cannot be satisfied due to missing keys on both branches, so it
+        // must be dissatisfied (and the after(50) branch must be satisfied). However, there
+        // are two dissatisfactions for the or_i: one which dissatisfies the first branch,
+        // by using the height-based timelock, and one which dissatisfies the second branch,
+        // which is ignored since it's the more expensive of the two possibilities.
+        //
+        // Since the first branch's dissatisfaction is HASSIG but the second branch's is not,
+        // the satisfier is required to dissatisfy the second branch to avoid malleability.
+        // But if we use `into_plan_mall` we can see the bug.
+        //
+        // Itstead, it takes both the after(144) and after(50) branches, and the resulting
+        // plan should show after(144) since it's the higher one. However, prior to #895,
+        // we "did not notice" the after(144) since it appears as part of a dissatisfaction,
+        // leading to a plan that did not match the actual timelock requirement.
+        let descriptor_str = format!(
+            "wsh(or_b(n:or_i(and_v(v:after(144),and_v(v:pk({}),pk({}))),{expensive_threshold}),ajt:and_v(v:after(50),v:pk({}))))",
+            available_keys[0], unavailable_keys[0], available_keys[1],
+        );
+        // Need DefiniteDescriptorKey https://github.com/rust-bitcoin/rust-miniscript/issues/927
+        let descriptor =
+            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
+        // Compute plan and confirm the timelock is correct -- 144 for a malleable transaction
+        let plan = descriptor.clone().into_plan_mall(&satisfier).unwrap();
+        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(144).unwrap()),);
+        // ...and 50 for a non-malleable one (since take the expensive_threshold alternate)
+        let plan = descriptor.into_plan(&satisfier).unwrap();
+        assert_eq!(plan.absolute_timelock, Some(absolute::LockTime::from_height(50).unwrap()),);
+
+        // Same descriptor as above, except that now we use a time-based timelock rather than a
+        // lower height-based one.
+        //
+        // Again, both timelock branches are considered. When `concatenate_rev` must merge a
+        // height-based and a time-based absolute locktime on the same path, that satisfaction
+        // becomes `Witness::Impossible`. Plan building then fails or selects an alternate path.
+        // Parallel per-kind tracking remains future work (see #979 discussion).
+        let descriptor_str = format!(
+            "wsh(or_b(n:or_i(and_v(v:after(144),and_v(v:pk({}),pk({}))),{expensive_threshold}),ajt:and_v(v:after(1000000000),v:pk({}))))",
+            available_keys[0], unavailable_keys[0], available_keys[1],
+        );
+        let descriptor =
+            Descriptor::<crate::DefiniteDescriptorKey>::from_str(&descriptor_str).unwrap();
+
+        // Both `or_b` arms hit a height/time conflict in `concatenate_rev`, so no malleable
+        // plan exists.
+        assert!(descriptor.clone().into_plan_mall(&satisfier).is_err());
+        // Non-malleable plan still succeeds: `into_plan` dissatisfies the expensive threshold
+        // branch and satisfies the time-based `after(1000000000)` branch without merging
+        // incompatible locktimes on one path.
+        let plan = descriptor.into_plan(&satisfier).unwrap();
+        assert_eq!(
+            plan.absolute_timelock,
+            Some(absolute::LockTime::from_time(1_000_000_000).unwrap()),
+        );
     }
 }
