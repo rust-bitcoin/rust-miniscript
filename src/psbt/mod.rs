@@ -887,6 +887,11 @@ pub trait PsbtInputExt {
     /// descriptor an error will be returned. The descriptor *can* (and should) have extended keys in
     /// it so PSBT fields like `bip32_derivation` and `tap_key_origins` can be populated.
     ///
+    /// Every key in the descriptor gets an entry in `bip32_derivation` (or `tap_key_origins` for
+    /// Taproot descriptors). Keys without origin information are recorded as their own master
+    /// key: the fingerprint is [`DefiniteDescriptorKey::master_fingerprint`] and the derivation
+    /// path is empty.
+    ///
     /// Note that his method doesn't check that the `witness_utxo` or `non_witness_utxo` is
     /// consistent with the descriptor. To do that see [`update_input_with_descriptor`].
     ///
@@ -920,6 +925,11 @@ pub trait PsbtOutputExt {
     /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
     /// descriptor an error will be returned. The descriptor *can* (and should) have extended keys in
     /// it so PSBT fields like `bip32_derivation` and `tap_key_origins` can be populated.
+    ///
+    /// Every key in the descriptor gets an entry in `bip32_derivation` (or `tap_key_origins` for
+    /// Taproot descriptors). Keys without origin information are recorded as their own master
+    /// key: the fingerprint is [`DefiniteDescriptorKey::master_fingerprint`] and the derivation
+    /// path is empty.
     ///
     /// Note that this method doesn't check that the `script_pubkey` of the output being
     /// updated matches the descriptor. To do that see [`update_output_with_descriptor`].
@@ -1353,6 +1363,42 @@ mod tests {
         let tx = psbt.extract(&secp).unwrap();
         let expected: bitcoin::Transaction = deserialize(&hex::decode_to_vec("0200000000010258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd7500000000da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752aeffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d01000000232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b2028903ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f000400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00000000").unwrap()).unwrap();
         assert_eq!(tx, expected);
+    }
+
+    #[test]
+    fn test_update_item_no_origin_single_key() {
+        // A single key without origin is recorded as its own master key: its own
+        // fingerprint (first four bytes of HASH160) with an empty derivation path.
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(
+            "wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)",
+        )
+        .unwrap();
+        let pk = PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+        let mut psbt_input = psbt::Input::default();
+        psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        assert_eq!(psbt_input.bip32_derivation.len(), 1);
+        let (fingerprint, path) = &psbt_input.bip32_derivation[&pk];
+        assert_eq!(*fingerprint, bip32::Fingerprint::from_str("751e76e8").unwrap());
+        assert_eq!(*path, DerivationPath::master());
+
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(
+            "tr(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)",
+        )
+        .unwrap();
+        let xonly = XOnlyPublicKey::from_str(
+            "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+        let mut psbt_output = psbt::Output::default();
+        psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
+        assert_eq!(psbt_output.tap_key_origins.len(), 1);
+        let (leaf_hashes, (fingerprint, path)) = &psbt_output.tap_key_origins[&xonly];
+        assert!(leaf_hashes.is_empty());
+        assert_eq!(*fingerprint, bip32::Fingerprint::from_str("f678d9b7").unwrap());
+        assert_eq!(*path, DerivationPath::master());
     }
 
     #[test]
