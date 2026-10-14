@@ -166,6 +166,9 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// Returns true if the key is an x-only pubkey (defaults to `false`).
     fn is_x_only_key(&self) -> bool;
 
+    /// Returns true if the key is a `musig()` key, which only Taproot allows (defaults to `false`).
+    fn is_musig(&self) -> bool { false }
+
     /// Returns the number of different derivation paths in this key (defaults to `0`).
     ///
     /// Only >1 for keys in BIP389 multipath descriptors.

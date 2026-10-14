@@ -2407,8 +2407,8 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
         }
 
-        // musig() reports itself as an x-only key, so pkh() rejects it outside Taproot too, also
-        // below the root of the script.
+        // pkh() rejects musig() outside Taproot too, also below the root of the script, with an
+        // error that says musig() is only allowed in tr().
         let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
         for desc in [
             format!("sh(pkh({}))", musig),
@@ -2418,15 +2418,19 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             format!("wsh(or_d(pk({}),pkh({})))", other_key, musig),
             format!("wsh(and_v(v:pkh({}),older(144)))", musig),
         ] {
+            let err = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
             assert!(
-                matches!(
-                    Descriptor::<DescriptorPublicKey>::from_str(&desc),
-                    Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
-                ),
+                matches!(err, Error::ContextError(ScriptContextError::MusigNotAllowed(..))),
                 "{}",
                 desc
             );
+            assert!(err.to_string().contains("is only allowed in tr()"), "{}: {}", desc, err);
         }
+        let desc = format!("wsh(pkh({}))", musig);
+        assert!(matches!(
+            Descriptor::<DefiniteDescriptorKey>::from_str(&desc),
+            Err(Error::ContextError(ScriptContextError::MusigNotAllowed(..)))
+        ));
 
         // Participants must be compressed keys in every Taproot position.
         let internal_key = "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
@@ -2504,10 +2508,13 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             Descriptor::new_wsh(Miniscript::pkh(musig.clone())),
             Descriptor::new_sh_wsh(Miniscript::pkh(musig.clone())),
             Descriptor::new_bare(Miniscript::pkh(musig.clone())),
+            Descriptor::new_pkh(musig.clone()),
+            Descriptor::new_wpkh(musig.clone()),
+            Descriptor::new_sh_wpkh(musig.clone()),
         ] {
             assert!(matches!(
                 result,
-                Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
+                Err(Error::ContextError(ScriptContextError::MusigNotAllowed(..)))
             ));
         }
 

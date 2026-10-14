@@ -31,6 +31,9 @@ pub enum ScriptContextError {
     /// XOnly keys are only allowed in Tap context
     /// The first element is key, and second element is current script context
     XOnlyKeysNotAllowed(String, &'static str),
+    /// `musig()` keys are only allowed in Tap context
+    /// The first element is key, and second element is current script context
+    MusigNotAllowed(String, &'static str),
     /// Tapscript descriptors cannot contain uncompressed keys
     /// Tap context can contain compressed or xonly
     UncompressedKeysNotAllowed,
@@ -72,6 +75,7 @@ impl error::Error for ScriptContextError {
             | MalleableDupIf
             | CompressedOnly(_)
             | XOnlyKeysNotAllowed(_, _)
+            | MusigNotAllowed(_, _)
             | UncompressedKeysNotAllowed
             | MaxWitnessItemsExceeded { .. }
             | MaxOpCountExceeded { .. }
@@ -99,6 +103,9 @@ impl fmt::Display for ScriptContextError {
             }
             Self::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
                 write!(f, "x-only key {} not allowed in {}", pk, ctx)
+            }
+            Self::MusigNotAllowed(ref pk, ref ctx) => {
+                write!(f, "musig() key {} is only allowed in tr(), not in {}", pk, ctx)
             }
             Self::UncompressedKeysNotAllowed => {
                 write!(f, "uncompressed keys cannot be used in Taproot descriptors.")
@@ -393,7 +400,9 @@ impl ScriptContext for Legacy {
 
     // Only compressed and uncompressed public keys are allowed in Legacy context
     fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
-        if pk.is_x_only_key() {
+        if pk.is_musig() {
+            Err(ScriptContextError::MusigNotAllowed(pk.to_string(), Self::name_str()))
+        } else if pk.is_x_only_key() {
             Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
         } else {
             Ok(())
@@ -513,7 +522,9 @@ impl ScriptContext for Segwitv0 {
 
     // No x-only keys or uncompressed keys in Segwitv0 context
     fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
-        if pk.is_uncompressed() {
+        if pk.is_musig() {
+            Err(ScriptContextError::MusigNotAllowed(pk.to_string(), Self::name_str()))
+        } else if pk.is_uncompressed() {
             Err(ScriptContextError::UncompressedKeysNotAllowed)
         } else if pk.is_x_only_key() {
             Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
@@ -771,7 +782,9 @@ impl ScriptContext for BareCtx {
 
     // No x-only keys in Bare context
     fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
-        if pk.is_x_only_key() {
+        if pk.is_musig() {
+            Err(ScriptContextError::MusigNotAllowed(pk.to_string(), Self::name_str()))
+        } else if pk.is_x_only_key() {
             Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
         } else {
             Ok(())

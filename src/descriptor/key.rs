@@ -1988,12 +1988,14 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         match self {
             Self::Single(single_pub) => single_pub.is_x_only_key(),
-            // The aggregate is used as an x-only Taproot key. This also keeps `musig()` out of
-            // non-Taproot contexts, which reject x-only keys.
+            // The aggregate is used as an x-only Taproot key. Non-Taproot contexts reject it,
+            // with their own error through `is_musig`.
             Self::Musig(_) => true,
             _ => false,
         }
     }
+
+    fn is_musig(&self) -> bool { matches!(self, Self::Musig(_)) }
 
     fn num_der_paths(&self) -> usize {
         match self {
@@ -2125,6 +2127,8 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     fn is_uncompressed(&self) -> bool { self.0.is_uncompressed() }
 
     fn is_x_only_key(&self) -> bool { self.0.is_x_only_key() }
+
+    fn is_musig(&self) -> bool { self.0.is_musig() }
 
     fn num_der_paths(&self) -> usize { self.0.num_der_paths() }
 }
