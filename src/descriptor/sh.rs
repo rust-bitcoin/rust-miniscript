@@ -113,7 +113,8 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
     /// Create a new p2sh descriptor with the raw miniscript
     pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
-        // do the top-level checks
+        // check every node, as parsing does, then do the top-level checks
+        ms.check_global_validity_recursive()?;
         Legacy::top_level_checks(&ms)?;
         Ok(Self { inner: ShInner::Ms(ms) })
     }
@@ -121,7 +122,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
     /// and Vec of `pks`.
     pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
-        Ok(Self { inner: ShInner::Ms(Miniscript::sortedmulti(thresh)) })
+        Self::new(Miniscript::sortedmulti(thresh))
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
@@ -137,8 +138,6 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn new_wsh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
     ) -> Result<Self, Error> {
-        // The context checks will be carried out inside new function for
-        // sortedMultiVec
         Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(thresh)?) })
     }
 

@@ -519,6 +519,22 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Get a reference to the inner `AstElem` representing the root of miniscript
     pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
+    /// Checks the global validity rules of the script context on every node.
+    ///
+    /// Parsing runs these checks, but constructors such as [`Miniscript::multi`] don't, and
+    /// [`Miniscript::from_ast`] checks only the new root.
+    pub(crate) fn check_global_validity_recursive(
+        &self,
+    ) -> Result<(), context::ScriptContextError> {
+        // It is definitely not sufficient to check only the root, since this will fail to notice
+        // illegal xonly keys at the leaves. But probably checking every single node is overkill.
+        // This may be worth optimizing.
+        for node in self.pre_order_iter() {
+            Ctx::check_global_validity(node)?;
+        }
+        Ok(())
+    }
+
     /// Encode as a Bitcoin script
     pub fn encode(&self) -> script::ScriptBuf
     where
@@ -1013,15 +1029,36 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
+        // Collect the nodes in pre-order, skipping the descendants of fragments that take keys:
+        // these fragments parse their key arguments themselves, and a key argument may be a
+        // function-style expression such as `musig(A,B)/0/*` with descendants of its own.
+        let mut iter = root.pre_order_iter();
+        let mut nodes = Vec::with_capacity(iter.len());
+        while let Some(node) = iter.next() {
+            nodes.push(node);
+            let name = node
+                .name()
+                .rsplit_once(':')
+                .map_or(node.name(), |(_, name)| name);
+            let takes_keys = match name {
+                "pk" | "pkh" | "pk_k" | "pk_h" => node.n_children() == 1,
+                "multi" | "sortedmulti" | "multi_a" | "sortedmulti_a" => true,
+                _ => false,
+            };
+            if takes_keys {
+                iter.skip_descendants();
+            }
+        }
+
         let mut stack = Vec::with_capacity(128);
-        for (n, node) in root.pre_order_iter().enumerate().rev() {
+        for (n, node) in nodes.into_iter().enumerate().rev() {
             // Before doing anything else, check if this is the inner value of a terminal.
             // In that case, just skip the node. Conveniently, there are no combinators
             // in Miniscript that have a single child that these might be confused with.
             // (Well, there are, but they're all serialized as wrappers.)
             //
-            // We also skip all the children of multi/multi_a and the first child of thresh
-            // (which will be the k value, not a real child).
+            // We also skip the first child of thresh (which will be the k value, not a real
+            // child). The children of multi/multi_a were already skipped above.
             //
             // We do not do this check on the root node, because its parent might be wsh or
             // sh or something, and actually these ARE single-child combinators, but we don't
@@ -1037,9 +1074,6 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
 
-                if matches!(parent_name, "multi" | "sortedmulti" | "multi_a" | "sortedmulti_a") {
-                    continue;
-                }
                 if parent_name == "thresh" && node.is_first_child() {
                     continue;
                 }
@@ -1051,102 +1085,101 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                 .map_err(Error::Parse)?;
 
             // "pk" and "pkh" are aliases for "c:pk_k" and "c:pk_h" respectively.
-            let new = match frag_name {
-                "expr_raw_pkh" => node
-                    .verify_terminal_parent("expr_raw_pkh", "public key hash")
-                    .map(Self::expr_raw_pkh)
-                    .map_err(Error::Parse),
-                "pk" => node
-                    .verify_terminal_parent("pk", "public key")
-                    .map(Self::pk)
-                    .map_err(Error::Parse),
-                "pkh" => node
-                    .verify_terminal_parent("pkh", "public key")
-                    .map(Self::pkh)
-                    .map_err(Error::Parse),
-                "pk_k" => node
-                    .verify_terminal_parent("pk_k", "public key")
-                    .map(Self::pk_k)
-                    .map_err(Error::Parse),
-                "pk_h" => node
-                    .verify_terminal_parent("pk_h", "public key")
-                    .map(Self::pk_h)
-                    .map_err(Error::Parse),
-                "after" => node.verify_after().map(Self::after).map_err(Error::Parse),
-                "older" => node.verify_older().map(Self::older).map_err(Error::Parse),
-                "sha256" => node
-                    .verify_terminal_parent("sha256", "hash")
-                    .map(Self::sha256)
-                    .map_err(Error::Parse),
-                "hash256" => node
-                    .verify_terminal_parent("hash256", "hash")
-                    .map(Self::hash256)
-                    .map_err(Error::Parse),
-                "ripemd160" => node
-                    .verify_terminal_parent("ripemd160", "hash")
-                    .map(Self::ripemd160)
-                    .map_err(Error::Parse),
-                "hash160" => node
-                    .verify_terminal_parent("hash160", "hash")
-                    .map(Self::hash160)
-                    .map_err(Error::Parse),
-                "1" => {
-                    node.verify_n_children("1", 0..=0)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Ok(Self::TRUE)
-                }
-                "0" => {
-                    node.verify_n_children("0", 0..=0)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Ok(Self::FALSE)
-                }
-                "and_v" => binary(node, &mut stack, "and_v", Terminal::AndV),
-                "and_b" => binary(node, &mut stack, "and_b", Terminal::AndB),
-                "and_n" => binary(node, &mut stack, "and_n", |x, y| {
-                    Terminal::AndOr(x, y, Arc::new(Self::FALSE))
-                }),
-                "andor" => {
-                    node.verify_n_children("andor", 3..=3)
-                        .map_err(From::from)
-                        .map_err(Error::Parse)?;
-                    Self::from_ast(Terminal::AndOr(
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
-                        stack.pop().unwrap(),
-                    ))
-                }
-                "or_b" => binary(node, &mut stack, "or_b", Terminal::OrB),
-                "or_d" => binary(node, &mut stack, "or_d", Terminal::OrD),
-                "or_c" => binary(node, &mut stack, "or_c", Terminal::OrC),
-                "or_i" => binary(node, &mut stack, "or_i", Terminal::OrI),
-                "thresh" => node
-                    .verify_threshold(|_| Ok(stack.pop().unwrap()))
-                    .map(Terminal::Thresh)
-                    .and_then(Self::from_ast),
-                "multi" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::Multi)
-                    .and_then(Self::from_ast),
-                "sortedmulti" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::SortedMulti)
-                    .and_then(Self::from_ast),
-                "multi_a" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::MultiA)
-                    .and_then(Self::from_ast),
-                "sortedmulti_a" => node
-                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
-                    .map(Terminal::SortedMultiA)
-                    .and_then(Self::from_ast),
-                x => {
-                    Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
-                        name: x.to_owned(),
-                    })))
-                }
-            }?;
+            let new =
+                match frag_name {
+                    "expr_raw_pkh" => node
+                        .verify_terminal_parent("expr_raw_pkh", "public key hash")
+                        .map(Self::expr_raw_pkh)
+                        .map_err(Error::Parse),
+                    "pk" => node
+                        .verify_key_expression_parent("pk")
+                        .map(Self::pk)
+                        .map_err(Error::Parse),
+                    "pkh" => node
+                        .verify_key_expression_parent("pkh")
+                        .map(Self::pkh)
+                        .map_err(Error::Parse),
+                    "pk_k" => node
+                        .verify_key_expression_parent("pk_k")
+                        .map(Self::pk_k)
+                        .map_err(Error::Parse),
+                    "pk_h" => node
+                        .verify_key_expression_parent("pk_h")
+                        .map(Self::pk_h)
+                        .map_err(Error::Parse),
+                    "after" => node.verify_after().map(Self::after).map_err(Error::Parse),
+                    "older" => node.verify_older().map(Self::older).map_err(Error::Parse),
+                    "sha256" => node
+                        .verify_terminal_parent("sha256", "hash")
+                        .map(Self::sha256)
+                        .map_err(Error::Parse),
+                    "hash256" => node
+                        .verify_terminal_parent("hash256", "hash")
+                        .map(Self::hash256)
+                        .map_err(Error::Parse),
+                    "ripemd160" => node
+                        .verify_terminal_parent("ripemd160", "hash")
+                        .map(Self::ripemd160)
+                        .map_err(Error::Parse),
+                    "hash160" => node
+                        .verify_terminal_parent("hash160", "hash")
+                        .map(Self::hash160)
+                        .map_err(Error::Parse),
+                    "1" => {
+                        node.verify_n_children("1", 0..=0)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Ok(Self::TRUE)
+                    }
+                    "0" => {
+                        node.verify_n_children("0", 0..=0)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Ok(Self::FALSE)
+                    }
+                    "and_v" => binary(node, &mut stack, "and_v", Terminal::AndV),
+                    "and_b" => binary(node, &mut stack, "and_b", Terminal::AndB),
+                    "and_n" => binary(node, &mut stack, "and_n", |x, y| {
+                        Terminal::AndOr(x, y, Arc::new(Self::FALSE))
+                    }),
+                    "andor" => {
+                        node.verify_n_children("andor", 3..=3)
+                            .map_err(From::from)
+                            .map_err(Error::Parse)?;
+                        Self::from_ast(Terminal::AndOr(
+                            stack.pop().unwrap(),
+                            stack.pop().unwrap(),
+                            stack.pop().unwrap(),
+                        ))
+                    }
+                    "or_b" => binary(node, &mut stack, "or_b", Terminal::OrB),
+                    "or_d" => binary(node, &mut stack, "or_d", Terminal::OrD),
+                    "or_c" => binary(node, &mut stack, "or_c", Terminal::OrC),
+                    "or_i" => binary(node, &mut stack, "or_i", Terminal::OrI),
+                    "thresh" => node
+                        .verify_threshold(|_| Ok(stack.pop().unwrap()))
+                        .map(Terminal::Thresh)
+                        .and_then(Self::from_ast),
+                    "multi" => node
+                        .verify_threshold(|sub| sub.verify_key_expression().map_err(Error::Parse))
+                        .map(Terminal::Multi)
+                        .and_then(Self::from_ast),
+                    "sortedmulti" => node
+                        .verify_threshold(|sub| sub.verify_key_expression().map_err(Error::Parse))
+                        .map(Terminal::SortedMulti)
+                        .and_then(Self::from_ast),
+                    "multi_a" => node
+                        .verify_threshold(|sub| sub.verify_key_expression().map_err(Error::Parse))
+                        .map(Terminal::MultiA)
+                        .and_then(Self::from_ast),
+                    "sortedmulti_a" => node
+                        .verify_threshold(|sub| sub.verify_key_expression().map_err(Error::Parse))
+                        .map(Terminal::SortedMultiA)
+                        .and_then(Self::from_ast),
+                    x => Err(Error::Parse(crate::ParseError::Tree(
+                        crate::ParseTreeError::UnknownName { name: x.to_owned() },
+                    ))),
+                }?;
 
             let mut new = Arc::new(new);
             if let Some(frag_wrap) = frag_wrap {
@@ -1180,13 +1213,7 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
 
         assert_eq!(stack.len(), 1);
         let ret = stack.pop().unwrap();
-        // Iterate through every node to check global validity. It is definitely not sufficient
-        // to check only the root, since this will fail to notice illegal xonly keys at the
-        // leaves. But probably checking every single node is overkill. This may be worth
-        // optimizing.
-        for node in ret.pre_order_iter() {
-            Ctx::check_global_validity(node)?;
-        }
+        ret.check_global_validity_recursive()?;
         Ok(Arc::try_unwrap(ret).unwrap())
     }
 }
@@ -2063,6 +2090,15 @@ mod tests {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }
         Tapscript::decode_consensus(&script.into_script()).unwrap_err();
+    }
+
+    #[test]
+    fn parse_subtree_under_key_fragment() {
+        // Parsing a subtree must not look at the fragments above it.
+        let tree = expression::Tree::from_str("pk(and_v(v:pk(A),pk(B)))").unwrap();
+        let subtree = tree.root().first_child().unwrap();
+        let ms = Miniscript::<String, Segwitv0>::from_tree(subtree).unwrap();
+        assert_eq!(ms.to_string(), "and_v(v:pk(A),pk(B))");
     }
 
     #[test]

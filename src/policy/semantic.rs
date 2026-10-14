@@ -466,12 +466,29 @@ impl<'a> MathParser<'a> {
         }
     }
 
-    fn consume_while(&mut self, pred: impl Fn(char) -> bool) -> &'a str {
+    fn consume_while(&mut self, mut pred: impl FnMut(char) -> bool) -> &'a str {
         let start = self.pos();
         while matches!(self.peek(), Some(c) if pred(c)) {
             self.next();
         }
         &self.s[start..self.pos()]
+    }
+
+    /// Consumes a terminal's argument, up to the `)` that closes the terminal.
+    ///
+    /// A key may be a function-style expression such as `musig(A,B)/0/*`, so the argument
+    /// can contain balanced parentheses.
+    fn consume_arg(&mut self) -> &'a str {
+        let mut depth = 0usize;
+        self.consume_while(|c| {
+            match c {
+                '(' => depth += 1,
+                ')' if depth == 0 => return false,
+                ')' => depth -= 1,
+                _ => {}
+            }
+            true
+        })
     }
 }
 
@@ -649,7 +666,7 @@ impl<'a> MathParser<'a> {
         }
         self.next();
 
-        let arg = self.consume_while(|c| c != ')').trim();
+        let arg = self.consume_arg().trim();
         self.expect(')')?;
 
         Ok(match name {
@@ -704,8 +721,20 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
+        // Collect the nodes in pre-order, skipping the descendants of `pk`: it parses its key
+        // argument itself, and the key may be a function-style expression such as
+        // `musig(A,B)/0/*` with descendants of its own.
+        let mut iter = root.pre_order_iter();
+        let mut nodes = Vec::with_capacity(iter.len());
+        while let Some(node) = iter.next() {
+            nodes.push(node);
+            if node.name() == "pk" && node.n_children() == 1 {
+                iter.skip_descendants();
+            }
+        }
+
         let mut stack = Vec::with_capacity(128);
-        for node in root.pre_order_iter().rev() {
+        for node in nodes.into_iter().rev() {
             // Before doing anything else, check if this is the inner value of a terminal.
             // In that case, just skip the node. Conveniently, there are no combinators
             // in policy that have a single child that these might be confused with (we
@@ -733,7 +762,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                     Ok(Self::Trivial)
                 }
                 "pk" => node
-                    .verify_terminal_parent("pk", "public key")
+                    .verify_key_expression_parent("pk")
                     .map(Policy::Key)
                     .map_err(Error::Parse),
                 "after" => node.verify_after().map_err(Error::Parse).map(Policy::After),
@@ -1209,6 +1238,22 @@ mod tests {
         // function-call form exercises the parser → Display → parser path.
         roundtrip("or(and(pk(A),pk(B)),pk(C))");
         roundtrip("thresh(2,pk(A),pk(B),pk(C))");
+    }
+
+    #[test]
+    fn parse_key_expressions() {
+        // A key may be a function-style expression, in both notations.
+        let musig = Policy::Key("musig(A,B)/0/*".to_owned());
+        assert_eq!(StringPolicy::from_str("pk(musig(A,B)/0/*)").unwrap(), musig);
+        let or =
+            Policy::Thresh(Threshold::or(Arc::new(musig), Arc::new(Policy::Key("C".to_owned()))));
+        assert_eq!(StringPolicy::from_str("(pk(musig(A,B)/0/*) ∨ pk(C))").unwrap(), or);
+        assert_eq!(StringPolicy::from_str("or(pk(musig(A,B)/0/*),pk(C))").unwrap(), or);
+
+        roundtrip("pk(musig(A,B)/0/*)");
+        roundtrip("(pk(musig(A,B)) ∨ pk(C))");
+        roundtrip("#{pk(musig(A,B)/<0;1>/*), pk(C), pk(D)} = 2");
+        roundtrip("thresh(2,pk(musig(A,B)),pk(C),pk(D))");
     }
 
     #[test]

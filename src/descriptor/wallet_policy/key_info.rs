@@ -36,7 +36,9 @@ impl TryFrom<DescriptorPublicKey> for KeyInfo {
             DescriptorPublicKey::XPub(_) | DescriptorPublicKey::MultiXPub(_) => {
                 Err(WalletPolicyError::KeyInfoUnexpectedDerivation(pk.to_string()))
             }
-            DescriptorPublicKey::Single(_) => Err(WalletPolicyError::KeyInfoNotExtendedKey),
+            DescriptorPublicKey::Single(_) | DescriptorPublicKey::Musig(_) => {
+                Err(WalletPolicyError::KeyInfoNotExtendedKey)
+            }
         }
     }
 }
@@ -73,7 +75,9 @@ pub(super) fn to_key_info(pk: &DescriptorPublicKey) -> Result<KeyInfo, WalletPol
     let (origin, xkey) = match pk {
         DescriptorPublicKey::XPub(xpub) => (xpub.origin.clone(), xpub.xkey),
         DescriptorPublicKey::MultiXPub(xpub) => (xpub.origin.clone(), xpub.xkey),
-        DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+        DescriptorPublicKey::Single(_) | DescriptorPublicKey::Musig(_) => {
+            return Err(WalletPolicyError::KeyInfoNotExtendedKey)
+        }
     };
     Ok(KeyInfo { origin, xkey })
 }

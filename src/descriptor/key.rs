@@ -27,6 +27,8 @@ pub enum DescriptorPublicKey {
     XPub(DescriptorXKey<bip32::Xpub>),
     /// Multiple extended public keys.
     MultiXPub(DescriptorMultiXKey<bip32::Xpub>),
+    /// MuSig2 aggregate key expression.
+    Musig(DescriptorMusigKey),
 }
 
 /// The descriptor secret key, either a single private key or an xprv.
@@ -108,6 +110,34 @@ pub struct DescriptorMultiXKey<K: InnerXKey> {
     pub wildcard: Wildcard,
 }
 
+/// Instance of a BIP390 `musig()` aggregate key expression.
+///
+/// Participants must be compressed public keys or extended keys. X-only and uncompressed keys are
+/// rejected: BIP327 KeyAgg takes 33-byte keys (matches Bitcoin Core).
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
+pub struct DescriptorMusigKey {
+    /// Participant keys.
+    participants: Vec<DescriptorPublicKey>,
+    /// Derivation paths applied to the aggregate key. Never empty.
+    derivation_paths: DerivPaths,
+    /// Whether the aggregate key expression is wildcard.
+    wildcard: Wildcard,
+}
+
+/// The way a `musig()` key expression applies derivation.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum MusigDerivationKind<'a> {
+    /// Participant keys are derived first, then aggregated.
+    DeriveThenAggregate,
+    /// Participant xpubs are aggregated first, then the BIP328 synthetic xpub is derived.
+    AggregateThenDerive {
+        /// Derivation paths applied to the aggregate key.
+        derivation_paths: &'a DerivPaths,
+        /// Wildcard applied to the aggregate key.
+        wildcard: Wildcard,
+    },
+}
+
 /// Single public key without any origin or range information.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum SinglePubKey {
@@ -122,7 +152,7 @@ pub enum SinglePubKey {
 pub struct DefiniteDescriptorKey(DescriptorPublicKey);
 
 /// Network information extracted from extended keys in a descriptor.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum XKeyNetwork {
     /// No extended keys are present in the descriptor.
     NoXKeys,
@@ -439,6 +469,7 @@ pub enum NonDefiniteKeyError {
     Multipath,
     HardenedStep,
     NoWildcard,
+    MaximumDepthExceeded,
 }
 
 impl fmt::Display for NonDefiniteKeyError {
@@ -452,12 +483,52 @@ impl fmt::Display for NonDefiniteKeyError {
             Self::NoWildcard => {
                 f.write_str("descriptor does not have a wildcard; cannot derive at index")
             }
+            Self::MaximumDepthExceeded => f.write_str(
+                "key deeper than BIP32's maximum depth of 255 cannot be a DerivedDescriptorKey",
+            ),
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl error::Error for NonDefiniteKeyError {}
+
+/// Error deriving a `musig()` aggregate public key.
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
+pub enum MusigKeyAggError {
+    /// The `musig()` key expression is not definite.
+    NonDefiniteKey(NonDefiniteKeyError),
+    /// BIP32 aggregate-level derivation failed.
+    AggregateDerivation(bip32::Error),
+    /// BIP327 key aggregation produced the point at infinity.
+    Infinity,
+}
+
+impl fmt::Display for MusigKeyAggError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonDefiniteKey(err) => err.fmt(f),
+            Self::AggregateDerivation(err) => err.fmt(f),
+            Self::Infinity => f.write_str("musig aggregate public key is infinity"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for MusigKeyAggError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::NonDefiniteKey(err) => Some(err),
+            Self::AggregateDerivation(err) => Some(err),
+            Self::Infinity => None,
+        }
+    }
+}
+
+impl From<NonDefiniteKeyError> for MusigKeyAggError {
+    fn from(err: NonDefiniteKeyError) -> Self { Self::NonDefiniteKey(err) }
+}
 
 /// Kinds of malformed key data
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -469,10 +540,19 @@ pub enum MalformedKeyDataKind {
     InvalidFullPublicKeyPrefix,
     InvalidMasterFingerprintLength,
     InvalidMultiIndexStep,
+    InvalidMusigAggregateDerivation,
+    InvalidMusigExpression,
     InvalidMultiXKeyDerivation,
     InvalidPublicKeyLength,
     InvalidWildcardInDerivationPath,
     KeyTooShort,
+    MaximumDepthExceeded,
+    MusigEmpty,
+    MusigHardenedDerivation,
+    MusigMultipathLenMismatch,
+    MusigNested,
+    MusigUncompressedParticipant,
+    MusigXOnlyParticipant,
     MultipleFingerprintsInPublicKey,
     MultipleDerivationPathIndexSteps,
     NoKeyAfterOrigin,
@@ -488,10 +568,21 @@ impl fmt::Display for MalformedKeyDataKind {
             Self::InvalidFullPublicKeyPrefix => "only full public keys with prefixes '02', '03' or '04' are allowed",
             Self::InvalidMasterFingerprintLength => "master fingerprint should be 8 characters long",
             Self::InvalidMultiIndexStep => "invalid multi index step in multipath descriptor",
+            Self::InvalidMusigAggregateDerivation => "musig aggregate-level derivation requires non-ranged xpub participants",
+            Self::InvalidMusigExpression => "invalid musig key expression",
             Self::InvalidMultiXKeyDerivation => "can't make a multi-xpriv with hardened derivation steps that are not shared among all paths into a public key",
             Self::InvalidPublicKeyLength => "public keys must be 64, 66 or 130 characters in size",
             Self::InvalidWildcardInDerivationPath => "'*' may only appear as last element in a derivation path",
             Self::KeyTooShort => "key too short",
+            Self::MaximumDepthExceeded => {
+                "key derivation would go deeper than BIP32's maximum depth of 255"
+            }
+            Self::MusigEmpty => "musig key expression must contain at least one participant",
+            Self::MusigHardenedDerivation => "musig aggregate-level derivation cannot contain hardened steps",
+            Self::MusigMultipathLenMismatch => "musig participant multipath lengths must match",
+            Self::MusigNested => "musig key expressions cannot be nested",
+            Self::MusigUncompressedParticipant => "musig participant keys must be compressed; uncompressed keys are not allowed",
+            Self::MusigXOnlyParticipant => "musig participant keys must be compressed public keys; x-only keys are not allowed",
             Self::MultipleFingerprintsInPublicKey => "multiple ']' in Descriptor Public Key",
             Self::MultipleDerivationPathIndexSteps => "'<' may only appear once in a derivation path",
             Self::NoKeyAfterOrigin => "no key after origin",
@@ -619,7 +710,23 @@ impl fmt::Display for DescriptorPublicKey {
             Self::Single(ref pk) => pk.fmt(f),
             Self::XPub(ref xpub) => xpub.fmt(f),
             Self::MultiXPub(ref xpub) => xpub.fmt(f),
+            Self::Musig(ref musig) => musig.fmt(f),
         }
+    }
+}
+
+impl fmt::Display for DescriptorMusigKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("musig(")?;
+        for (i, participant) in self.participants.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            participant.fmt(f)?;
+        }
+        f.write_str(")")?;
+        fmt_derivation_paths(f, self.derivation_paths.paths())?;
+        self.wildcard.fmt(f)
     }
 }
 
@@ -732,6 +839,10 @@ impl FromStr for DescriptorPublicKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with("musig(") {
+            return parse_musig_key(s, Self::from_str).map(DescriptorPublicKey::Musig);
+        }
+
         // A "raw" public key without any origin is the least we accept.
         if s.len() < 64 {
             return Err(DescriptorKeyParseError::MalformedKeyData(
@@ -744,7 +855,13 @@ impl FromStr for DescriptorPublicKey {
         match key_part.get(..4) {
             Some("xprv" | "tprv") => Err(DescriptorKeyParseError::UnexpectedXPrivateKey),
             Some("xpub" | "tpub") => {
-                let (xpub, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
+                let (xpub, derivation_paths, wildcard) =
+                    parse_xkey_deriv::<bip32::Xpub, _>(key_part)?;
+                if derivation_exceeds_max_depth(xpub.depth, &derivation_paths, wildcard) {
+                    return Err(DescriptorKeyParseError::MalformedKeyData(
+                        MalformedKeyDataKind::MaximumDepthExceeded,
+                    ));
+                }
                 if derivation_paths.len() > 1 {
                     Ok(Self::MultiXPub(DescriptorMultiXKey {
                         origin,
@@ -793,6 +910,93 @@ impl FromStr for DescriptorPublicKey {
     }
 }
 
+/// Parses a `musig()` key expression, parsing each participant with `parse_participant`.
+pub(super) fn parse_musig_key(
+    s: &str,
+    mut parse_participant: impl FnMut(&str) -> Result<DescriptorPublicKey, DescriptorKeyParseError>,
+) -> Result<DescriptorMusigKey, DescriptorKeyParseError> {
+    let tree = crate::expression::Tree::from_str(s).map_err(|_| {
+        DescriptorKeyParseError::MalformedKeyData(MalformedKeyDataKind::InvalidMusigExpression)
+    })?;
+    let root = tree.root();
+    if root.name() != "musig" {
+        return Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::InvalidMusigExpression,
+        ));
+    }
+    if root.n_children() == 0 {
+        return Err(DescriptorKeyParseError::MalformedKeyData(MalformedKeyDataKind::MusigEmpty));
+    }
+
+    let mut participants = Vec::with_capacity(root.n_children());
+    for child in root.children() {
+        // Participants are single or extended keys, which are terminals.
+        if child.n_children() > 0 {
+            let kind = if child.name() == "musig" {
+                MalformedKeyDataKind::MusigNested
+            } else {
+                MalformedKeyDataKind::InvalidMusigExpression
+            };
+            return Err(DescriptorKeyParseError::MalformedKeyData(kind));
+        }
+        participants.push(parse_participant(child.name())?);
+    }
+
+    let (mut derivation_paths, wildcard) = parse_derivation_suffix(root.postfix())?;
+    if derivation_paths.is_empty() {
+        derivation_paths.push(bip32::DerivationPath::from(Vec::new()));
+    }
+
+    DescriptorMusigKey::new(
+        participants,
+        DerivPaths::new(derivation_paths).expect("not empty"),
+        wildcard,
+    )
+}
+
+fn has_hardened_step(path: &bip32::DerivationPath) -> bool {
+    path.into_iter().any(|step| step.is_hardened())
+}
+
+/// Checks that several derivation paths form one BIP389 multipath step, as the parser produces
+/// them and as [`fmt_derivation_paths`] writes them: equal lengths, exactly one step where they
+/// differ, and no index repeated at that step.
+fn check_multipath_shape(paths: &[bip32::DerivationPath]) -> Result<(), DescriptorKeyParseError> {
+    let (first, rest) = match paths.split_first() {
+        Some((first, rest)) if !rest.is_empty() => (first, rest),
+        _ => return Ok(()),
+    };
+    if rest.iter().any(|path| path.len() != first.len()) {
+        return Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::InvalidMultiIndexStep,
+        ));
+    }
+
+    let mut steps = (0..first.len()).filter(|&i| rest.iter().any(|path| path[i] != first[i]));
+    let step = match (steps.next(), steps.next()) {
+        (Some(step), None) => step,
+        (Some(_), Some(_)) => {
+            return Err(DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::MultipleDerivationPathIndexSteps,
+            ))
+        }
+        (None, _) => {
+            return Err(DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::InvalidMultiIndexStep,
+            ))
+        }
+    };
+
+    let mut indexes = paths.iter().map(|path| path[step]).collect::<Vec<_>>();
+    indexes.sort_unstable();
+    if indexes.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::InvalidMultiIndexStep,
+        ));
+    }
+    Ok(())
+}
+
 impl From<XOnlyPublicKey> for DescriptorPublicKey {
     fn from(key: XOnlyPublicKey) -> Self {
         Self::Single(SinglePub { origin: None, key: SinglePubKey::XOnly(key) })
@@ -814,6 +1018,9 @@ impl DescriptorPublicKey {
     /// four bytes of the HASH160 of its serialization (33 bytes for a full key, 32 bytes for an
     /// x-only key). This matches the key origin Bitcoin Core reports for keys without origin
     /// information, and is never `0x00000000` for a key without origin.
+    ///
+    /// The exception is a `musig()` key, which has no single master key: its fingerprint is
+    /// `0x00000000`.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
             Self::XPub(ref xpub) => {
@@ -848,6 +1055,7 @@ impl DescriptorPublicKey {
                     )
                 }
             }
+            Self::Musig(_) => bip32::Fingerprint::default(),
         }
     }
 
@@ -857,7 +1065,8 @@ impl DescriptorPublicKey {
     /// can get full paths by appending one additional derivation step, according
     /// to the wildcard type (hardened or normal).
     ///
-    /// For multipath extended keys, this returns `None`.
+    /// For multipath extended keys, this returns `None`. It also returns `None` for `musig()`
+    /// keys, which have no single key source.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         match *self {
             Self::XPub(ref xpub) => {
@@ -873,7 +1082,7 @@ impl DescriptorPublicKey {
             } else {
                 bip32::DerivationPath::from(vec![])
             }),
-            Self::MultiXPub(_) => None,
+            Self::MultiXPub(_) | Self::Musig(_) => None,
         }
     }
 
@@ -884,6 +1093,9 @@ impl DescriptorPublicKey {
     /// For wildcard keys this will return the path up to the wildcard, so you
     /// can get full paths by appending one additional derivation step, according
     /// to the wildcard type (hardened or normal).
+    ///
+    /// For `musig()` keys these are the aggregate-level paths, relative to the BIP328 synthetic
+    /// xpub rather than to a master key.
     pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
         match self {
             Self::MultiXPub(xpub) => {
@@ -898,6 +1110,7 @@ impl DescriptorPublicKey {
                     .map(|p| origin_path.extend(p))
                     .collect()
             }
+            Self::Musig(musig) => musig.derivation_paths.paths().clone(),
             _ => vec![self
                 .full_derivation_path()
                 .expect("Must be Some for non-multipath keys")],
@@ -915,7 +1128,7 @@ impl DescriptorPublicKey {
         match *self {
             Self::XPub(ref xpub) => Some(xpub.derivation_path.clone()),
             Self::Single(_) => Some(bip32::DerivationPath::from(vec![])),
-            Self::MultiXPub(_) => None,
+            Self::MultiXPub(_) | Self::Musig(_) => None,
         }
     }
 
@@ -933,6 +1146,7 @@ impl DescriptorPublicKey {
                 vec![bip32::DerivationPath::from(vec![])]
             }
             Self::MultiXPub(xpub) => xpub.derivation_paths.paths().clone(),
+            Self::Musig(musig) => musig.derivation_paths.paths().clone(),
         }
     }
 
@@ -942,6 +1156,10 @@ impl DescriptorPublicKey {
             Self::Single(..) => false,
             Self::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
             Self::MultiXPub(ref xpub) => xpub.wildcard != Wildcard::None,
+            Self::Musig(ref musig) => {
+                musig.wildcard != Wildcard::None
+                    || musig.participants.iter().any(Self::has_wildcard)
+            }
         }
     }
 
@@ -951,6 +1169,22 @@ impl DescriptorPublicKey {
             Self::Single(..) => None,
             Self::XPub(ref xpub) => Some(xpub.wildcard),
             Self::MultiXPub(ref xpub) => Some(xpub.wildcard),
+            Self::Musig(ref musig) => Some(musig.wildcard),
+        }
+    }
+
+    /// Applies `pred` to this key and any underlying `musig()` participant keys.
+    ///
+    /// For a `musig()` key expression, this walks the participant keys and does not call `pred`
+    /// on the aggregate key expression itself.
+    pub fn for_each_leaf_key<'a, F>(&'a self, mut pred: F) -> bool
+    where
+        F: FnMut(&'a Self) -> bool,
+    {
+        match self {
+            // `DescriptorMusigKey::new` rejects nested `musig()` participants.
+            Self::Musig(musig) => musig.participants.iter().all(pred),
+            _ => pred(self),
         }
     }
 
@@ -960,6 +1194,12 @@ impl DescriptorPublicKey {
             Self::Single(..) => &[],
             Self::XPub(xpub) => core::slice::from_ref(&xpub.derivation_path),
             Self::MultiXPub(xpub) => &xpub.derivation_paths.paths()[..],
+            Self::Musig(musig) => {
+                if musig.derivation_paths.paths().iter().any(has_hardened_step) {
+                    return true;
+                }
+                return musig.participants.iter().any(Self::has_hardened_step);
+            }
         };
         for p in paths {
             for step in p.into_iter() {
@@ -971,20 +1211,44 @@ impl DescriptorPublicKey {
         false
     }
 
+    /// Whether deriving this key, including a wildcard step, would go deeper than BIP32's maximum
+    /// depth of 255.
+    fn exceeds_max_depth(&self) -> bool {
+        match self {
+            Self::Single(..) => false,
+            Self::XPub(xpub) => derivation_exceeds_max_depth(
+                xpub.xkey.depth,
+                core::slice::from_ref(&xpub.derivation_path),
+                xpub.wildcard,
+            ),
+            Self::MultiXPub(xpub) => derivation_exceeds_max_depth(
+                xpub.xkey.depth,
+                xpub.derivation_paths.paths(),
+                xpub.wildcard,
+            ),
+            // `DescriptorMusigKey::new` already limits the aggregate-level paths.
+            Self::Musig(musig) => musig.participants.iter().any(Self::exceeds_max_depth),
+        }
+    }
+
     /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
     /// *definite* key (i.e. one where all the derivation paths are set).
     ///
     /// # Returns
     ///
-    /// - If this key is not an xpub, returns `self`.
+    /// - If this key is a single key, returns `self`.
     /// - If this key is an xpub but does not have a wildcard, returns `self`.
-    /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
+    /// - If this key is an xpub with a wildcard, returns the xpub at derivation `index` (removing
+    ///   the wildcard).
+    /// - If this key is a `musig()` key, returns it with its ranged participants and any
+    ///   aggregate-level wildcard derived at `index`.
     ///
     /// # Errors
     ///
     /// - If `index` is hardened.
     /// - If derivation path contains a hardened step.
     /// - If the key contains multi-path derivations
+    /// - If deriving the key would go deeper than BIP32's maximum depth of 255
     pub fn at_derivation_index(
         self,
         index: u32,
@@ -1013,6 +1277,41 @@ impl DescriptorPublicKey {
                 })
             }
             Self::MultiXPub(_) => return Err(NonDefiniteKeyError::Multipath),
+            Self::Musig(musig) => {
+                let participants = musig
+                    .participants
+                    .into_iter()
+                    .map(|participant| {
+                        participant
+                            .at_derivation_index(index)
+                            .map(DefiniteDescriptorKey::into_descriptor_public_key)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let derivation_paths = musig
+                    .derivation_paths
+                    .into_paths()
+                    .into_iter()
+                    .map(|path| match musig.wildcard {
+                        Wildcard::None => Ok(path),
+                        Wildcard::Unhardened => Ok(path.into_child(
+                            bip32::ChildNumber::from_normal_idx(index)
+                                .ok()
+                                .ok_or(NonDefiniteKeyError::HardenedStep)?,
+                        )),
+                        Wildcard::Hardened => Err(NonDefiniteKeyError::HardenedStep),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Self::Musig(
+                    DescriptorMusigKey::new(
+                        participants,
+                        DerivPaths::new(derivation_paths).expect("not empty"),
+                        Wildcard::None,
+                    )
+                    .expect("deriving a valid musig key preserves musig invariants"),
+                )
+            }
         };
 
         DefiniteDescriptorKey::new(definite)
@@ -1023,6 +1322,10 @@ impl DescriptorPublicKey {
         match *self {
             Self::Single(..) | Self::XPub(..) => false,
             Self::MultiXPub(_) => true,
+            Self::Musig(ref musig) => {
+                musig.derivation_paths.paths().len() > 1
+                    || musig.participants.iter().any(Self::is_multipath)
+            }
         }
     }
 
@@ -1049,6 +1352,7 @@ impl DescriptorPublicKey {
                     })
                     .collect()
             }
+            Self::Musig(musig) => musig.into_single_keys(),
         }
     }
 
@@ -1056,11 +1360,278 @@ impl DescriptorPublicKey {
     ///
     /// Returns `None` for single keys (non-extended keys), `Some(NetworkKind)` for extended keys.
     pub fn xkey_network(&self) -> Option<NetworkKind> {
-        match self {
-            Self::Single(_) => None,
-            Self::XPub(xpub) => Some(xpub.xkey.network),
-            Self::MultiXPub(multi_xpub) => Some(multi_xpub.xkey.network),
+        match self.xkey_network_summary() {
+            XKeyNetwork::Single(network) => Some(network),
+            XKeyNetwork::NoXKeys | XKeyNetwork::Mixed => None,
         }
+    }
+
+    pub(crate) fn xkey_network_summary(&self) -> XKeyNetwork {
+        match self {
+            Self::Single(_) => XKeyNetwork::NoXKeys,
+            Self::XPub(xpub) => XKeyNetwork::Single(xpub.xkey.network),
+            Self::MultiXPub(multi_xpub) => XKeyNetwork::Single(multi_xpub.xkey.network),
+            Self::Musig(musig) => musig.xkey_network_summary(),
+        }
+    }
+}
+
+impl DescriptorMusigKey {
+    /// Creates a `musig()` aggregate key expression after validating BIP390 invariants.
+    pub fn new(
+        participants: Vec<DescriptorPublicKey>,
+        derivation_paths: DerivPaths,
+        wildcard: Wildcard,
+    ) -> Result<Self, DescriptorKeyParseError> {
+        Self::validate(&participants, &derivation_paths, wildcard)?;
+        Ok(Self { participants, derivation_paths, wildcard })
+    }
+
+    /// Participant keys in this aggregate.
+    pub fn participants(&self) -> &[DescriptorPublicKey] { &self.participants }
+
+    /// Derivation paths applied to the aggregate key.
+    pub fn derivation_paths(&self) -> &DerivPaths { &self.derivation_paths }
+
+    /// Wildcard applied to the aggregate key expression.
+    pub fn wildcard(&self) -> Wildcard { self.wildcard }
+
+    /// Returns whether this `musig()` derives participants before aggregation or derives the
+    /// aggregate through the BIP328 synthetic xpub.
+    pub fn derivation_kind(&self) -> MusigDerivationKind<'_> {
+        if Self::has_aggregate_derivation(&self.derivation_paths, self.wildcard) {
+            MusigDerivationKind::AggregateThenDerive {
+                derivation_paths: &self.derivation_paths,
+                wildcard: self.wildcard,
+            }
+        } else {
+            MusigDerivationKind::DeriveThenAggregate
+        }
+    }
+
+    /// Returns the BIP327 aggregate public key before aggregate-level BIP328 derivation.
+    ///
+    /// This requires all participants to be definite. If participant keys are ranged, first derive
+    /// the whole key with [`DescriptorPublicKey::at_derivation_index`], and call this on the
+    /// `musig()` key it returns.
+    pub fn aggregate_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<PublicKey, MusigKeyAggError> {
+        super::musig::aggregate_public_key(secp, self)
+    }
+
+    /// Returns the BIP328 synthetic xpub for aggregate-level derivation, if this `musig()` uses it.
+    pub fn synthetic_xpub(&self, aggregate: PublicKey) -> Option<bip32::Xpub> {
+        if Self::has_aggregate_derivation(&self.derivation_paths, self.wildcard) {
+            let network = self.xkey_network().unwrap_or(NetworkKind::Main);
+            Some(super::musig::synthetic_xpub(aggregate.inner, network))
+        } else {
+            None
+        }
+    }
+
+    /// Derives the final aggregate public key for a definite `musig()` key expression.
+    pub fn try_derive_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<PublicKey, MusigKeyAggError> {
+        // `aggregate_public_key` checks that the participants are definite, and `new` rejects
+        // hardened aggregate-level steps.
+        if self.wildcard != Wildcard::None {
+            return Err(NonDefiniteKeyError::Wildcard.into());
+        }
+        if self.derivation_paths.paths().len() > 1 {
+            return Err(NonDefiniteKeyError::Multipath.into());
+        }
+        super::musig::derive_public_key(secp, self)
+    }
+
+    /// Derives each participant key at `index`, as [`DescriptorPublicKey::at_derivation_index`]
+    /// does: ranged participants are derived at `index`, and the others are returned as-is.
+    pub fn derived_participants_at_index(
+        &self,
+        index: u32,
+    ) -> Result<Vec<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        self.participants
+            .iter()
+            .map(|participant| participant.clone().at_derivation_index(index))
+            .collect()
+    }
+
+    pub(crate) fn derivation_suffix_string(&self) -> String {
+        use core::fmt::Write as _;
+
+        let mut suffix = String::new();
+        fmt_derivation_paths(&mut suffix, self.derivation_paths.paths())
+            .expect("writing to a string cannot fail");
+        write!(&mut suffix, "{}", self.wildcard).expect("writing to a string cannot fail");
+        suffix
+    }
+
+    /// Get the network of the participant xpubs, if all present xpubs agree.
+    pub fn xkey_network(&self) -> Option<NetworkKind> {
+        match self.xkey_network_summary() {
+            XKeyNetwork::Single(network) => Some(network),
+            XKeyNetwork::NoXKeys | XKeyNetwork::Mixed => None,
+        }
+    }
+
+    pub(crate) fn xkey_network_summary(&self) -> XKeyNetwork {
+        let mut network = None;
+        for participant in &self.participants {
+            match participant.xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(found) => match network {
+                    None => network = Some(found),
+                    Some(current) if current == found => {}
+                    Some(_) => return XKeyNetwork::Mixed,
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
+            }
+        }
+
+        match network {
+            Some(network) => XKeyNetwork::Single(network),
+            None => XKeyNetwork::NoXKeys,
+        }
+    }
+
+    fn validate(
+        participants: &[DescriptorPublicKey],
+        derivation_paths: &DerivPaths,
+        wildcard: Wildcard,
+    ) -> Result<(), DescriptorKeyParseError> {
+        if participants.is_empty() {
+            return Err(DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::MusigEmpty,
+            ));
+        }
+
+        if participants
+            .iter()
+            .any(|participant| matches!(participant, DescriptorPublicKey::Musig(_)))
+        {
+            return Err(DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::MusigNested,
+            ));
+        }
+
+        // BIP327 KeyAgg takes 33-byte compressed keys. Extended keys always derive compressed
+        // keys, so only single keys can fail these checks.
+        for participant in participants {
+            if participant.is_x_only_key() {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::MusigXOnlyParticipant,
+                ));
+            }
+            if participant.is_uncompressed() {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::MusigUncompressedParticipant,
+                ));
+            }
+        }
+
+        if Self::has_aggregate_derivation(derivation_paths, wildcard) {
+            if wildcard == Wildcard::Hardened
+                || derivation_paths.paths().iter().any(has_hardened_step)
+            {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::MusigHardenedDerivation,
+                ));
+            }
+            check_multipath_shape(derivation_paths.paths())?;
+            // Aggregate-level derivation starts from the BIP328 synthetic xpub, at depth 0.
+            if derivation_exceeds_max_depth(0, derivation_paths.paths(), wildcard) {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::MaximumDepthExceeded,
+                ));
+            }
+
+            if participants.iter().any(|p| {
+                !matches!(p, DescriptorPublicKey::XPub(_)) || p.has_wildcard() || p.is_multipath()
+            }) {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::InvalidMusigAggregateDerivation,
+                ));
+            }
+        } else {
+            let mut multipath_len = None;
+            for participant in participants {
+                let n_paths = participant.num_der_paths();
+                if n_paths > 1 {
+                    match multipath_len {
+                        None => multipath_len = Some(n_paths),
+                        Some(len) if len == n_paths => {}
+                        Some(_) => {
+                            return Err(DescriptorKeyParseError::MalformedKeyData(
+                                MalformedKeyDataKind::MusigMultipathLenMismatch,
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn has_aggregate_derivation(derivation_paths: &DerivPaths, wildcard: Wildcard) -> bool {
+        wildcard != Wildcard::None
+            || derivation_paths.paths().len() > 1
+            || derivation_paths.paths().iter().any(|path| !path.is_empty())
+    }
+
+    fn into_single_keys(self) -> Vec<DescriptorPublicKey> {
+        let Self { participants, derivation_paths, wildcard } = self;
+        let derivation_paths = derivation_paths.into_paths();
+        if derivation_paths.len() > 1 {
+            return derivation_paths
+                .into_iter()
+                .map(|derivation_path| {
+                    DescriptorPublicKey::Musig(
+                        Self::new(
+                            participants.clone(),
+                            DerivPaths::new(vec![derivation_path]).expect("not empty"),
+                            wildcard,
+                        )
+                        .expect("single aggregate paths preserve musig invariants"),
+                    )
+                })
+                .collect();
+        }
+
+        let participant_keys = participants
+            .into_iter()
+            .map(DescriptorPublicKey::into_single_keys)
+            .collect::<Vec<_>>();
+        let n_keys = participant_keys.iter().map(Vec::len).max().unwrap_or(1);
+        debug_assert!(participant_keys
+            .iter()
+            .all(|keys| keys.len() == 1 || keys.len() == n_keys));
+
+        (0..n_keys)
+            .map(|i| {
+                let participants = participant_keys
+                    .iter()
+                    .map(|keys| {
+                        if keys.len() == 1 {
+                            keys[0].clone()
+                        } else {
+                            keys[i].clone()
+                        }
+                    })
+                    .collect();
+                DescriptorPublicKey::Musig(
+                    Self::new(
+                        participants,
+                        DerivPaths::new(derivation_paths.clone()).expect("not empty"),
+                        wildcard,
+                    )
+                    .expect("single participant paths preserve musig invariants"),
+                )
+            })
+            .collect()
     }
 }
 
@@ -1075,7 +1646,13 @@ impl FromStr for DescriptorSecretKey {
                 .map_err(DescriptorKeyParseError::WifPrivateKey)?;
             Ok(Self::Single(SinglePriv { key: sk, origin }))
         } else {
-            let (xpriv, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
+            let (xpriv, derivation_paths, wildcard) =
+                parse_xkey_deriv::<bip32::Xpriv, _>(key_part)?;
+            if derivation_exceeds_max_depth(xpriv.depth, &derivation_paths, wildcard) {
+                return Err(DescriptorKeyParseError::MalformedKeyData(
+                    MalformedKeyDataKind::MaximumDepthExceeded,
+                ));
+            }
             if derivation_paths.len() > 1 {
                 Ok(Self::MultiXPrv(DescriptorMultiXKey {
                     origin,
@@ -1158,6 +1735,20 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
     }
 }
 
+/// Whether deriving from an extended key at `depth` along any of `paths`, plus one more step for a
+/// wildcard, would go deeper than BIP32's maximum depth of 255.
+///
+/// The paths hold only the steps after the extended key. Its depth already includes the steps of
+/// its origin, so those are not counted again.
+fn derivation_exceeds_max_depth(
+    depth: u8,
+    paths: &[bip32::DerivationPath],
+    wildcard: Wildcard,
+) -> bool {
+    let longest = paths.iter().map(|path| path.len()).max().unwrap_or(0);
+    longest + usize::from(wildcard != Wildcard::None) > usize::from(u8::MAX - depth)
+}
+
 pub(crate) fn parse_xkey_deriv<Key, E>(
     key_deriv: &str,
 ) -> Result<(Key, Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError>
@@ -1165,8 +1756,8 @@ where
     Key: FromStr<Err = E>,
     E: Into<XKeyParseError>,
 {
-    let mut key_deriv = key_deriv.split('/');
-    let xkey_str = key_deriv
+    let mut key_deriv_split = key_deriv.split('/');
+    let xkey_str = key_deriv_split
         .next()
         .ok_or(DescriptorKeyParseError::MalformedKeyData(
             MalformedKeyDataKind::NoKeyAfterOrigin,
@@ -1175,6 +1766,28 @@ where
     let xkey =
         Key::from_str(xkey_str).map_err(|e| DescriptorKeyParseError::XKeyParseError(e.into()))?;
 
+    let (derivation_paths, wildcard) = parse_derivation_steps(key_deriv_split)?;
+
+    Ok((xkey, derivation_paths, wildcard))
+}
+
+fn parse_derivation_suffix(
+    suffix: &str,
+) -> Result<(Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError> {
+    if suffix.is_empty() {
+        Ok((Vec::new(), Wildcard::None))
+    } else if let Some(suffix) = suffix.strip_prefix('/') {
+        parse_derivation_steps(suffix.split('/'))
+    } else {
+        Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::InvalidMusigExpression,
+        ))
+    }
+}
+
+fn parse_derivation_steps<'a>(
+    key_deriv: impl Iterator<Item = &'a str>,
+) -> Result<(Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError> {
     let mut wildcard = Wildcard::None;
     let mut multipath = false;
     let derivation_paths = key_deriv
@@ -1268,7 +1881,7 @@ where
         .map(|index_list| index_list.into_iter().collect::<bip32::DerivationPath>())
         .collect::<Vec<bip32::DerivationPath>>();
 
-    Ok((xkey, derivation_paths, wildcard))
+    Ok((derivation_paths, wildcard))
 }
 
 impl<K: InnerXKey> DescriptorXKey<K> {
@@ -1366,6 +1979,8 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_uncompressed(&self) -> bool {
         match self {
             Self::Single(key) => key.is_uncompressed(),
+            // Extended keys derive compressed keys, and `DescriptorMusigKey::new` rejects
+            // uncompressed `musig()` participants.
             _ => false,
         }
     }
@@ -1373,15 +1988,30 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         match self {
             Self::Single(single_pub) => single_pub.is_x_only_key(),
+            // The aggregate is used as an x-only Taproot key. Non-Taproot contexts reject it,
+            // with their own error through `is_musig`.
+            Self::Musig(_) => true,
             _ => false,
         }
     }
+
+    fn is_musig(&self) -> bool { matches!(self, Self::Musig(_)) }
 
     fn num_der_paths(&self) -> usize {
         match self {
             Self::Single(single) => single.num_der_paths(),
             Self::XPub(xpub) => xpub.num_der_paths(),
             Self::MultiXPub(xpub) => xpub.num_der_paths(),
+            Self::Musig(musig) => {
+                let aggregate_paths = musig.derivation_paths.paths().len();
+                let participant_paths = musig
+                    .participants
+                    .iter()
+                    .map(Self::num_der_paths)
+                    .max()
+                    .unwrap_or(0);
+                aggregate_paths.max(participant_paths)
+            }
         }
     }
 }
@@ -1392,8 +2022,15 @@ impl DefiniteDescriptorKey {
     /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
     /// always return a compressed key
     ///
-    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
-    /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
+    /// Hardened derivation steps are rejected when constructing a `DefiniteDescriptorKey`. To
+    /// handle a `musig()` key aggregation error explicitly, use
+    /// [`DescriptorMusigKey::try_derive_public_key`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if derivation fails. [`Self::new`] rejects keys that BIP32 cannot derive, so this
+    /// only happens in cryptographic edge cases that are unreachable for non-adversarial keys,
+    /// such as a BIP327 `musig()` aggregate at the point at infinity.
     pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
@@ -1415,12 +2052,16 @@ impl DefiniteDescriptorKey {
             DescriptorPublicKey::MultiXPub(_) => {
                 unreachable!("impossible by construction of DefiniteDescriptorKey")
             }
+            DescriptorPublicKey::Musig(ref musig) => {
+                super::musig::derive_public_key(secp, musig).expect("failed to derive musig() key")
+            }
         }
     }
 
-    /// Construct an instance from a descriptor key and a derivation index
+    /// Constructs an instance from a descriptor key.
     ///
-    /// Returns `None` if the key contains a wildcard
+    /// Returns an error if the key has a wildcard, a hardened derivation step or several derivation
+    /// paths, or if deriving it would go deeper than BIP32's maximum depth of 255.
     pub fn new(key: DescriptorPublicKey) -> Result<Self, NonDefiniteKeyError> {
         if key.has_wildcard() {
             Err(NonDefiniteKeyError::Wildcard)
@@ -1428,6 +2069,8 @@ impl DefiniteDescriptorKey {
             Err(NonDefiniteKeyError::HardenedStep)
         } else if key.is_multipath() {
             Err(NonDefiniteKeyError::Multipath)
+        } else if key.exceeds_max_depth() {
+            Err(NonDefiniteKeyError::MaximumDepthExceeded)
         } else {
             Ok(Self(key))
         }
@@ -1436,16 +2079,21 @@ impl DefiniteDescriptorKey {
     /// The fingerprint of the master key associated with this key.
     ///
     /// See [`DescriptorPublicKey::master_fingerprint`] for how this is computed for keys without
-    /// origin information.
+    /// origin information, including `musig()` keys.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint { self.0.master_fingerprint() }
 
     /// Full path from the master key if not a multipath extended key.
+    ///
+    /// `None` for `musig()` keys, which have no single key source.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         self.0.full_derivation_path()
     }
 
     /// Full paths from the master key. The vector will contain just one path for single
     /// keys, and multiple ones for multipath extended keys
+    ///
+    /// For `musig()` keys these are the aggregate-level paths, relative to the BIP328 synthetic
+    /// xpub rather than to a master key.
     pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
         self.0.full_derivation_paths()
     }
@@ -1479,6 +2127,8 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     fn is_uncompressed(&self) -> bool { self.0.is_uncompressed() }
 
     fn is_x_only_key(&self) -> bool { self.0.is_x_only_key() }
+
+    fn is_musig(&self) -> bool { self.0.is_musig() }
 
     fn num_der_paths(&self) -> usize { self.0.num_der_paths() }
 }
@@ -1536,12 +2186,19 @@ mod test {
     use serde_test::{assert_tokens, Token};
 
     use super::{
-        DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
-        MiniscriptKey, Wildcard,
+        DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey, DescriptorMusigKey,
+        DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, MalformedKeyDataKind,
+        MiniscriptKey, MusigDerivationKind, MusigKeyAggError, PublicKey, Wildcard,
     };
     use crate::descriptor::key::NonDefiniteKeyError;
     use crate::prelude::*;
-    use crate::DefiniteDescriptorKey;
+    use crate::{DefiniteDescriptorKey, Descriptor};
+
+    const PUBKEY_1: &str = "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b";
+    const PUBKEY_2: &str = "02a489e0ea42b56148d212d325b7c67c6460483ff931c303ea311edfef667c8f35";
+    const XONLY_PUBKEY: &str = "1d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b";
+    const UNCOMPRESSED_PUBKEY: &str = "0414fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267be5645686309c6e6736dbd93940707cc9143d3cf29f1b877ff340e2cb2d259cf";
+    const TPUB: &str = "tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi";
 
     #[test]
     fn parse_descriptor_key_errors() {
@@ -1626,6 +2283,338 @@ mod test {
     }
 
     #[test]
+    fn parse_musig_descriptor_public_keys() {
+        let desc = format!("musig({},{})", PUBKEY_1, PUBKEY_2);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        assert_eq!(key.to_string(), desc);
+        assert!(key.is_x_only_key());
+        assert!(!key.has_wildcard());
+        assert_eq!(key.num_der_paths(), 1);
+        assert!(matches!(DefiniteDescriptorKey::new(key), Ok(..)));
+
+        // Bitcoin Core PR #31244 accepts a single musig() participant, and BIP390 does not
+        // forbid it.
+        let desc = format!("musig({})", PUBKEY_1);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        assert_eq!(key.to_string(), desc);
+        assert!(key.is_x_only_key());
+        assert_eq!(key.num_der_paths(), 1);
+        assert!(matches!(DefiniteDescriptorKey::new(key), Ok(..)));
+
+        let desc = format!("musig({},{})/0/*", TPUB, TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        assert_eq!(key.to_string(), desc);
+        assert!(key.has_wildcard());
+        assert_eq!(key.wildcard(), Some(Wildcard::Unhardened));
+        assert_eq!(key.derivation_paths(), vec![bip32::DerivationPath::from_str("m/0").unwrap()]);
+        assert!(matches!(
+            DefiniteDescriptorKey::new(key.clone()),
+            Err(NonDefiniteKeyError::Wildcard)
+        ));
+        assert_eq!(
+            key.at_derivation_index(7)
+                .unwrap()
+                .into_descriptor_public_key()
+                .to_string(),
+            format!("musig({},{})/0/7", TPUB, TPUB)
+        );
+
+        let desc = format!("musig({0}/<0;1>/*,{0})", TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        assert_eq!(key.at_derivation_index(7), Err(NonDefiniteKeyError::Multipath));
+    }
+
+    #[test]
+    fn musig_helper_apis() {
+        let secp = bitcoin::secp256k1::Secp256k1::verification_only();
+
+        let desc = format!("musig({0}/*,{0})", TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        let musig = match &key {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("parsed musig key"),
+        };
+        assert_eq!(musig.derivation_kind(), MusigDerivationKind::DeriveThenAggregate);
+        assert!(musig
+            .synthetic_xpub(PublicKey::from_str(PUBKEY_1).unwrap())
+            .is_none());
+        assert!(matches!(
+            musig.try_derive_public_key(&secp),
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::Wildcard))
+        ));
+        assert_eq!(
+            musig
+                .derived_participants_at_index(7)
+                .unwrap()
+                .into_iter()
+                .map(|key| key.to_string())
+                .collect::<Vec<_>>(),
+            vec![format!("{}/7", TPUB), TPUB.to_owned()]
+        );
+        // Ranged participants are aggregated after deriving the whole key.
+        assert!(matches!(
+            musig.aggregate_public_key(&secp),
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::Wildcard))
+        ));
+        let definite = key.clone().at_derivation_index(7).unwrap();
+        let definite_musig = match definite.as_descriptor_public_key() {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("derived musig key"),
+        };
+        assert_eq!(
+            definite_musig.try_derive_public_key(&secp).unwrap(),
+            definite_musig.aggregate_public_key(&secp).unwrap()
+        );
+
+        let mut leaves = Vec::new();
+        key.for_each_leaf_key(|key| {
+            leaves.push(key.to_string());
+            true
+        });
+        assert_eq!(leaves, vec![format!("{}/{}", TPUB, "*"), TPUB.to_owned()]);
+
+        let desc = format!("musig({0},{0})/2", TPUB);
+        let key = DescriptorPublicKey::from_str(&desc).unwrap();
+        let musig = match &key {
+            DescriptorPublicKey::Musig(ref musig) => musig,
+            _ => unreachable!("parsed musig key"),
+        };
+        assert!(matches!(
+            musig.derivation_kind(),
+            MusigDerivationKind::AggregateThenDerive { wildcard: Wildcard::None, .. }
+        ));
+        let aggregate = musig.aggregate_public_key(&secp).unwrap();
+        assert_eq!(musig.synthetic_xpub(aggregate).unwrap().depth, 0);
+        assert_eq!(
+            musig.try_derive_public_key(&secp).unwrap(),
+            DefiniteDescriptorKey::new(key)
+                .unwrap()
+                .derive_public_key(&secp)
+        );
+
+        // Aggregate-level wildcards and multipath derivation are not definite either.
+        for (desc, err) in [
+            (format!("musig({0},{0})/0/*", TPUB), NonDefiniteKeyError::Wildcard),
+            (format!("musig({0},{0})/<0;1>", TPUB), NonDefiniteKeyError::Multipath),
+        ] {
+            let key = DescriptorPublicKey::from_str(&desc).unwrap();
+            let musig = match &key {
+                DescriptorPublicKey::Musig(ref musig) => musig,
+                _ => unreachable!("parsed musig key"),
+            };
+            assert_eq!(
+                musig.try_derive_public_key(&secp),
+                Err(MusigKeyAggError::NonDefiniteKey(err.clone()))
+            );
+            assert_eq!(DefiniteDescriptorKey::new(key), Err(err));
+        }
+
+        // A participant deeper than BIP32 allows is reported as an error, not a panic.
+        let musig = musig_with_too_deep_participant();
+        let too_deep =
+            Err(MusigKeyAggError::NonDefiniteKey(NonDefiniteKeyError::MaximumDepthExceeded));
+        assert_eq!(musig.aggregate_public_key(&secp), too_deep);
+        assert_eq!(musig.try_derive_public_key(&secp), too_deep);
+    }
+
+    #[test]
+    fn parse_musig_descriptor_public_key_errors() {
+        for desc in [
+            "musig()",
+            &format!("musig(musig({},{}),{})", PUBKEY_1, PUBKEY_2, PUBKEY_1),
+            &format!("musig({},{})/0", PUBKEY_1, PUBKEY_2),
+            &format!("musig({0}/*,{0})/0", TPUB),
+            &format!("musig({0},{0})/0'", TPUB),
+            &format!("musig({0},{0})/0/*h", TPUB),
+            &format!("musig({0}/<0;1>,{0}/<0;1;2>)", TPUB),
+            &format!("musig({0}/<0;1>,{0})/<2;3>", TPUB),
+        ] {
+            DescriptorPublicKey::from_str(desc).unwrap_err();
+        }
+
+        // Participants are plain keys.
+        for (desc, kind) in [
+            (
+                format!("musig(musig({},{}),{})", PUBKEY_1, PUBKEY_2, PUBKEY_1),
+                MalformedKeyDataKind::MusigNested,
+            ),
+            (
+                format!("musig(pk({}),{})", PUBKEY_1, PUBKEY_2),
+                MalformedKeyDataKind::InvalidMusigExpression,
+            ),
+        ] {
+            assert_eq!(
+                DescriptorPublicKey::from_str(&desc),
+                Err(DescriptorKeyParseError::MalformedKeyData(kind)),
+                "{}",
+                desc
+            );
+        }
+
+        // BIP327 KeyAgg takes 33-byte compressed keys, so like Bitcoin Core we reject x-only and
+        // uncompressed participants, with or without origin information.
+        let x_only = MalformedKeyDataKind::MusigXOnlyParticipant;
+        let uncompressed = MalformedKeyDataKind::MusigUncompressedParticipant;
+        for (desc, kind) in [
+            (format!("musig({},{})", XONLY_PUBKEY, PUBKEY_2), &x_only),
+            (format!("musig({},{})", PUBKEY_2, XONLY_PUBKEY), &x_only),
+            (format!("musig([deadbeef/1]{},{})", XONLY_PUBKEY, PUBKEY_2), &x_only),
+            (format!("musig({},{})", UNCOMPRESSED_PUBKEY, PUBKEY_2), &uncompressed),
+            (format!("musig({},{})", PUBKEY_2, UNCOMPRESSED_PUBKEY), &uncompressed),
+            (
+                format!("musig([deadbeef/1]{},{})", UNCOMPRESSED_PUBKEY, PUBKEY_2),
+                &uncompressed,
+            ),
+            // The participant checks come before the aggregate derivation checks.
+            (format!("musig({},{})/0", XONLY_PUBKEY, PUBKEY_2), &x_only),
+        ] {
+            assert_eq!(
+                DescriptorPublicKey::from_str(&desc),
+                Err(DescriptorKeyParseError::MalformedKeyData(kind.clone())),
+                "{}",
+                desc
+            );
+        }
+
+        // The constructor enforces the same rule.
+        let participants = vec![
+            DescriptorPublicKey::from_str(XONLY_PUBKEY).unwrap(),
+            DescriptorPublicKey::from_str(PUBKEY_2).unwrap(),
+        ];
+        let derivation_paths = DerivPaths::new(vec![bip32::DerivationPath::master()]).unwrap();
+        assert_eq!(
+            DescriptorMusigKey::new(participants, derivation_paths, Wildcard::None),
+            Err(DescriptorKeyParseError::MalformedKeyData(x_only))
+        );
+    }
+
+    #[test]
+    fn musig_aggregate_multipath_shape() {
+        let participants = vec![
+            DescriptorPublicKey::from_str(TPUB).unwrap(),
+            DescriptorPublicKey::from_str(TPUB).unwrap(),
+        ];
+        let deriv_paths = |paths: &[&str]| {
+            let paths = paths
+                .iter()
+                .map(|path| bip32::DerivationPath::from_str(path).unwrap())
+                .collect();
+            DerivPaths::new(paths).unwrap()
+        };
+
+        let key = DescriptorMusigKey::new(
+            participants.clone(),
+            deriv_paths(&["m/0", "m/1"]),
+            Wildcard::Unhardened,
+        )
+        .unwrap();
+        assert_eq!(key.to_string(), format!("musig({0},{0})/<0;1>/*", TPUB));
+
+        // Aggregate-level paths must form one BIP389 multipath step, or the key could not be
+        // written out and parsed back.
+        for (paths, kind) in [
+            (&["m/0", "m"][..], MalformedKeyDataKind::InvalidMultiIndexStep),
+            (&["m/0/0", "m/1/1"][..], MalformedKeyDataKind::MultipleDerivationPathIndexSteps),
+            (&["m/0", "m/0"][..], MalformedKeyDataKind::InvalidMultiIndexStep),
+            (&["m/0", "m/1", "m/0"][..], MalformedKeyDataKind::InvalidMultiIndexStep),
+        ] {
+            assert_eq!(
+                DescriptorMusigKey::new(participants.clone(), deriv_paths(paths), Wildcard::None),
+                Err(DescriptorKeyParseError::MalformedKeyData(kind)),
+                "{:?}",
+                paths
+            );
+        }
+
+        // BIP389 does not allow an index to appear twice in a multipath step.
+        assert_eq!(
+            DescriptorPublicKey::from_str(&format!("musig({0},{0})/<0;0>/*", TPUB)),
+            Err(DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::InvalidMultiIndexStep
+            ))
+        );
+    }
+
+    /// A `musig()` key whose first participant is deeper than BIP32 allows. The parser rejects
+    /// such participants, so this builds the key directly.
+    fn musig_with_too_deep_participant() -> DescriptorMusigKey {
+        let mut participant = match DescriptorPublicKey::from_str(TPUB).unwrap() {
+            DescriptorPublicKey::XPub(xpub) => xpub,
+            _ => unreachable!("parsed xpub"),
+        };
+        participant.derivation_path = vec![bip32::ChildNumber::from(0); 256].into();
+        DescriptorMusigKey::new(
+            vec![
+                DescriptorPublicKey::XPub(participant),
+                DescriptorPublicKey::from_str(TPUB).unwrap(),
+            ],
+            DerivPaths::new(vec![bip32::DerivationPath::master()]).unwrap(),
+            Wildcard::None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn musig_maximum_depth() {
+        // Aggregate-level derivation starts from the synthetic xpub at depth 0, so it can take 255
+        // steps, counting a wildcard as one.
+        let musig = |path: String| {
+            DescriptorPublicKey::from_str(&format!("musig({0},{0}){1}", TPUB, path)).map(|_| ())
+        };
+        let too_deep = Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::MaximumDepthExceeded,
+        ));
+        assert_eq!(musig("/0".repeat(255)), Ok(()));
+        assert_eq!(musig("/0".repeat(256)), too_deep);
+        assert_eq!(musig(format!("{}/*", "/0".repeat(254))), Ok(()));
+        assert_eq!(musig(format!("{}/*", "/0".repeat(255))), too_deep);
+        assert_eq!(musig(format!("{}/<0;1>", "/0".repeat(255))), too_deep);
+
+        // Deriving the deepest allowed wildcard uses the last step.
+        let key =
+            DescriptorPublicKey::from_str(&format!("musig({0},{0}){1}/*", TPUB, "/0".repeat(254)))
+                .unwrap();
+        assert!(key.at_derivation_index(7).is_ok());
+
+        // Participants are checked like other keys when the key becomes definite.
+        let key = DescriptorPublicKey::Musig(musig_with_too_deep_participant());
+        assert_eq!(
+            DefiniteDescriptorKey::new(key).map(|_| ()),
+            Err(NonDefiniteKeyError::MaximumDepthExceeded)
+        );
+    }
+
+    #[test]
+    fn musig_into_single_keys() {
+        let key =
+            DescriptorPublicKey::from_str(&format!("musig({0}/<0;1>,{0}/<2;3>)", TPUB)).unwrap();
+        assert_eq!(key.num_der_paths(), 2);
+        assert_eq!(
+            key.into_single_keys()
+                .into_iter()
+                .map(|key| key.to_string())
+                .collect::<Vec<_>>(),
+            vec![
+                format!("musig({0}/0,{0}/2)", TPUB),
+                format!("musig({0}/1,{0}/3)", TPUB)
+            ]
+        );
+
+        let key = DescriptorPublicKey::from_str(&format!("musig({0},{0})/<0;1>/*", TPUB)).unwrap();
+        assert_eq!(key.num_der_paths(), 2);
+        assert_eq!(
+            key.into_single_keys()
+                .into_iter()
+                .map(|key| key.to_string())
+                .collect::<Vec<_>>(),
+            vec![
+                format!("musig({0},{0})/0/*", TPUB),
+                format!("musig({0},{0})/1/*", TPUB)
+            ]
+        );
+    }
+
+    #[test]
     fn test_wildcard() {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
@@ -1698,6 +2687,11 @@ mod test {
         assert_eq!(xonly.master_fingerprint().to_string(), "f678d9b7");
         let definite = DefiniteDescriptorKey::new(xonly).unwrap();
         assert_eq!(definite.master_fingerprint().to_string(), "f678d9b7");
+
+        // A musig() key has no single master key, so its fingerprint is zero.
+        let musig =
+            DescriptorPublicKey::from_str(&format!("musig({},{})", PUBKEY_1, PUBKEY_2)).unwrap();
+        assert_eq!(musig.master_fingerprint(), bip32::Fingerprint::default());
     }
 
     fn get_multipath_xpub(key_str: &str, num_paths: usize) -> DescriptorMultiXKey<bip32::Xpub> {
@@ -1965,25 +2959,121 @@ mod test {
     }
 
     #[test]
+    fn definite_key_maximum_depth() {
+        let key = |depth: u8, steps: usize, wildcard: Wildcard| {
+            let mut xkey = bip32::Xpub::from_str("xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8").unwrap();
+            xkey.depth = depth;
+            DescriptorPublicKey::XPub(DescriptorXKey {
+                origin: None,
+                xkey,
+                derivation_path: vec![bip32::ChildNumber::from(0); steps].into(),
+                wildcard,
+            })
+        };
+        let new = |key| DefiniteDescriptorKey::new(key).map(|_| ());
+        let too_deep = Err(NonDefiniteKeyError::MaximumDepthExceeded);
+
+        // BIP32 depth stops at 255, so an xpub at `depth` can take 255 - depth more steps.
+        assert_eq!(new(key(0, 255, Wildcard::None)), Ok(()));
+        assert_eq!(new(key(0, 256, Wildcard::None)), too_deep);
+        assert_eq!(new(key(200, 55, Wildcard::None)), Ok(()));
+        assert_eq!(new(key(200, 56, Wildcard::None)), too_deep);
+
+        // Deriving at an index turns the wildcard into one more step.
+        assert!(key(200, 54, Wildcard::Unhardened)
+            .at_derivation_index(7)
+            .is_ok());
+        assert_eq!(
+            key(200, 55, Wildcard::Unhardened)
+                .at_derivation_index(7)
+                .map(|_| ()),
+            too_deep
+        );
+
+        // Origin steps don't count, since the xpub's depth already includes them.
+        let mut key_with_origin = key(0, 255, Wildcard::None);
+        if let DescriptorPublicKey::XPub(ref mut xpub) = key_with_origin {
+            xpub.origin = Some((
+                bip32::Fingerprint::default(),
+                vec![bip32::ChildNumber::from(0); 300].into(),
+            ));
+        }
+        assert_eq!(new(key_with_origin), Ok(()));
+
+        // A descriptor with such a key doesn't become definite, so it can't panic later when
+        // deriving its script pubkey.
+        let desc = Descriptor::new_tr(key(0, 256, Wildcard::None), None).unwrap();
+        assert_eq!(desc.into_definite().map(|_| ()), too_deep);
+    }
+
+    #[test]
+    fn parse_key_maximum_depth() {
+        // BIP32 test vector 1 master keys, at depth 0.
+        let xpub = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8";
+        let xprv = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
+        let steps = |n: usize| "/0".repeat(n);
+        let public = |s: String| DescriptorPublicKey::from_str(&s).map(|_| ());
+        let secret = |s: String| DescriptorSecretKey::from_str(&s).map(|_| ());
+        let too_deep = Err(DescriptorKeyParseError::MalformedKeyData(
+            MalformedKeyDataKind::MaximumDepthExceeded,
+        ));
+
+        // BIP32 depth stops at 255. A wildcard or a multipath step counts as one more step.
+        assert_eq!(public(format!("{xpub}{}", steps(255))), Ok(()));
+        assert_eq!(public(format!("{xpub}{}", steps(256))), too_deep);
+        assert_eq!(public(format!("{xpub}{}/*", steps(254))), Ok(()));
+        assert_eq!(public(format!("{xpub}{}/*", steps(255))), too_deep);
+        assert_eq!(public(format!("{xpub}{}/<0;1>", steps(254))), Ok(()));
+        assert_eq!(public(format!("{xpub}{}/<0;1>", steps(255))), too_deep);
+        assert_eq!(secret(format!("{xprv}{}/*", steps(254))), Ok(()));
+        assert_eq!(secret(format!("{xprv}{}/*", steps(255))), too_deep);
+
+        // An xpub at depth 200 can take 55 more steps.
+        let mut xkey = bip32::Xpub::from_str(xpub).unwrap();
+        xkey.depth = 200;
+        assert_eq!(public(format!("{xkey}{}", steps(55))), Ok(()));
+        assert_eq!(public(format!("{xkey}{}", steps(56))), too_deep);
+
+        // Origin steps don't count, since the xpub's depth already includes them.
+        assert_eq!(public(format!("[d34db33f{}]{xpub}{}", steps(300), steps(255))), Ok(()));
+
+        // A descriptor with such a key fails to parse, before anything can be derived from it.
+        let desc = format!("tr({xpub}{})", steps(256));
+        assert!(Descriptor::<DescriptorPublicKey>::from_str(&desc).is_err());
+    }
+
+    #[test]
     fn test_xkey_network() {
         use bitcoin::NetworkKind;
 
+        let mainnet_xpub_str = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8";
+        let testnet_xpub_str = "tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi";
+        let single_key_str = "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b";
+
         // Test mainnet xpub
-        let mainnet_xpub = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
-            .parse::<DescriptorPublicKey>()
-            .unwrap();
+        let mainnet_xpub = mainnet_xpub_str.parse::<DescriptorPublicKey>().unwrap();
         assert_eq!(mainnet_xpub.xkey_network(), Some(NetworkKind::Main));
 
         // Test testnet xpub
-        let testnet_xpub = "tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi"
-            .parse::<DescriptorPublicKey>()
-            .unwrap();
+        let testnet_xpub = testnet_xpub_str.parse::<DescriptorPublicKey>().unwrap();
         assert_eq!(testnet_xpub.xkey_network(), Some(NetworkKind::Test));
 
         // Test single public key (no extended key)
-        let single_key = "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"
-            .parse::<DescriptorPublicKey>()
-            .unwrap();
+        let single_key = single_key_str.parse::<DescriptorPublicKey>().unwrap();
         assert_eq!(single_key.xkey_network(), None);
+
+        let musig = DescriptorPublicKey::from_str(&format!(
+            "musig({},{})",
+            single_key_str, mainnet_xpub_str
+        ))
+        .unwrap();
+        assert_eq!(musig.xkey_network(), Some(NetworkKind::Main));
+
+        let musig = DescriptorPublicKey::from_str(&format!(
+            "musig({},{})",
+            mainnet_xpub_str, testnet_xpub_str
+        ))
+        .unwrap();
+        assert_eq!(musig.xkey_network(), None);
     }
 }

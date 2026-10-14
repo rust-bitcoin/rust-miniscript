@@ -51,12 +51,14 @@ pub use self::tr::{
 pub mod checksum;
 mod key;
 mod key_map;
+mod musig;
 mod wallet_policy;
 
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
-    DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey, MalformedKeyDataKind,
-    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
+    DescriptorMusigKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
+    MalformedKeyDataKind, MusigDerivationKind, MusigKeyAggError, NonDefiniteKeyError, SinglePriv,
+    SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
 pub use self::wallet_policy::{KeyInfo, WalletPolicy, WalletPolicyError};
@@ -699,6 +701,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// # Errors
     /// - If the descriptor contains wildcards
     /// - If the descriptor contains multi-path derivations
+    /// - If deriving a key would go deeper than BIP32's maximum depth of 255
     pub fn into_definite(&self) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
         if self.has_wildcard() {
             return Err(NonDefiniteKeyError::Wildcard);
@@ -727,6 +730,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// - If the descriptor contains no wildcards
     /// - If index >= 2^31
     /// - If the descriptor contains multi-path derivations
+    /// - If deriving a key would go deeper than BIP32's maximum depth of 255
     #[allow(deprecated)]
     pub fn derive_at_index(&self, index: u32) -> DerivationResult {
         if !self.has_wildcard() {
@@ -796,8 +800,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// # Errors
     ///
-    /// This function will return an error for multi-path descriptors
-    /// or if hardened derivation is attempted,
+    /// This function will return an error for multi-path descriptors, if hardened derivation is
+    /// attempted, or if deriving a key would go deeper than BIP32's maximum depth of 255.
     #[allow(deprecated)]
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
@@ -820,6 +824,21 @@ impl Descriptor<DescriptorPublicKey> {
             key_map: &mut KeyMap,
             secp: &secp256k1::Secp256k1<C>,
         ) -> Result<DescriptorPublicKey, Error> {
+            if s.starts_with("musig(") {
+                // Secret participants go into the key map one by one. There is no aggregate
+                // secret key to store.
+                let parse_participant = |participant: &str| {
+                    if let Ok(sk) = DescriptorSecretKey::from_str(participant) {
+                        key_map.insert(secp, sk)
+                    } else {
+                        DescriptorPublicKey::from_str(participant)
+                    }
+                };
+                return key::parse_musig_key(s, parse_participant)
+                    .map(DescriptorPublicKey::Musig)
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)));
+            }
+
             match DescriptorSecretKey::from_str(s) {
                 Ok(sk) => {
                     let pk = key_map
@@ -915,6 +934,19 @@ impl Descriptor<DescriptorPublicKey> {
             pk: &DescriptorPublicKey,
             key_map: &KeyMap,
         ) -> Result<String, core::convert::Infallible> {
+            if let DescriptorPublicKey::Musig(ref musig) = *pk {
+                let mut musig_string = String::from("musig(");
+                for (i, participant) in musig.participants().iter().enumerate() {
+                    if i > 0 {
+                        musig_string.push(',');
+                    }
+                    musig_string.push_str(&key_to_string(participant, key_map)?);
+                }
+                musig_string.push(')');
+                musig_string.push_str(&musig.derivation_suffix_string());
+                return Ok(musig_string);
+            }
+
             Ok(match key_map.get(pk) {
                 Some(secret) => secret.to_string(),
                 None => pk.to_string(),
@@ -989,6 +1021,13 @@ impl Descriptor<DescriptorPublicKey> {
                     }
                     true
                 }
+                DescriptorPublicKey::Musig(_) if key.is_multipath() => {
+                    for _ in 0..key.num_der_paths() {
+                        descriptors.push(self.clone());
+                    }
+                    true
+                }
+                DescriptorPublicKey::Musig(_) => false,
             }
         }) {
             // If there is no multipath key, return early.
@@ -1007,7 +1046,10 @@ impl Descriptor<DescriptorPublicKey> {
                     DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
                         Ok(pk.clone())
                     }
-                    DescriptorPublicKey::MultiXPub(_) => pk
+                    // Like the keys above, a single-path `musig()` key goes into every descriptor
+                    // unchanged.
+                    DescriptorPublicKey::Musig(_) if !pk.is_multipath() => Ok(pk.clone()),
+                    DescriptorPublicKey::MultiXPub(_) | DescriptorPublicKey::Musig(_) => pk
                         .clone()
                         .into_single_keys()
                         .get(self.0)
@@ -1040,12 +1082,14 @@ impl Descriptor<DescriptorPublicKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.xkey_network() {
-                match first_network {
+            match key.xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -1130,12 +1174,14 @@ impl Descriptor<DefiniteDescriptorKey> {
         let mut first_network = None;
 
         for key in self.iter_pk() {
-            if let Some(network) = key.as_descriptor_public_key().xkey_network() {
-                match first_network {
+            match key.as_descriptor_public_key().xkey_network_summary() {
+                XKeyNetwork::NoXKeys => {}
+                XKeyNetwork::Single(network) => match first_network {
                     None => first_network = Some(network),
-                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
-                    _ => continue,
-                }
+                    Some(n) if n != network => return XKeyNetwork::Mixed,
+                    Some(_) => {}
+                },
+                XKeyNetwork::Mixed => return XKeyNetwork::Mixed,
             }
         }
 
@@ -2151,6 +2197,58 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn parse_musig_with_secrets() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor_str = "tr(musig(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0,xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1)/2)";
+        let descriptor_str = Descriptor::<String>::from_str(descriptor_str)
+            .unwrap()
+            .to_string();
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, &descriptor_str).unwrap();
+
+        assert_eq!(keymap.len(), 1);
+        assert!(descriptor
+            .to_string()
+            .contains("tr(musig([a12b02f4/44'/0'/0']"));
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+
+        let descriptor_str = "tr(musig(KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74sHUHy8S,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))";
+        let descriptor_str = Descriptor::<String>::from_str(descriptor_str)
+            .unwrap()
+            .to_string();
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, &descriptor_str).unwrap();
+
+        assert_eq!(keymap.len(), 1);
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+
+        // An uncompressed WIF participant is rejected like an uncompressed public key.
+        let descriptor_str = "tr(musig(5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659))";
+        let err = Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, descriptor_str)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("uncompressed keys are not allowed"), "{}", err);
+
+        // Each secret participant gets its own key map entry.
+        let descriptor_str = "tr(musig(KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74sHUHy8S,xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0))";
+        let descriptor_str = Descriptor::<String>::from_str(descriptor_str)
+            .unwrap()
+            .to_string();
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, &descriptor_str).unwrap();
+
+        assert_eq!(keymap.len(), 2);
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+
+        // A nested musig() is rejected before its participants are parsed.
+        let descriptor_str = "tr(musig(musig(KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74sHUHy8S,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659),023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))";
+        let err = Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, descriptor_str)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("cannot be nested"), "{}", err);
+    }
+
+    #[test]
     fn checksum_for_nested_sh() {
         let descriptor_str = "sh(wpkh(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL))";
         let descriptor: Descriptor<DescriptorPublicKey> = descriptor_str.parse().unwrap();
@@ -2174,6 +2272,262 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", comp_key)).unwrap();
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", x_only_key))
             .unwrap_err();
+    }
+
+    #[test]
+    fn bip390_musig_script_pubkey_vectors() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66))",
+        )
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            ScriptBuf::from_hex(
+                "512079e6c3e628c9bfbce91de6b7fb28e2aec7713d377cf260ab599dcbc40e542312"
+            )
+            .unwrap()
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1,xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1)/2)",
+        )
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey(),
+            ScriptBuf::from_hex(
+                "5120a17ceacd6422bd5ffd9f165807b254b7d68ad39f179cc4f11545a6835227e97c"
+            )
+            .unwrap()
+        );
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*,pk(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))",
+        )
+        .unwrap();
+        for (index, expected) in [
+            (0, "51201d377b637b5c73f670f5c8a96a2c0bb0d1a682a1fca6aba91fe673501a189782"),
+            (1, "51208950c83b117a6c208d5205ffefcf75b187b32512eb7f0d8577db8d9102833036"),
+            (2, "5120a49a477c61df73691b77fcd563a80a15ea67bb9c75470310ce5c0f25918db60d"),
+        ] {
+            assert_eq!(
+                descriptor
+                    .derive_at_index(index)
+                    .unwrap()
+                    .derived_descriptor(&secp)
+                    .script_pubkey(),
+                ScriptBuf::from_hex(expected).unwrap()
+            );
+        }
+
+        let descriptor = Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,pk(musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*))",
+        )
+        .unwrap();
+        for (index, expected) in [
+            (0, "512068983d461174afc90c26f3b2821d8a9ced9534586a756763b68371a404635cc8"),
+            (1, "5120368e2d864115181bdc8bb5dc8684be8d0760d5c33315570d71a21afce4afd43e"),
+            (2, "512097a1e6270b33ad85744677418bae5f59ea9136027223bc6e282c47c167b471d5"),
+        ] {
+            assert_eq!(
+                descriptor
+                    .derive_at_index(index)
+                    .unwrap()
+                    .derived_descriptor(&secp)
+                    .script_pubkey(),
+                ScriptBuf::from_hex(expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn bip390_musig_tap_miniscript_key_positions() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        for desc in [
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,multi_a(1,{},{}))",
+                musig, other_key
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,sortedmulti_a(1,{},{}))",
+                other_key, musig
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,pkh({}))",
+                musig
+            ),
+            format!(
+                "tr(f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,or_d(pk({}),pkh({})))",
+                other_key, musig
+            ),
+        ] {
+            let descriptor = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap();
+            assert!(descriptor.to_string().contains("musig("));
+            descriptor
+                .into_definite()
+                .unwrap()
+                .derived_descriptor(&secp)
+                .script_pubkey();
+        }
+    }
+
+    #[test]
+    fn bip390_musig_invalid_placements() {
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        for desc in [
+            musig.to_owned(),
+            format!("pk({})", musig),
+            format!("pkh({})", musig),
+            format!("wpkh({})", musig),
+            format!("sh(wpkh({}))", musig),
+            format!("wsh(pk({}))", musig),
+            format!("sh(wsh(pk({})))", musig),
+            format!("wsh({})", musig),
+            format!("sh({})", musig),
+            format!(
+                "tr(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,{})",
+                musig
+            ),
+            format!(
+                "tr(musig({},02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))",
+                musig
+            ),
+        ] {
+            Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
+        }
+
+        // pkh() rejects musig() outside Taproot too, also below the root of the script, with an
+        // error that says musig() is only allowed in tr().
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        for desc in [
+            format!("sh(pkh({}))", musig),
+            format!("wsh(pkh({}))", musig),
+            format!("sh(wsh(pkh({})))", musig),
+            format!("c:pk_h({})", musig),
+            format!("wsh(or_d(pk({}),pkh({})))", other_key, musig),
+            format!("wsh(and_v(v:pkh({}),older(144)))", musig),
+        ] {
+            let err = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap_err();
+            assert!(
+                matches!(err, Error::ContextError(ScriptContextError::MusigNotAllowed(..))),
+                "{}",
+                desc
+            );
+            assert!(err.to_string().contains("is only allowed in tr()"), "{}: {}", desc, err);
+        }
+        let desc = format!("wsh(pkh({}))", musig);
+        assert!(matches!(
+            Descriptor::<DefiniteDescriptorKey>::from_str(&desc),
+            Err(Error::ContextError(ScriptContextError::MusigNotAllowed(..)))
+        ));
+
+        // Participants must be compressed keys in every Taproot position.
+        let internal_key = "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+        let x_only = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+        let uncompressed = "0414fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267be5645686309c6e6736dbd93940707cc9143d3cf29f1b877ff340e2cb2d259cf";
+        let key_1 = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let key_2 = "03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
+        for desc in [
+            format!("tr({},pk(musig({},{})))", internal_key, x_only, key_2),
+            format!("tr({},multi_a(1,{},musig({},{})))", internal_key, key_1, uncompressed, key_2),
+            format!("tr(musig({},{}))", uncompressed, key_2),
+        ] {
+            let err = Descriptor::<DescriptorPublicKey>::from_str(&desc)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("musig participant keys must be compressed"), "{}: {}", desc, err);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn bip390_musig_compiler_placements() {
+        use crate::policy::compiler::CompilerError;
+        use crate::policy::concrete::DescriptorCtx;
+
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)";
+        let other_key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        // Neither pk_k() nor pk_h() accepts musig() outside Taproot, so there is nothing to compile
+        // to.
+        let policy =
+            policy::Concrete::<DescriptorPublicKey>::from_str(&format!("pk({})", musig)).unwrap();
+        for result in [
+            policy.compile_to_descriptor::<Legacy>(DescriptorCtx::Sh),
+            policy.compile_to_descriptor::<Segwitv0>(DescriptorCtx::Wsh),
+            policy.compile_to_descriptor::<Segwitv0>(DescriptorCtx::ShWsh),
+            policy.compile_to_descriptor::<BareCtx>(DescriptorCtx::Bare),
+        ] {
+            assert!(matches!(result, Err(Error::CompilerError(CompilerError::LimitsExceeded))));
+        }
+
+        // In Taproot, musig() compiles as the internal key or as a script key.
+        let descriptor = policy
+            .compile_to_descriptor::<Tap>(DescriptorCtx::Tr(None))
+            .unwrap();
+        assert_eq!(descriptor.internal_key().unwrap().to_string(), musig);
+        let policy = policy::Concrete::<DescriptorPublicKey>::from_str(&format!(
+            "or(99@pk({}),1@pk({}))",
+            other_key, musig
+        ))
+        .unwrap();
+        let descriptor = policy
+            .compile_to_descriptor::<Tap>(DescriptorCtx::Tr(None))
+            .unwrap();
+        assert_eq!(descriptor.internal_key().unwrap().to_string(), other_key);
+        assert!(descriptor.to_string().contains(&format!("({})", musig)));
+    }
+
+    #[test]
+    fn bip390_musig_descriptor_constructors() {
+        let musig = DescriptorPublicKey::from_str("musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659,023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66)").unwrap();
+        let other_key = DescriptorPublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+
+        // The constructors reject musig() outside Taproot, like parsing does.
+        let thresh = || Threshold::new(1, vec![other_key.clone(), musig.clone()]).unwrap();
+        for result in [
+            Descriptor::new_sh_sortedmulti(thresh()),
+            Descriptor::new_wsh_sortedmulti(thresh()),
+            Descriptor::new_sh_wsh_sortedmulti(thresh()),
+            Descriptor::new_wsh(Miniscript::multi(thresh())),
+            Descriptor::new_sh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_wsh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_sh_wsh(Miniscript::pkh(musig.clone())),
+            Descriptor::new_bare(Miniscript::pkh(musig.clone())),
+            Descriptor::new_pkh(musig.clone()),
+            Descriptor::new_wpkh(musig.clone()),
+            Descriptor::new_sh_wpkh(musig.clone()),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::MusigNotAllowed(..)))
+            ));
+        }
+
+        // The Taproot constructors accept it.
+        assert_eq!(
+            Descriptor::new_tr(musig.clone(), None).unwrap(),
+            Descriptor::from_str(&format!("tr({})", musig)).unwrap()
+        );
+        let leaf = TapTree::leaf(Miniscript::<_, Tap>::pkh(musig.clone()));
+        assert_eq!(
+            Descriptor::new_tr(other_key.clone(), Some(leaf)).unwrap(),
+            Descriptor::from_str(&format!("tr({},pkh({}))", other_key, musig)).unwrap()
+        );
     }
 
     #[test]
@@ -2310,6 +2664,99 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn musig_multipath_descriptors() {
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)";
+        let key = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let xpub_a = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        let xpub_b = "xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y";
+
+        for (desc, expected) in [
+            // A single-path musig() key goes into every descriptor unchanged.
+            (
+                format!("tr({},pk({}/<0;1>/*))", musig, xpub_a),
+                [
+                    format!("tr({},pk({}/0/*))", musig, xpub_a),
+                    format!("tr({},pk({}/1/*))", musig, xpub_a),
+                ],
+            ),
+            (
+                format!("tr({}/<0;1>/*,pk({}))", xpub_a, musig),
+                [
+                    format!("tr({}/0/*,pk({}))", xpub_a, musig),
+                    format!("tr({}/1/*,pk({}))", xpub_a, musig),
+                ],
+            ),
+            // Multipath participants and aggregate-level paths are split.
+            (
+                format!("tr(musig({}/<0;1>/*,{}),pk({}/<2;3>/*))", xpub_a, key, xpub_b),
+                [
+                    format!("tr(musig({}/0/*,{}),pk({}/2/*))", xpub_a, key, xpub_b),
+                    format!("tr(musig({}/1/*,{}),pk({}/3/*))", xpub_a, key, xpub_b),
+                ],
+            ),
+            (
+                format!("tr(musig({},{})/<0;1>/*)", xpub_a, xpub_b),
+                [
+                    format!("tr(musig({},{})/0/*)", xpub_a, xpub_b),
+                    format!("tr(musig({},{})/1/*)", xpub_a, xpub_b),
+                ],
+            ),
+        ] {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc).unwrap();
+            assert!(desc.is_multipath());
+            let expected = expected
+                .iter()
+                .map(|desc| Descriptor::<DescriptorPublicKey>::from_str(desc).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(desc.into_single_descriptors().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn musig_policy_round_trip() {
+        use crate::policy::{Concrete, Liftable as _, Semantic};
+
+        let musig = "musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)";
+        let xpub_musig = "musig(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y)/0/*";
+        let key_1 = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+        let key_2 = "023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66";
+
+        // Policies lifted from musig() descriptors parse back from both string notations.
+        for desc in [
+            format!("tr({})", musig),
+            format!("tr({},pk({}))", musig, key_1),
+            format!("tr({},pk({}))", key_1, xpub_musig),
+            format!("tr({},multi_a(2,{},{},{}))", key_1, musig, key_2, xpub_musig),
+        ] {
+            let policy = Descriptor::<DescriptorPublicKey>::from_str(&desc)
+                .unwrap()
+                .lift()
+                .unwrap();
+            for s in [policy.to_string(), policy.to_policy_syntax_string()] {
+                assert_eq!(Semantic::<DescriptorPublicKey>::from_str(&s).unwrap(), policy, "{}", s);
+            }
+        }
+
+        let policy = format!("or(99@pk({}),1@pk({}))", xpub_musig, key_1);
+        assert_eq!(
+            Concrete::<DescriptorPublicKey>::from_str(&policy)
+                .unwrap()
+                .to_string(),
+            policy
+        );
+
+        #[cfg(feature = "serde")]
+        {
+            // Serde uses the string form.
+            let policy = "(pk(musig(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9,03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659)) ∨ pk(02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c))";
+            serde_test::assert_tokens(
+                &Semantic::<DescriptorPublicKey>::from_str(policy).unwrap(),
+                &[serde_test::Token::Str(policy)],
+            );
+        }
+    }
+
+    #[test]
     fn regression_736() {
         Descriptor::<DescriptorPublicKey>::from_str(
             "tr(0000000000000000000000000000000000000000000000000000000000000002,)",
@@ -2369,11 +2816,17 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Desc::from_str(&format!("sh(pk({}))", comp_key)).unwrap();
         Desc::from_str(&format!("sh(pk({}))", uncomp_key)).unwrap();
         Desc::from_str(&format!("sh(pk({}))", x_only_key)).unwrap_err();
+        Desc::from_str(&format!("sh(pkh({}))", comp_key)).unwrap();
+        Desc::from_str(&format!("sh(pkh({}))", uncomp_key)).unwrap();
+        Desc::from_str(&format!("sh(pkh({}))", x_only_key)).unwrap_err();
 
         // bare tests, x-only keys not supported
         Desc::from_str(&format!("pk({})", comp_key)).unwrap();
         Desc::from_str(&format!("pk({})", uncomp_key)).unwrap();
         Desc::from_str(&format!("pk({})", x_only_key)).unwrap_err();
+        Desc::from_str(&format!("c:pk_h({})", comp_key)).unwrap();
+        Desc::from_str(&format!("c:pk_h({})", uncomp_key)).unwrap();
+        Desc::from_str(&format!("c:pk_h({})", x_only_key)).unwrap_err();
 
         // pkh tests, x-only keys not supported
         Desc::from_str(&format!("pkh({})", comp_key)).unwrap();
@@ -2389,6 +2842,9 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Desc::from_str(&format!("wsh(pk({}))", comp_key)).unwrap();
         Desc::from_str(&format!("wsh(pk({}))", uncomp_key)).unwrap_err();
         Desc::from_str(&format!("wsh(pk({}))", x_only_key)).unwrap_err();
+        Desc::from_str(&format!("wsh(pkh({}))", comp_key)).unwrap();
+        Desc::from_str(&format!("wsh(pkh({}))", uncomp_key)).unwrap_err();
+        Desc::from_str(&format!("wsh(pkh({}))", x_only_key)).unwrap_err();
 
         // Tap tests, key path
         Desc::from_str(&format!("tr({})", comp_key)).unwrap();
@@ -2399,6 +2855,142 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, comp_key)).unwrap();
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, uncomp_key)).unwrap_err();
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, x_only_key)).unwrap();
+        Desc::from_str(&format!("tr({},pkh({}))", x_only_key, comp_key)).unwrap();
+        Desc::from_str(&format!("tr({},pkh({}))", x_only_key, uncomp_key)).unwrap_err();
+        Desc::from_str(&format!("tr({},pkh({}))", x_only_key, x_only_key)).unwrap();
+    }
+
+    #[test]
+    fn test_context_constructors() {
+        let comp_key = bitcoin::PublicKey::from_str(
+            "02015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
+        )
+        .unwrap();
+        let x_only_key = bitcoin::key::XOnlyPublicKey::from_str(
+            "015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
+        )
+        .unwrap();
+        let uncomp_key = bitcoin::PublicKey::from_str("04015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab0d46021e9e69ef061eb25eab41ae206187b2b05e829559df59d78319bd9267b4").unwrap();
+
+        // The constructors reject the keys that parsing rejects.
+        let x_only = || Threshold::new(1, vec![x_only_key]).unwrap();
+        let uncomp = || Threshold::new(1, vec![uncomp_key]).unwrap();
+        for result in [
+            Descriptor::new_sh_sortedmulti(x_only()),
+            Descriptor::new_wsh_sortedmulti(x_only()),
+            Descriptor::new_sh_wsh_sortedmulti(x_only()),
+            Descriptor::new_sh(Miniscript::multi(x_only())),
+            Descriptor::new_wsh(Miniscript::multi(x_only())),
+            Descriptor::new_bare(Miniscript::multi(x_only())),
+            Descriptor::new_sh(Miniscript::pk(x_only_key)),
+            Descriptor::new_wsh(Miniscript::pk(x_only_key)),
+            Descriptor::new_bare(Miniscript::pk(x_only_key)),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::XOnlyKeysNotAllowed(..)))
+            ));
+        }
+        for result in [
+            Descriptor::new_wsh_sortedmulti(uncomp()),
+            Descriptor::new_sh_wsh_sortedmulti(uncomp()),
+            Descriptor::new_wsh(Miniscript::multi(uncomp())),
+            Descriptor::new_sh_wsh(Miniscript::pk(uncomp_key)),
+        ] {
+            assert!(matches!(
+                result,
+                Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+            ));
+        }
+        Descriptor::new_sh_sortedmulti(uncomp()).unwrap();
+        Descriptor::new_bare(Miniscript::pk(uncomp_key)).unwrap();
+
+        // A key below the root is checked too.
+        let ms = Miniscript::from_ast(Terminal::OrD(
+            Arc::new(Miniscript::pk(comp_key)),
+            Arc::new(Miniscript::pk(uncomp_key)),
+        ))
+        .unwrap();
+        assert!(matches!(
+            Descriptor::new_wsh(ms),
+            Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+        ));
+
+        // So is every node of every Taproot leaf.
+        for leaf in [
+            Miniscript::<_, Tap>::pk(uncomp_key),
+            Miniscript::from_ast(Terminal::OrD(
+                Arc::new(Miniscript::pk(comp_key)),
+                Arc::new(Miniscript::pk(uncomp_key)),
+            ))
+            .unwrap(),
+        ] {
+            let tree =
+                TapTree::combine(TapTree::leaf(Miniscript::pk(comp_key)), TapTree::leaf(leaf))
+                    .unwrap();
+            assert!(matches!(
+                Descriptor::new_tr(comp_key, Some(tree)),
+                Err(Error::ContextError(ScriptContextError::UncompressedKeysNotAllowed))
+            ));
+        }
+        let multi = Miniscript::<_, Tap>::multi(Threshold::new(1, vec![comp_key]).unwrap());
+        assert!(matches!(
+            Descriptor::new_tr(comp_key, Some(TapTree::leaf(multi))),
+            Err(Error::ContextError(ScriptContextError::TaprootMultiDisabled))
+        ));
+        let leaf = TapTree::leaf(Miniscript::<_, Tap>::pkh(comp_key));
+        assert_eq!(
+            Descriptor::new_tr(comp_key, Some(leaf)).unwrap(),
+            Descriptor::from_str(&format!("tr({},pkh({}))", comp_key, comp_key)).unwrap()
+        );
+
+        // The sortedmulti constructors build what parsing builds. The keys are out of order,
+        // so the script must sort them.
+        let g_key = bitcoin::PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+        let thresh = || Threshold::new(2, vec![g_key, comp_key]).unwrap();
+        for (result, sortedmulti, multi) in [
+            (
+                Descriptor::new_sh_sortedmulti(thresh()),
+                format!("sh(sortedmulti(2,{},{}))", g_key, comp_key),
+                format!("sh(multi(2,{},{}))", comp_key, g_key),
+            ),
+            (
+                Descriptor::new_wsh_sortedmulti(thresh()),
+                format!("wsh(sortedmulti(2,{},{}))", g_key, comp_key),
+                format!("wsh(multi(2,{},{}))", comp_key, g_key),
+            ),
+            (
+                Descriptor::new_sh_wsh_sortedmulti(thresh()),
+                format!("sh(wsh(sortedmulti(2,{},{})))", g_key, comp_key),
+                format!("sh(wsh(multi(2,{},{})))", comp_key, g_key),
+            ),
+        ] {
+            let desc = result.unwrap();
+            assert_eq!(desc, Descriptor::from_str(&sortedmulti).unwrap());
+            let multi = Descriptor::<PublicKey>::from_str(&multi).unwrap();
+            assert_eq!(desc.explicit_script().unwrap(), multi.explicit_script().unwrap());
+        }
+
+        // A P2SH redeem script can't be larger than 520 bytes, which is 15 compressed keys
+        // in a multisig.
+        let secp = secp256k1::Secp256k1::signing_only();
+        let keys: Vec<PublicKey> = (1..=16u8)
+            .map(|i| {
+                PublicKey::new(
+                    secp256k1::SecretKey::from_slice(&[i; 32])
+                        .unwrap()
+                        .public_key(&secp),
+                )
+            })
+            .collect();
+        Descriptor::new_sh_sortedmulti(Threshold::new(1, keys[..15].to_vec()).unwrap()).unwrap();
+        assert!(matches!(
+            Descriptor::new_sh_sortedmulti(Threshold::new(1, keys).unwrap()),
+            Err(Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }))
+        ));
     }
 
     #[test]
@@ -2785,6 +3377,16 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let complex_tests = vec![
             // Taproot with mixed networks
             (format!("tr({},pk({}))", mainnet_xpubs[0], testnet_tpubs[0]), XKeyNetwork::Mixed),
+            // MuSig with mixed networks
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            // MuSig with raw keys and one xpub
+            (
+                format!("tr(musig({},{},{}))", single_keys[0], mainnet_xpubs[0], single_keys[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
             // Taproot with consistent mainnet keys
             (format!("tr({},pk({}))", mainnet_xpubs[0], mainnet_xpubs[1]), XKeyNetwork::Single(NetworkKind::Main)),
             // HTLC-like pattern with mixed networks
@@ -2849,6 +3451,10 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             (format!("tr({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
             (
                 format!("tr({},pk({}/0))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            (
+                format!("tr(musig({},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
                 XKeyNetwork::Mixed,
             ),
         ];

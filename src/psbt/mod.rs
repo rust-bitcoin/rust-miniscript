@@ -536,6 +536,9 @@ pub trait PsbtExt {
     /// The `descriptor` **must not have any wildcards** in it
     /// otherwise an error will be returned however it can (and should) have extended keys in it.
     ///
+    /// Returns an error if the descriptor contains a `musig()` key; PSBT MuSig2 fields (BIP373)
+    /// are not supported yet.
+    ///
     /// [`update_with_descriptor_unchecked`]: PsbtInputExt::update_with_descriptor_unchecked
     /// [segwit bug]: https://bitcoinhackers.org/@lukedashjr/104287698361196952
     fn update_input_with_descriptor(
@@ -551,6 +554,9 @@ pub trait PsbtExt {
     ///
     /// The `descriptor` **must not have any wildcards** in it
     /// otherwise an error will be returned however it can (and should) have extended keys in it.
+    ///
+    /// Returns an error if the descriptor contains a `musig()` key; PSBT MuSig2 fields (BIP373)
+    /// are not supported yet.
     ///
     /// [`update_with_descriptor_unchecked`]: PsbtOutputExt::update_with_descriptor_unchecked
     fn update_output_with_descriptor(
@@ -753,8 +759,11 @@ impl PsbtExt for Psbt {
         };
 
         let (_, spk_check_passed) =
-            update_item_with_descriptor_helper(input, desc, Some(&expected_spk))
-                .map_err(UtxoUpdateError::DerivationError)?;
+            update_item_with_descriptor_helper(input, desc, Some(&expected_spk)).map_err(|e| {
+                match e {
+                    DescriptorUpdateError::MusigUnsupported => UtxoUpdateError::MusigUnsupported,
+                }
+            })?;
 
         if !spk_check_passed {
             return Err(UtxoUpdateError::MismatchedScriptPubkey);
@@ -780,8 +789,11 @@ impl PsbtExt for Psbt {
             .ok_or(OutputUpdateError::MissingTxOut)?;
 
         let (_, spk_check_passed) =
-            update_item_with_descriptor_helper(output, desc, Some(&txout.script_pubkey))
-                .map_err(OutputUpdateError::DerivationError)?;
+            update_item_with_descriptor_helper(output, desc, Some(&txout.script_pubkey)).map_err(
+                |e| match e {
+                    DescriptorUpdateError::MusigUnsupported => OutputUpdateError::MusigUnsupported,
+                },
+            )?;
 
         if !spk_check_passed {
             return Err(OutputUpdateError::MismatchedScriptPubkey);
@@ -883,9 +895,9 @@ impl PsbtExt for Psbt {
 pub trait PsbtInputExt {
     /// Given the descriptor for a utxo being spent populate the PSBT input's fields so it can be signed.
     ///
-    /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
-    /// descriptor an error will be returned. The descriptor *can* (and should) have extended keys in
-    /// it so PSBT fields like `bip32_derivation` and `tap_key_origins` can be populated.
+    /// The descriptor *can* (and should) have extended keys in it so PSBT fields like
+    /// `bip32_derivation` and `tap_key_origins` can be populated. Returns an error if the descriptor
+    /// contains a `musig()` key; PSBT MuSig2 fields (BIP373) are not supported yet.
     ///
     /// Every key in the descriptor gets an entry in `bip32_derivation` (or `tap_key_origins` for
     /// Taproot descriptors). Keys without origin information are recorded as their own master
@@ -905,14 +917,14 @@ pub trait PsbtInputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, DescriptorUpdateError>;
 }
 
 impl PsbtInputExt for psbt::Input {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, DescriptorUpdateError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -922,9 +934,9 @@ impl PsbtInputExt for psbt::Input {
 pub trait PsbtOutputExt {
     /// Given the descriptor of a PSBT output populate the relevant metadata
     ///
-    /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
-    /// descriptor an error will be returned. The descriptor *can* (and should) have extended keys in
-    /// it so PSBT fields like `bip32_derivation` and `tap_key_origins` can be populated.
+    /// The descriptor *can* (and should) have extended keys in it so PSBT fields like
+    /// `bip32_derivation` and `tap_key_origins` can be populated. Returns an error if the descriptor
+    /// contains a `musig()` key; PSBT MuSig2 fields (BIP373) are not supported yet.
     ///
     /// Every key in the descriptor gets an entry in `bip32_derivation` (or `tap_key_origins` for
     /// Taproot descriptors). Keys without origin information are recorded as their own master
@@ -944,14 +956,14 @@ pub trait PsbtOutputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, DescriptorUpdateError>;
 }
 
 impl PsbtOutputExt for psbt::Output {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, DescriptorUpdateError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -966,9 +978,14 @@ struct KeySourceLookUp(
 
 impl Translator<DefiniteDescriptorKey> for KeySourceLookUp {
     type TargetPk = bitcoin::PublicKey;
-    type Error = core::convert::Infallible;
+    type Error = DescriptorUpdateError;
 
     fn pk(&mut self, xpk: &DefiniteDescriptorKey) -> Result<Self::TargetPk, Self::Error> {
+        // A `musig()` key has no single key source, and the PSBT MuSig2 fields (BIP373) that
+        // would describe it are not supported yet.
+        if let DescriptorPublicKey::Musig(_) = xpk.as_descriptor_public_key() {
+            return Err(DescriptorUpdateError::MusigUnsupported);
+        }
         let derived = xpk.derive_public_key(&self.1);
         self.0.insert(
             derived.to_public_key().inner,
@@ -1068,19 +1085,18 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     check_script: Option<&Script>,
     // We return an extra boolean here to indicate an error with `check_script`. We do this
     // because the error is "morally" a UtxoUpdateError::MismatchedScriptPubkey, but some
-    // callers expect a `descriptor::NonDefiniteKeyError`, which cannot be produced from a
+    // callers expect a `DescriptorUpdateError`, which cannot be produced from a
     // `UtxoUpdateError`, and those callers can't get this error anyway because they pass
     // `None` for `check_script`.
-) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::NonDefiniteKeyError> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, bool), DescriptorUpdateError> {
     let secp = Secp256k1::verification_only();
 
     // 1. Derive the descriptor, recording each key derivation in a map from xpubs
-    //    the keysource used to derive the key.
+    //    the keysource used to derive the key. This fails before any PSBT field is written.
     let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), secp);
     let derived = descriptor
         .translate_pk(&mut bip32_derivation)
-        .map_err(crate::TranslateErr::into_outer_err)
-        .expect("No Context errors while translating");
+        .map_err(|e| e.expect_translator_err("No Context errors while translating"))?;
 
     // 2. If we have a specific scriptpubkey we are targeting, bail out.
     if let Some(check_script) = check_script {
@@ -1157,6 +1173,37 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     Ok((derived, true))
 }
 
+/// Error returned when a descriptor cannot be used to update PSBT fields.
+///
+/// Return error type for [`PsbtInputExt::update_with_descriptor_unchecked`] and
+/// [`PsbtOutputExt::update_with_descriptor_unchecked`].
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
+pub enum DescriptorUpdateError {
+    /// The descriptor contains a `musig()` key. PSBT MuSig2 fields (BIP373) are not supported
+    /// yet.
+    MusigUnsupported,
+}
+
+impl fmt::Display for DescriptorUpdateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MusigUnsupported => f.write_str(
+                "the descriptor contains a musig() key; PSBT MuSig2 fields (BIP373) are not supported yet",
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for DescriptorUpdateError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::MusigUnsupported => None,
+        }
+    }
+}
+
 /// Return error type for [`PsbtExt::update_input_with_descriptor`]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UtxoUpdateError {
@@ -1171,6 +1218,9 @@ pub enum UtxoUpdateError {
     /// The PSBT's `witness_utxo` and/or `non_witness_utxo` had a script_pubkey that did not match
     /// the descriptor
     MismatchedScriptPubkey,
+    /// The descriptor contains a `musig()` key. PSBT MuSig2 fields (BIP373) are not supported
+    /// yet.
+    MusigUnsupported,
 }
 
 impl fmt::Display for UtxoUpdateError {
@@ -1190,6 +1240,7 @@ impl fmt::Display for UtxoUpdateError {
             Self::MismatchedScriptPubkey => {
                 write!(f, "The input's witness_utxo and/or non_witness_utxo had a script pubkey that didn't match the descriptor")
             }
+            Self::MusigUnsupported => DescriptorUpdateError::MusigUnsupported.fmt(f),
         }
     }
 }
@@ -1200,7 +1251,11 @@ impl error::Error for UtxoUpdateError {
         use self::UtxoUpdateError::*;
 
         match self {
-            IndexOutOfBounds(_, _) | MissingInputUtxo | UtxoCheck | MismatchedScriptPubkey => None,
+            IndexOutOfBounds(_, _)
+            | MissingInputUtxo
+            | UtxoCheck
+            | MismatchedScriptPubkey
+            | MusigUnsupported => None,
             DerivationError(e) => Some(e),
         }
     }
@@ -1217,6 +1272,9 @@ pub enum OutputUpdateError {
     DerivationError(descriptor::NonDefiniteKeyError),
     /// The output's script_pubkey did not match the descriptor
     MismatchedScriptPubkey,
+    /// The descriptor contains a `musig()` key. PSBT MuSig2 fields (BIP373) are not supported
+    /// yet.
+    MusigUnsupported,
 }
 
 impl fmt::Display for OutputUpdateError {
@@ -1232,6 +1290,7 @@ impl fmt::Display for OutputUpdateError {
             Self::MismatchedScriptPubkey => {
                 write!(f, "The output's script pubkey didn't match the descriptor")
             }
+            Self::MusigUnsupported => DescriptorUpdateError::MusigUnsupported.fmt(f),
         }
     }
 }
@@ -1242,7 +1301,9 @@ impl error::Error for OutputUpdateError {
         use self::OutputUpdateError::*;
 
         match self {
-            IndexOutOfBounds(_, _) | MissingTxOut | MismatchedScriptPubkey => None,
+            IndexOutOfBounds(_, _) | MissingTxOut | MismatchedScriptPubkey | MusigUnsupported => {
+                None
+            }
             DerivationError(e) => Some(e),
         }
     }
@@ -1631,6 +1692,67 @@ mod tests {
             Err(UtxoUpdateError::MismatchedScriptPubkey),
             "non_witness_utxo no longer matches"
         );
+    }
+
+    #[test]
+    fn test_update_with_musig_descriptor() {
+        let a = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        let b = "xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y";
+        let k1 = "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+        let k2 = "03dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
+        let k3 = "023590a94e768f8e1815c2f24b4d80a8e3149316c3518ce7b7ad338368d038ca66";
+        let k4 = "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c";
+
+        for desc in [
+            format!("tr(musig({},{})/0/0)", a, b),
+            format!("tr(musig({}/0/0,{}/0/0))", a, b),
+            format!("tr({},pk(musig({},{})))", k1, k2, k3),
+            format!("tr({},multi_a(1,{},musig({},{})))", k1, k2, k3, k4),
+        ] {
+            let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+
+            // The PSBT matches the descriptor, so only the musig() key can make the updates fail.
+            let script_pubkey = desc.script_pubkey();
+            let tx = bitcoin::Transaction {
+                version: transaction::Version::TWO,
+                lock_time: absolute::LockTime::ZERO,
+                input: vec![TxIn::default()],
+                output: vec![TxOut {
+                    value: Amount::from_sat(1_000),
+                    script_pubkey: script_pubkey.clone(),
+                }],
+            };
+            let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+            psbt.inputs[0].witness_utxo =
+                Some(TxOut { value: Amount::from_sat(2_000), script_pubkey });
+            let original = psbt.clone();
+
+            assert_eq!(
+                psbt.update_input_with_descriptor(0, &desc),
+                Err(UtxoUpdateError::MusigUnsupported)
+            );
+            assert_eq!(
+                psbt.update_output_with_descriptor(0, &desc),
+                Err(OutputUpdateError::MusigUnsupported)
+            );
+            assert_eq!(
+                psbt.inputs[0].update_with_descriptor_unchecked(&desc),
+                Err(DescriptorUpdateError::MusigUnsupported)
+            );
+            assert_eq!(
+                psbt.outputs[0].update_with_descriptor_unchecked(&desc),
+                Err(DescriptorUpdateError::MusigUnsupported)
+            );
+            assert_eq!(psbt, original, "a failed update must not modify the PSBT");
+        }
+
+        let message = DescriptorUpdateError::MusigUnsupported.to_string();
+        assert_eq!(
+            message,
+            "the descriptor contains a musig() key; PSBT MuSig2 fields (BIP373) are not supported yet"
+        );
+        assert_eq!(UtxoUpdateError::MusigUnsupported.to_string(), message);
+        assert_eq!(OutputUpdateError::MusigUnsupported.to_string(), message);
     }
 
     #[test]

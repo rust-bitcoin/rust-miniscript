@@ -56,7 +56,9 @@ impl Translator<DescriptorPublicKey> for WalletPolicyTranslator {
                 (DerivPaths::single(x.derivation_path.clone()), x.wildcard)
             }
             DescriptorPublicKey::MultiXPub(x) => (x.derivation_paths.clone(), x.wildcard),
-            DescriptorPublicKey::Single(_) => return Err(WalletPolicyError::KeyInfoNotExtendedKey),
+            DescriptorPublicKey::Single(_) | DescriptorPublicKey::Musig(_) => {
+                return Err(WalletPolicyError::KeyInfoNotExtendedKey)
+            }
         };
         let key = to_key_info(pk)?;
         let index = match self.key_info.iter().position(|k| *k == key) {
