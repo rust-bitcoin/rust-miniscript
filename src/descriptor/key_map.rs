@@ -10,7 +10,7 @@ use bitcoin::PrivateKey;
 
 #[cfg(doc)]
 use super::Descriptor;
-use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey, Wildcard};
 use crate::prelude::{btree_map, BTreeMap};
 
 /// A structure mapping [`DescriptorPublicKey`] to [`DescriptorSecretKey`].
@@ -143,6 +143,19 @@ impl GetKey for DescriptorSecretKey {
                     },
                     None => return Ok(None),
                 };
+
+                // `matches()` ignores the wildcard step entirely, so check it here: it must be
+                // present and its hardenedness must match the descriptor's wildcard.
+                if descriptor_xkey.wildcard != Wildcard::None {
+                    let wildcard_step = match full_path.as_ref().last() {
+                        Some(child) => child,
+                        None => return Ok(None),
+                    };
+                    let hardened = descriptor_xkey.wildcard == Wildcard::Hardened;
+                    if wildcard_step.is_hardened() != hardened {
+                        return Err(GetKeyError::NotSupported);
+                    }
+                }
 
                 Ok(Some(
                     descriptor_xkey
@@ -493,5 +506,66 @@ mod tests {
             .get_key(key_request, &secp)
             .expect("key lookup should not fail");
         assert!(result.is_none(), "expected no matching key, got: {result:?}");
+    }
+
+    // Wildcard keys must only hand out keys whose last path step matches the wildcard's
+    // hardenedness, and must not hand out the key at the bare (wildcard-less) path.
+    #[test]
+    fn get_key_bip32_checks_wildcard_step() {
+        let secp = Secp256k1::new();
+        let master = "tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS"
+            .parse::<Xpriv>()
+            .unwrap();
+        let fp = master.fingerprint(&secp);
+        let request = |path: &str| KeyRequest::Bip32((fp, path.parse::<DerivationPath>().unwrap()));
+        let derive = |path: &str| {
+            master
+                .derive_priv(&secp, &path.parse::<DerivationPath>().unwrap())
+                .unwrap()
+                .to_priv()
+        };
+
+        let unhardened = DescriptorSecretKey::from_str(&format!("{master}/0/*")).unwrap();
+        assert_eq!(unhardened.get_key(request("m/0/1"), &secp).unwrap(), Some(derive("m/0/1")));
+        assert!(matches!(
+            unhardened.get_key(request("m/0/1h"), &secp),
+            Err(GetKeyError::NotSupported)
+        ));
+
+        let hardened = DescriptorSecretKey::from_str(&format!("{master}/0/*h")).unwrap();
+        assert_eq!(hardened.get_key(request("m/0/1h"), &secp).unwrap(), Some(derive("m/0/1h")));
+        assert!(matches!(
+            hardened.get_key(request("m/0/1"), &secp),
+            Err(GetKeyError::NotSupported)
+        ));
+
+        let bare = DescriptorSecretKey::from_str(&format!("{master}/*")).unwrap();
+        assert_eq!(bare.get_key(request("m/1"), &secp).unwrap(), Some(derive("m/1")));
+        assert_eq!(bare.get_key(request("m"), &secp).unwrap(), None);
+
+        // Same checks apply through an origin.
+        let account = master
+            .derive_priv(&secp, &"84h/1h/0h".parse::<DerivationPath>().unwrap())
+            .unwrap();
+        let with_origin =
+            DescriptorSecretKey::from_str(&format!("[{fp}/84h/1h/0h]{account}/0/*")).unwrap();
+        assert_eq!(
+            with_origin
+                .get_key(request("m/84h/1h/0h/0/3"), &secp)
+                .unwrap(),
+            Some(derive("m/84h/1h/0h/0/3"))
+        );
+        assert!(matches!(
+            with_origin.get_key(request("m/84h/1h/0h/0/3h"), &secp),
+            Err(GetKeyError::NotSupported)
+        ));
+
+        // Multipath keys propagate the same rejection.
+        let multi = DescriptorSecretKey::from_str(&format!("{master}/<0;1>/*")).unwrap();
+        assert_eq!(multi.get_key(request("m/1/2"), &secp).unwrap(), Some(derive("m/1/2")));
+        assert!(matches!(
+            multi.get_key(request("m/1/2h"), &secp),
+            Err(GetKeyError::NotSupported)
+        ));
     }
 }
