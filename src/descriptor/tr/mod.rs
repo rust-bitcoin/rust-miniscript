@@ -391,6 +391,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 tree_builder.push_inner_node()?;
             } else {
                 let script = Miniscript::from_tree(node)?;
+                script.ext_check(&crate::ExtParams::insane())?;
                 // FIXME hack for https://github.com/rust-bitcoin/rust-miniscript/issues/734
                 if script.ty.corr.base != crate::miniscript::types::Base::B {
                     return Err(Error::NonTopLevel(format!("{:?}", script)));
@@ -567,6 +568,24 @@ mod tests {
         assert_display_roundtrip(&descriptor());
         assert_display_roundtrip("tr(acc0,{pk(acc1),{pk(acc2),pk(acc3)}})");
         assert_display_roundtrip("tr(acc0,{{pk(acc1),pk(acc2)},{pk(acc3),pk(acc4)}})");
+    }
+
+    #[test]
+    fn tr_rejects_raw_pkh_leaf() {
+        let hash = "1111111111111111111111111111111111111111";
+        for desc in [
+            format!("tr(acc0,c:expr_raw_pkh({hash}))"),
+            format!("tr(acc0,{{pk(acc1),c:expr_raw_pkh({hash})}})"),
+            format!("tr(acc0,{{pk(acc1),and_v(v:pk(acc2),c:expr_raw_pkh({hash}))}})"),
+        ] {
+            assert!(
+                matches!(
+                    Tr::<String>::from_str(&desc),
+                    Err(Error::AnalysisError(crate::AnalysisError::ContainsRawPkh))
+                ),
+                "{desc}"
+            );
+        }
     }
 
     #[test]
