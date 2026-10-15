@@ -1,3 +1,28 @@
+# 13.2.0 - October 15, 2026
+
+- add BIP-388 wallet policy support with `WalletPolicy` and `KeyInfo`, `Display` for
+  `Wildcard`, and `DescriptorPublicKey::{derivation_path, derivation_paths, wildcard}`.
+  Replace `DescriptorKeyParseError::{Bip32Xpriv, Bip32Xpub}` with
+  `DescriptorKeyParseError::XKeyParseError`; downstream code naming the removed variants
+  must be updated.
+  [#1009](https://github.com/rust-bitcoin/rust-miniscript/pull/1009)
+- key lookup: do not fulfill BIP32 requests outside the descriptor path, including sibling paths.
+  [#1010](https://github.com/rust-bitcoin/rust-miniscript/pull/1010)
+- fix unbalanced Taproot tree formatting and the tree builder's finalization assertion.
+  [#1039](https://github.com/rust-bitcoin/rust-miniscript/pull/1039)
+- fix BIP-388 wallet policy validation and derivation, translate keys left-to-right
+  with the Taproot internal key first, and add `DerivPaths::single`.
+  [#1042](https://github.com/rust-bitcoin/rust-miniscript/pull/1042)
+- mark `WalletPolicyError` as non-exhaustive so future error variants can be added.
+  [#1054](https://github.com/rust-bitcoin/rust-miniscript/pull/1054)
+- reject raw public-key hashes in Taproot leaves when parsing `Tr` directly, including
+  nested fragments, with `Error::AnalysisError(AnalysisError::ContainsRawPkh)`.
+  [#1061](https://github.com/rust-bitcoin/rust-miniscript/pull/1061)
+- reject extended-key derivations beyond BIP32's maximum depth of 255 when parsing
+  keys or constructing definite keys, and return an error instead of panicking for
+  hardened derivation steps in `at_derivation_index`.
+  [#1074](https://github.com/rust-bitcoin/rust-miniscript/pull/1074)
+
 # 13.1.0 - June 9, 2026
 
 - plan: make `Plan`'s `descriptor` field public.
