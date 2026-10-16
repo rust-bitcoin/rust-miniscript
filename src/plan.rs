@@ -395,7 +395,7 @@ impl Plan<DefiniteDescriptorKey> {
                             }
                         }
                     })
-                    .or_insert_with(|| (vec![], key_source));
+                    .or_insert_with(|| (leaf_hash.into_iter().collect(), key_source));
             }
             if let (Some(tap_script), Some(control_block)) = (data.tap_script, data.control_block) {
                 input
@@ -1135,6 +1135,7 @@ mod test {
         assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
         assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
         assert_eq!(psbt_input.tap_scripts.len(), 0, "Unexpected number of tap_scripts");
+        assert_leaf_hashes(&psbt_input, &[]);
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(first_branch);
@@ -1146,6 +1147,7 @@ mod test {
         assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
         assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
         assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
+        assert_leaf_hashes(&psbt_input, &[tap_script_leaf_hash(&psbt_input)]);
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(second_branch);
@@ -1156,6 +1158,108 @@ mod test {
         assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
         assert_eq!(psbt_input.tap_key_origins.len(), 2, "Unexpected number of tap_key_origins");
         assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
+        assert_leaf_hashes(&psbt_input, &[tap_script_leaf_hash(&psbt_input)]);
+    }
+
+    // Leaf hash of the only script in the input's `tap_scripts`.
+    fn tap_script_leaf_hash(psbt_input: &bitcoin::psbt::Input) -> TapLeafHash {
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Expected exactly one tap script");
+        let (script, leaf_version) = psbt_input.tap_scripts.values().next().unwrap();
+        TapLeafHash::from_script(script, *leaf_version)
+    }
+
+    // Checks that every `tap_key_origins` entry lists exactly `expected` leaf hashes.
+    fn assert_leaf_hashes(psbt_input: &bitcoin::psbt::Input, expected: &[TapLeafHash]) {
+        for (pk, (leaf_hashes, _)) in &psbt_input.tap_key_origins {
+            assert_eq!(leaf_hashes, expected, "Unexpected leaf hashes for {}", pk);
+        }
+    }
+
+    #[test]
+    fn test_plan_update_psbt_tr_leaf_hashes_accumulate() {
+        // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
+        let root_xpub = Xpub::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
+        let fingerprint = root_xpub.fingerprint();
+        let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
+        // The same key appears in two leaves, each satisfiable only with a different timelock,
+        // so the two plans below pick different leaves.
+        let desc = format!(
+            "tr({}/0/0,{{and_v(v:pk({}/0/1),after(100)),and_v(v:pk({}/0/1),older(10))}})",
+            xpub, xpub, xpub
+        );
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let key = DescriptorPublicKey::from_str(&format!("{}/0/1", xpub)).unwrap();
+
+        let plans = [
+            Assets::new()
+                .add(key.clone())
+                .after(absolute::LockTime::from_height(100).unwrap()),
+            Assets::new()
+                .add(key)
+                .older(relative::LockTime::from_height(10)),
+        ]
+        .iter()
+        .map(|assets| desc.clone().into_plan(assets).unwrap())
+        .collect::<Vec<_>>();
+
+        let mut expected = plans
+            .iter()
+            .map(|plan| {
+                let mut psbt_input = bitcoin::psbt::Input::default();
+                plan.update_psbt_input(&mut psbt_input);
+                tap_script_leaf_hash(&psbt_input)
+            })
+            .collect::<Vec<_>>();
+        assert_ne!(expected[0], expected[1], "The plans should use different leaves");
+
+        // Updating one input from both plans, twice each, lists both leaf hashes once.
+        let mut psbt_input = bitcoin::psbt::Input::default();
+        for plan in plans.iter().chain(plans.iter()) {
+            plan.update_psbt_input(&mut psbt_input);
+        }
+        assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
+        let (leaf_hashes, _) = psbt_input.tap_key_origins.values().next().unwrap();
+        let mut leaf_hashes = leaf_hashes.clone();
+        leaf_hashes.sort();
+        expected.sort();
+        assert_eq!(leaf_hashes, expected);
+    }
+
+    #[test]
+    fn test_plan_update_psbt_tr_script_path_signs() {
+        use bitcoin::{transaction, Amount, OutPoint, Psbt, Transaction, TxIn, TxOut};
+
+        // The signer only signs the leaves listed in a key's `tap_key_origins` entry, so a
+        // script-path plan applied to a fresh input must list its leaf there.
+        let secp = Secp256k1::new();
+        // Root key of https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
+        let root_xpriv = bip32::Xpriv::from_str("xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu").unwrap();
+        let account_path = bip32::DerivationPath::from_str("m/86'/0'/0'").unwrap();
+        let account_xpub =
+            Xpub::from_priv(&secp, &root_xpriv.derive_priv(&secp, &account_path).unwrap());
+        let xpub = format!("[{}/86'/0'/0']{}", root_xpriv.fingerprint(&secp), account_xpub);
+        let desc = format!("tr({}/0/0,pk({}/0/1))", xpub, xpub);
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let key = DescriptorPublicKey::from_str(&format!("{}/0/1", xpub)).unwrap();
+
+        let script_pubkey = desc.script_pubkey();
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn { previous_output: OutPoint::null(), ..Default::default() }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: script_pubkey.clone(),
+            }],
+        };
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+        psbt.inputs[0].witness_utxo = Some(TxOut { value: Amount::from_sat(2_000), script_pubkey });
+
+        desc.into_plan(&Assets::new().add(key))
+            .unwrap()
+            .update_psbt_input(&mut psbt.inputs[0]);
+        psbt.sign(&root_xpriv, &secp).unwrap();
+        assert_eq!(psbt.inputs[0].tap_script_sigs.len(), 1, "Script path was not signed");
     }
 
     #[test]
