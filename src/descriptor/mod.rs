@@ -12,6 +12,7 @@
 //!
 
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use core::ops::Range;
 use core::str::{self, FromStr};
 
@@ -60,6 +61,226 @@ pub use self::key::{
 };
 pub use self::key_map::KeyMap;
 pub use self::wallet_policy::{KeyInfo, WalletPolicy, WalletPolicyError};
+
+/// A descriptor that preserves secret keys without converting them to public keys.
+///
+/// Unlike [`Descriptor::parse_descriptor`], parsing a `SecretDescriptor` does not
+/// need a secp256k1 context. Secret extended keys are retained as supplied and
+/// are not derived during parsing.
+#[derive(Clone, Debug)]
+enum SecretDescriptorKey {
+    Public(DescriptorPublicKey),
+    Secret(DescriptorSecretKey),
+}
+
+impl PartialEq for SecretDescriptorKey {
+    fn eq(&self, other: &Self) -> bool { self.cmp(other).is_eq() }
+}
+
+impl Eq for SecretDescriptorKey {}
+
+impl PartialOrd for SecretDescriptorKey {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> { Some(self.cmp(other)) }
+}
+
+impl Ord for SecretDescriptorKey {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        match (self, other) {
+            (Self::Public(left), Self::Public(right)) => left.cmp(right),
+            (Self::Secret(left), Self::Secret(right)) => left.to_string().cmp(&right.to_string()),
+            (Self::Public(_), Self::Secret(_)) => core::cmp::Ordering::Less,
+            (Self::Secret(_), Self::Public(_)) => core::cmp::Ordering::Greater,
+        }
+    }
+}
+
+impl Hash for SecretDescriptorKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Public(key) => {
+                0u8.hash(state);
+                key.hash(state);
+            }
+            Self::Secret(key) => {
+                1u8.hash(state);
+                key.to_string().hash(state);
+            }
+        }
+    }
+}
+
+impl fmt::Display for SecretDescriptorKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Public(key) => key.fmt(f),
+            Self::Secret(key) => key.fmt(f),
+        }
+    }
+}
+
+impl FromStr for SecretDescriptorKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match DescriptorSecretKey::from_str(s) {
+            Ok(key) => Ok(Self::Secret(key)),
+            Err(_) => DescriptorPublicKey::from_str(s).map(Self::Public),
+        }
+    }
+}
+
+impl MiniscriptKey for SecretDescriptorKey {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_uncompressed(&self) -> bool {
+        match self {
+            Self::Public(key) => key.is_uncompressed(),
+            Self::Secret(DescriptorSecretKey::Single(key)) => !key.key.compressed,
+            Self::Secret(DescriptorSecretKey::XPrv(_) | DescriptorSecretKey::MultiXPrv(_)) => false,
+        }
+    }
+
+    fn is_x_only_key(&self) -> bool { matches!(self, Self::Public(key) if key.is_x_only_key()) }
+
+    fn num_der_paths(&self) -> usize {
+        match self {
+            Self::Public(key) => key.num_der_paths(),
+            Self::Secret(DescriptorSecretKey::Single(_)) => 0,
+            Self::Secret(DescriptorSecretKey::XPrv(_)) => 1,
+            Self::Secret(DescriptorSecretKey::MultiXPrv(key)) => key.derivation_paths.paths().len(),
+        }
+    }
+}
+
+/// A descriptor that preserves secret keys without converting them to public keys.
+///
+/// Unlike [`Descriptor::parse_descriptor`], parsing a `SecretDescriptor` does not
+/// need a secp256k1 context. Secret extended keys are retained as supplied and
+/// are not derived during parsing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SecretDescriptor(Descriptor<SecretDescriptorKey>);
+
+impl SecretDescriptor {
+    /// Constructs a secret descriptor from its public descriptor and key map.
+    ///
+    /// Keys present in the map are retained as secret keys. Unmapped keys remain
+    /// public keys, allowing descriptors with a mix of public and secret keys.
+    pub fn from_descriptor_and_keymap(
+        descriptor: Descriptor<DescriptorPublicKey>,
+        keymap: &KeyMap,
+    ) -> Result<Self, Error> {
+        struct KeyLookup<'a>(&'a KeyMap);
+
+        impl Translator<DescriptorPublicKey> for KeyLookup<'_> {
+            type TargetPk = SecretDescriptorKey;
+            type Error = core::convert::Infallible;
+
+            fn pk(
+                &mut self,
+                key: &DescriptorPublicKey,
+            ) -> Result<SecretDescriptorKey, Self::Error> {
+                Ok(match self.0.get(key) {
+                    Some(secret) => SecretDescriptorKey::Secret(secret.clone()),
+                    None => SecretDescriptorKey::Public(key.clone()),
+                })
+            }
+
+            fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, Self::Error> {
+                Ok(*hash)
+            }
+
+            fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, Self::Error> {
+                Ok(*hash)
+            }
+
+            fn ripemd160(
+                &mut self,
+                hash: &ripemd160::Hash,
+            ) -> Result<ripemd160::Hash, Self::Error> {
+                Ok(*hash)
+            }
+
+            fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, Self::Error> {
+                Ok(*hash)
+            }
+        }
+
+        descriptor
+            .translate_pk(&mut KeyLookup(keymap))
+            .map(Self)
+            .map_err(TranslateErr::into_outer_err)
+    }
+
+    /// Converts this descriptor to a public descriptor and secret key map.
+    ///
+    /// Public keys are retained. Converting secret keys to public keys requires
+    /// a signing secp256k1 context and may derive hardened paths from extended
+    /// private keys.
+    pub fn into_descriptor<C: secp256k1::Signing>(
+        self,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+        struct ToPublic<'a, C: secp256k1::Signing> {
+            secp: &'a secp256k1::Secp256k1<C>,
+            keymap: KeyMap,
+        }
+
+        impl<C: secp256k1::Signing> Translator<SecretDescriptorKey> for ToPublic<'_, C> {
+            type TargetPk = DescriptorPublicKey;
+            type Error = Error;
+
+            fn pk(&mut self, key: &SecretDescriptorKey) -> Result<DescriptorPublicKey, Error> {
+                match key {
+                    SecretDescriptorKey::Public(key) => Ok(key.clone()),
+                    SecretDescriptorKey::Secret(secret) => {
+                        let public = self
+                            .keymap
+                            .insert(self.secp, secret.clone())
+                            .map_err(|err| Error::Unexpected(err.to_string()))?;
+                        Ok(public)
+                    }
+                }
+            }
+
+            fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, Error> { Ok(*hash) }
+
+            fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, Error> {
+                Ok(*hash)
+            }
+
+            fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, Error> {
+                Ok(*hash)
+            }
+
+            fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, Error> {
+                Ok(*hash)
+            }
+        }
+
+        let mut translator = ToPublic { secp, keymap: KeyMap::new() };
+        let descriptor = self
+            .0
+            .translate_pk(&mut translator)
+            .map_err(TranslateErr::flatten)?;
+        Ok((descriptor, translator.keymap))
+    }
+}
+
+impl FromStr for SecretDescriptor {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let descriptor = Descriptor::<SecretDescriptorKey>::from_str(s)?;
+        Ok(Self(descriptor))
+    }
+}
+
+impl fmt::Display for SecretDescriptor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0.fmt(f) }
+}
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -2091,6 +2312,86 @@ mod tests {
 
         Descriptor::parse_descriptor(secp, "sh(multi(2,[00000000/111'/222]xprvA1RpRA33e1JQ7ifknakTFpgNXPmW2YvmhqLQYMmrj4xJXXWYpDPS3xz7iAxn8L39njGVyuoseXzU6rcxFLJ8HFsTjSyQbLYnMpCqE2VbFWc,xprv9uPDJpEQgRQfDcW7BkF7eTya6RPxXeJCqCJGHuCJ4GiRVLzkTXBAJMu2qaMWPrS7AANYqdq6vcBcBUdJCVVFceUvJFjaPdGZ2y9WACViL4L/0))#ggrsrxfy").expect("Valid descriptor with checksum");
         Descriptor::parse_descriptor(secp, "sh(multi(2,[00000000/111'/222]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL,xpub68NZiKmJWnxxS6aaHmn81bvJeTESw724CRDs6HbuccFQN9Ku14VQrADWgqbhhTHBaohPX4CjNLf9fq9MYo6oDaPPLPxSb7gwQN3ih19Zm4Y/0))#tjg09x5t").expect("Valid descriptor with checksum");
+    }
+
+    #[test]
+    fn secret_descriptor_parse_and_display_without_secp_context() {
+        let descriptor = "pk(xprv9s21ZrQH143K31xYSDQpPDxsXRTUcvj2iNHm5NUtrGiGG5e2DtALGdso3pGz6ssrdK4PFmM8NSpSBHNqPqm55Qn3LqFtT2emdEXVYsCzC2U/*)#dl4n4vmp";
+
+        let parsed = descriptor.parse::<SecretDescriptor>().unwrap();
+
+        assert_eq!(parsed.to_string(), descriptor);
+    }
+
+    #[test]
+    fn secret_descriptor_rejects_invalid_key() {
+        assert!("pk(not-a-key)".parse::<SecretDescriptor>().is_err());
+    }
+
+    #[test]
+    fn secret_descriptor_parses_and_displays_wif_key() {
+        let descriptor = "wpkh(cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij)";
+
+        let parsed = descriptor.parse::<SecretDescriptor>().unwrap();
+
+        assert_eq!(
+            parsed.to_string(),
+            "wpkh(cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij)#73enmern"
+        );
+    }
+
+    #[test]
+    fn secret_descriptor_enforces_compressed_keys_for_segwit() {
+        assert!("wpkh(5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ)"
+            .parse::<SecretDescriptor>()
+            .is_err());
+    }
+
+    #[test]
+    fn secret_descriptor_converts_to_and_from_descriptor_and_keymap() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor = "pk(xprv9s21ZrQH143K31xYSDQpPDxsXRTUcvj2iNHm5NUtrGiGG5e2DtALGdso3pGz6ssrdK4PFmM8NSpSBHNqPqm55Qn3LqFtT2emdEXVYsCzC2U/*)#dl4n4vmp";
+        let secret_descriptor = descriptor.parse::<SecretDescriptor>().unwrap();
+
+        let (public_descriptor, keymap) = secret_descriptor.into_descriptor(secp).unwrap();
+        assert_eq!(keymap.len(), 1);
+
+        let roundtrip =
+            SecretDescriptor::from_descriptor_and_keymap(public_descriptor, &keymap).unwrap();
+        assert_eq!(roundtrip.to_string(), descriptor);
+    }
+
+    #[test]
+    fn secret_descriptor_converts_public_only_descriptor_with_empty_keymap() {
+        let descriptor = "wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
+            .parse::<Descriptor<DescriptorPublicKey>>()
+            .unwrap();
+        let expected = descriptor.to_string();
+
+        let secret_descriptor =
+            SecretDescriptor::from_descriptor_and_keymap(descriptor, &KeyMap::new()).unwrap();
+
+        assert_eq!(secret_descriptor.to_string(), expected);
+    }
+
+    #[test]
+    fn secret_descriptor_converts_mixed_key_descriptor_and_keymap() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor = "wsh(multi(1,cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij,0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798))";
+        let secret_descriptor = descriptor.parse::<SecretDescriptor>().unwrap();
+
+        let (public_descriptor, keymap) = secret_descriptor.clone().into_descriptor(secp).unwrap();
+        assert_eq!(keymap.len(), 1);
+
+        let roundtrip =
+            SecretDescriptor::from_descriptor_and_keymap(public_descriptor, &keymap).unwrap();
+        assert_eq!(roundtrip, secret_descriptor);
+        assert!(roundtrip
+            .to_string()
+            .contains("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij"));
+        assert!(roundtrip
+            .to_string()
+            .contains("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"));
     }
 
     #[test]
