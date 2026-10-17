@@ -39,14 +39,15 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
     /// Create a new wsh descriptor
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
-        // do the top-level checks
+        // check every node, as parsing does, then do the top-level checks
+        ms.check_global_validity_recursive()?;
         Segwitv0::top_level_checks(&ms)?;
         Ok(Self { ms })
     }
 
     /// Create a new sortedmulti wsh descriptor
     pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
-        Ok(Self { ms: Miniscript::sortedmulti(thresh) })
+        Self::new(Miniscript::sortedmulti(thresh))
     }
 
     /// Get the descriptor without the checksum

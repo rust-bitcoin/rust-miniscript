@@ -519,6 +519,22 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Get a reference to the inner `AstElem` representing the root of miniscript
     pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
+    /// Checks the global validity rules of the script context on every node.
+    ///
+    /// Parsing runs these checks, but constructors such as [`Miniscript::multi`] don't, and
+    /// [`Miniscript::from_ast`] checks only the new root.
+    pub(crate) fn check_global_validity_recursive(
+        &self,
+    ) -> Result<(), context::ScriptContextError> {
+        // It is definitely not sufficient to check only the root, since this will fail to notice
+        // illegal xonly keys at the leaves. But probably checking every single node is overkill.
+        // This may be worth optimizing.
+        for node in self.pre_order_iter() {
+            Ctx::check_global_validity(node)?;
+        }
+        Ok(())
+    }
+
     /// Encode as a Bitcoin script
     pub fn encode(&self) -> script::ScriptBuf
     where
@@ -1180,13 +1196,7 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
 
         assert_eq!(stack.len(), 1);
         let ret = stack.pop().unwrap();
-        // Iterate through every node to check global validity. It is definitely not sufficient
-        // to check only the root, since this will fail to notice illegal xonly keys at the
-        // leaves. But probably checking every single node is overkill. This may be worth
-        // optimizing.
-        for node in ret.pre_order_iter() {
-            Ctx::check_global_validity(node)?;
-        }
+        ret.check_global_validity_recursive()?;
         Ok(Arc::try_unwrap(ret).unwrap())
     }
 }
