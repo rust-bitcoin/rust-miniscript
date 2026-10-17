@@ -32,6 +32,9 @@ completing an unsigned `bitcoin::TxIn` with appropriate data
 * Determining the specific keys, hash preimages and timelocks used to spend
 coins in a given Bitcoin transaction
 * `no_std` support enabled by disabling the `default-features`. See `embedded/` for an example.
+* Optional `compact-errors` feature omits fragment strings from type-checking
+errors to reduce binary size. Error kinds and validation are unchanged; detailed
+fragment strings are retained by default.
 
 More information can be found in [the documentation](https://docs.rs/miniscript)
 or in [the `examples/` directory](https://github.com/rust-bitcoin/rust-miniscript/tree/master/examples)

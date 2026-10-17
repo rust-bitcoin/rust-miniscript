@@ -63,6 +63,10 @@ pub enum ErrorKind {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Error {
     /// The fragment that failed typecheck
+    ///
+    /// Errors constructed by [`Type::type_check`] leave this empty when the
+    /// `compact-errors` feature is enabled. `Display` then shows `fragment «»`
+    /// followed by the reason for the error.
     pub fragment_string: String,
     /// The reason that typechecking failed
     pub error: ErrorKind,
@@ -465,7 +469,14 @@ impl Type {
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
+            result.map_err(|kind| Error {
+                fragment_string: if cfg!(feature = "compact-errors") {
+                    String::new()
+                } else {
+                    fragment.to_string()
+                },
+                error: kind,
+            })
         };
 
         let ret = match *fragment {
@@ -528,12 +539,49 @@ impl Type {
             }
             Terminal::Thresh(ref thresh) => {
                 let res = Self::threshold(thresh.k(), thresh.iter().map(|ms| &ms.ty));
-                res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
+                wrap_err(res)
             }
         };
         if let Ok(ref ret) = ret {
             ret.sanity_checks()
         }
         ret
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::{Base, ErrorKind, Type};
+    use crate::{Miniscript, Segwitv0, Terminal, Threshold};
+
+    #[test]
+    fn test_type_check_error_fragments() {
+        let cases = [
+            (
+                Terminal::<String, Segwitv0>::Swap(Arc::new(Miniscript::TRUE)),
+                ErrorKind::SwapNonOne,
+                "s:1",
+                "attempts to use `SWAP` to prefix something which does not take exactly one input",
+            ),
+            (
+                Terminal::Thresh(Threshold::new(1, vec![Arc::new(Miniscript::FALSE); 2]).unwrap()),
+                ErrorKind::ThresholdBase(1, Base::B),
+                "thresh(1,0,0)",
+                "sub-fragment 1 has type B rather than W",
+            ),
+        ];
+        for (fragment, kind, fragment_string, reason) in cases {
+            let error = Type::type_check(&fragment).unwrap_err();
+            let expected_fragment = if cfg!(feature = "compact-errors") {
+                ""
+            } else {
+                fragment_string
+            };
+            assert_eq!(error.error, kind);
+            assert_eq!(error.fragment_string, expected_fragment);
+            assert_eq!(error.to_string(), format!("fragment «{}» {}", expected_fragment, reason));
+        }
     }
 }
