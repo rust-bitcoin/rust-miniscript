@@ -8,10 +8,11 @@
 
 use core::{cmp, fmt, mem};
 
+use bitcoin::compat::{absolute, relative, Sequence};
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
-use bitcoin::{absolute, relative, ScriptBuf, Sequence};
+use bitcoin::ScriptBuf;
 use sync::Arc;
 
 use super::context::SigType;

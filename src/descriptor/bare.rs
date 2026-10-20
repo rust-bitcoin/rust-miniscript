@@ -9,8 +9,9 @@
 
 use core::fmt;
 
+use bitcoin::compat::Weight;
 use bitcoin::script::{self, PushBytes};
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin::{Address, Network, ScriptBuf};
 
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
