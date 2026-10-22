@@ -130,7 +130,9 @@ use core::{fmt, hash, str};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 
 pub use crate::blanket_traits::FromStrKey;
-pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
+pub use crate::descriptor::{
+    DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, SecretDescriptor,
+};
 pub use crate::error::ParseError;
 pub use crate::expression::{ParseNumError, ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
